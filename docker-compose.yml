@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: tagalong
+      POSTGRES_PASSWORD: tagalong
+      POSTGRES_DB: tagalong
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tagalong -d tagalong']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6380:6379' # 6380 on the host so it doesn't clash with a local Redis
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Object storage (S3-compatible) is added in the photos phase. MinIO's public
+  # images are no longer available, so pick an alternative then (e.g. SeaweedFS).
+
+volumes:
+  pgdata:
