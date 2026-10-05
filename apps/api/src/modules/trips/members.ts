@@ -1,8 +1,10 @@
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { changeLog, tripMembers, type Db, type Tx } from '@tagalong/db';
 import type { TripRole } from '@tagalong/shared';
+import type { Redis } from 'ioredis';
 import { requireTripRole } from '../../lib/access';
 import { conflict, notFound } from '../../lib/errors';
+import { publishTripEvent } from '../../lib/events';
 
 const activeMember = (tripId: string, userId: string) =>
   and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt));
@@ -19,20 +21,19 @@ const ownerCount = async (tx: Tx, tripId: string) => {
   return owners.length;
 };
 
-const LAST_OWNER =
-  'Every trip needs an owner. Make someone else an owner first.';
+const LAST_OWNER = 'Every trip needs an owner. Make someone else an owner first.';
 
-export const createMembersService = (db: Db) => ({
+export const createMembersService = (db: Db, redis: Redis) => ({
   /** Owners can change anyone's role, including making co-owners. */
   async updateRole(tripId: string, targetUserId: string, role: TripRole, actorId: string) {
     await requireTripRole(db, tripId, actorId, 'owner');
-    await db.transaction(async (tx) => {
+    const changed = await db.transaction(async (tx) => {
       const [target] = await tx
         .select({ role: tripMembers.role })
         .from(tripMembers)
         .where(activeMember(tripId, targetUserId));
       if (!target) throw notFound('Member not found');
-      if (target.role === role) return;
+      if (target.role === role) return false;
 
       if (target.role === 'owner' && (await ownerCount(tx, tripId)) <= 1) {
         throw conflict(LAST_OWNER);
@@ -45,7 +46,18 @@ export const createMembersService = (db: Db) => ({
         op: 'upsert',
         changedBy: actorId,
       });
+      return true;
     });
+
+    if (changed) {
+      await publishTripEvent(redis, {
+        type: 'member.updated',
+        tripId,
+        entityId: targetUserId,
+        actorId,
+        payload: { userId: targetUserId, role },
+      });
+    }
   },
 
   /** Removing yourself is leaving; removing someone else needs an owner. */
@@ -74,6 +86,15 @@ export const createMembersService = (db: Db) => ({
         op: 'delete',
         changedBy: actorId,
       });
+    });
+
+    // The gateway also uses this to stop sending the trip to the person who left.
+    await publishTripEvent(redis, {
+      type: 'member.left',
+      tripId,
+      entityId: targetUserId,
+      actorId,
+      payload: { userId: targetUserId },
     });
   },
 });

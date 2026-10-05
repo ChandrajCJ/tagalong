@@ -1,5 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { realtime } from '@/lib/realtime';
 import { useSession } from '@/lib/session';
 import { colors } from '@/theme';
 
@@ -10,6 +11,12 @@ export default function AppLayout() {
   useEffect(() => {
     if (pendingInvite) router.push(`/invite/${pendingInvite}`);
   }, [pendingInvite]);
+
+  // Live updates run while signed in, and stop on sign-out.
+  useEffect(() => {
+    realtime.start();
+    return () => realtime.stop();
+  }, []);
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

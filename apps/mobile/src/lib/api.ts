@@ -1,6 +1,7 @@
-import { AuthTokens } from '@tagalong/shared';
+import { AuthTokens, CLIENT_ID_HEADER } from '@tagalong/shared';
 import Constants from 'expo-constants';
 import type { z } from 'zod';
+import { CLIENT_ID } from './client-id';
 
 /**
  * The API runs on your laptop. In development we reuse the host the phone
@@ -16,11 +17,32 @@ const resolveBaseUrl = () => {
 
 export const API_URL = resolveBaseUrl();
 
+/** The realtime gateway: same host, port 3002. Override with EXPO_PUBLIC_GATEWAY_URL. */
+export const GATEWAY_URL = (() => {
+  const fromEnv = process.env.EXPO_PUBLIC_GATEWAY_URL;
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  const host = Constants.expoConfig?.hostUri?.split(':')[0];
+  return `ws://${host ?? 'localhost'}:3002`;
+})();
+
+/** The current access token, for the realtime connection. */
+export const getAccessToken = () => store.get()?.accessToken ?? null;
+
+/** Gets fresh tokens after the gateway rejects an expired one. */
+export const refreshAccessToken = async () => {
+  refreshing ??= refreshTokens().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+};
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
+    /** The full error body, e.g. `current` (the latest copy) on a 409. */
+    readonly data: Record<string, unknown> = {},
   ) {
     super(message);
   }
@@ -68,7 +90,7 @@ export async function request<S extends z.ZodTypeAny>(
   { method = 'GET', body, schema, auth = true }: RequestOptions<S> = {},
   retried = false,
 ): Promise<z.output<S>> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { [CLIENT_ID_HEADER]: CLIENT_ID };
   if (body !== undefined) headers['content-type'] = 'application/json';
   const token = store.get()?.accessToken;
   if (auth && token) headers.authorization = `Bearer ${token}`;
@@ -86,15 +108,15 @@ export async function request<S extends z.ZodTypeAny>(
 
   if (res.status === 401 && auth && !retried) {
     // Several requests can fail at once; refresh only once for all of them.
-    refreshing ??= refreshTokens().finally(() => {
-      refreshing = null;
-    });
-    if (await refreshing) return request(path, { method, body, schema, auth }, true);
+    if (await refreshAccessToken()) return request(path, { method, body, schema, auth }, true);
   }
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-    throw new ApiError(res.status, data.error ?? 'error', data.message ?? 'Something went wrong');
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+    } & Record<string, unknown>;
+    throw new ApiError(res.status, data.error ?? 'error', data.message ?? 'Something went wrong', data);
   }
   if (res.status === 204) return undefined as z.output<S>;
   const json: unknown = await res.json();

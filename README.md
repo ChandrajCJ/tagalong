@@ -10,7 +10,7 @@ Design canvas: https://claude.ai/artifact/QvbZKYGYkiFyCYEnDs3bf7
 | Path | What it is |
 |---|---|
 | `apps/mobile` | Expo + Expo Router app (iOS and Android) |
-| `apps/api` | Fastify API: auth, trips, health |
+| `apps/api` | Fastify API (auth, trips, invites, plan) and the realtime gateway (`src/gateway.ts`) |
 | `apps/worker` | BullMQ background worker |
 | `packages/shared` | zod schemas and types used by the app and the API |
 | `packages/db` | Drizzle schema, migrations and seed data |
@@ -34,9 +34,13 @@ pnpm db:seed                  # demo@tagalong.app with a Lisbon trip
 ## Day to day
 
 ```bash
-pnpm dev:backend              # API on :3000 and the worker
+pnpm dev:backend              # API on :3000, realtime gateway on :3002, and the worker
 pnpm --filter @tagalong/mobile dev   # Expo; scan the QR code with your phone
 ```
+
+**Testing live updates with two people:** sign in on your phone as one user and in a
+second place as another (a second phone, or sign out and use an invite link). Both
+open the same trip's Plan tab; changes appear on the other side within a second.
 
 Sign in on the phone with any email (try `demo@tagalong.app`). The 6-digit code is
 printed in the API log, since email sending isn't wired up yet.
@@ -53,6 +57,9 @@ curl localhost:3000/health
   `EXPO_PUBLIC_API_URL=http://<your-laptop-ip>:3000` in `apps/mobile/.env`.
 - **`pnpm infra:up` fails.** Start Docker Desktop or Rancher Desktop first.
 - **Redis is on port 6380**, so it doesn't clash with a Redis you may already run locally.
+- **Live updates don't arrive.** Check `curl localhost:3002/health` shows the gateway, and
+  that nothing blocks port 3002. Override the address with `EXPO_PUBLIC_GATEWAY_URL`.
+  The app refetches the plan whenever it reconnects, so nothing is lost meanwhile.
 
 ## Conventions
 

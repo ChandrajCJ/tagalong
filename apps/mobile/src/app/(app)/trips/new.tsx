@@ -96,7 +96,7 @@ export default function NewTrip() {
                 <Pressable
                   key={c}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: c === coverColor }}
+                  aria-checked={c === coverColor}
                   accessibilityLabel={`Cover color ${c}`}
                   onPress={() => setCoverColor(c)}
                   style={[styles.swatch, { backgroundColor: c }, c === coverColor && styles.swatchOn]}
@@ -112,7 +112,7 @@ export default function NewTrip() {
                 <Pressable
                   key={c}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: c === currency }}
+                  aria-checked={c === currency}
                   onPress={() => setCurrency(c)}
                   style={[styles.pill, c === currency && styles.pillOn]}
                 >

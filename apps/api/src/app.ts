@@ -5,6 +5,7 @@ import { logMailer } from './lib/mailer';
 import { authRoutes } from './modules/auth/routes';
 import { healthRoutes } from './modules/health/routes';
 import { invitesRoutes } from './modules/invites/routes';
+import { itineraryRoutes } from './modules/itinerary/routes';
 import { tripsRoutes } from './modules/trips/routes';
 import { authPlugin } from './plugins/auth';
 import { errorsPlugin } from './plugins/errors';
@@ -32,6 +33,7 @@ export const buildApp = async (deps: Omit<Deps, 'mailer'> & { mailer?: Deps['mai
   await app.register(authRoutes, { deps: fullDeps });
   await app.register(tripsRoutes, { deps: fullDeps });
   await app.register(invitesRoutes, { deps: fullDeps });
+  await app.register(itineraryRoutes, { deps: fullDeps });
 
   return app;
 };

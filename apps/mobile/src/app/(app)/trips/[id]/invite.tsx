@@ -104,7 +104,7 @@ export default function InviteScreen() {
               <Pressable
                 key={r}
                 accessibilityRole="radio"
-                accessibilityState={{ selected: role === r }}
+                aria-checked={role === r}
                 onPress={() => {
                   setRole(r);
                   setLink(undefined);

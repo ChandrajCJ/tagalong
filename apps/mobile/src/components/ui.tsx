@@ -37,7 +37,8 @@ export function Button({ label, variant = 'primary', loading, disabled, style, i
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
+      aria-disabled={!!disabled || !!loading}
+      aria-busy={!!loading}
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.button,

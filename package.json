@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "turbo run dev --parallel",
-    "dev:backend": "turbo run dev --filter=@tagalong/api --filter=@tagalong/worker --parallel",
+    "dev:backend": "turbo run dev dev:gateway --filter=@tagalong/api --filter=@tagalong/worker --parallel",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

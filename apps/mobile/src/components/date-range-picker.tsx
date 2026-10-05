@@ -230,7 +230,8 @@ const Month = memo(function Month({ year, month, cell, today, start, end, onPick
               onPress={() => onPick(day)}
               accessibilityRole="button"
               accessibilityLabel={spokenDate(day)}
-              accessibilityState={{ selected: endpoint || inRange, disabled: past }}
+              aria-selected={endpoint || inRange}
+              aria-disabled={past}
               style={{ width: cell, height: cell, justifyContent: 'center' }}
             >
               {bandLeft || bandRight ? (

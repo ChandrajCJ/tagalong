@@ -11,7 +11,7 @@ const MemberParams = TripParams.extend({ userId: z.string().uuid() });
 
 export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
   const tripsService = createTripsService(deps.db);
-  const membersService = createMembersService(deps.db);
+  const membersService = createMembersService(deps.db, deps.redis);
   app.addHook('preHandler', app.authenticate);
 
   app.get('/trips', async (request) => ({

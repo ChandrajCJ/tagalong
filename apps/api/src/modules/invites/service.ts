@@ -6,10 +6,12 @@ import {
   type InvitePreview,
   type Trip,
 } from '@tagalong/shared';
+import type { Redis } from 'ioredis';
 import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { notFound } from '../../lib/errors';
+import { publishTripEvent } from '../../lib/events';
 import { createTripsService } from '../trips/service';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -25,7 +27,7 @@ const usable = () =>
     or(isNull(invites.maxUses), sql`${invites.useCount} < ${invites.maxUses}`),
   );
 
-export const createInvitesService = (db: Db) => {
+export const createInvitesService = (db: Db, redis: Redis) => {
   const tripsService = createTripsService(db);
 
   return {
@@ -132,7 +134,7 @@ export const createInvitesService = (db: Db) => {
      * back, and someone who left before rejoins with the invite's role.
      */
     async accept(token: string, userId: string): Promise<Trip> {
-      const tripId = await db.transaction(async (tx) => {
+      const { tripId, joined } = await db.transaction(async (tx) => {
         const [invite] = await tx
           .select()
           .from(invites)
@@ -152,7 +154,8 @@ export const createInvitesService = (db: Db) => {
           .from(tripMembers)
           .where(and(eq(tripMembers.tripId, invite.tripId), eq(tripMembers.userId, userId)));
 
-        if (existing && !existing.leftAt) return invite.tripId; // already in; nothing to do
+        // Already in: nothing to do.
+        if (existing && !existing.leftAt) return { tripId: invite.tripId, joined: false };
 
         if (existing) {
           await tx
@@ -174,9 +177,18 @@ export const createInvitesService = (db: Db) => {
           op: 'upsert',
           changedBy: userId,
         });
-        return invite.tripId;
+        return { tripId: invite.tripId, joined: true };
       });
 
+      if (joined) {
+        await publishTripEvent(redis, {
+          type: 'member.joined',
+          tripId,
+          entityId: userId,
+          actorId: userId,
+          payload: { userId },
+        });
+      }
       return tripsService.get(tripId, userId);
     },
   };

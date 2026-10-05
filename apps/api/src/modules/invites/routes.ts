@@ -10,7 +10,7 @@ const InviteParams = TripParams.extend({ inviteId: z.string().uuid() });
 const TokenParams = z.object({ token: z.string().min(20).max(100) });
 
 export const invitesRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const service = createInvitesService(deps.db);
+  const service = createInvitesService(deps.db, deps.redis);
   app.addHook('preHandler', app.authenticate);
 
   app.post('/trips/:id/invites', async (request, reply) => {

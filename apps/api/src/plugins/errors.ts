@@ -13,7 +13,9 @@ export const errorsPlugin = fp(async (app: FastifyInstance) => {
       });
     }
     if (error instanceof HttpError) {
-      return reply.status(error.statusCode).send({ error: error.code, message: error.message });
+      return reply
+        .status(error.statusCode)
+        .send({ ...error.details, error: error.code, message: error.message });
     }
     const status = (error as { statusCode?: number }).statusCode;
     if (status && status < 500) {

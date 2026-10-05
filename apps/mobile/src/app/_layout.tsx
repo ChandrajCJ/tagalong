@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SessionProvider, useSession } from '@/lib/session';
 import { colors } from '@/theme';
 
@@ -46,8 +47,11 @@ function Navigator() {
 
 export default function RootLayout() {
   return (
-    <SessionProvider>
-      <Navigator />
-    </SessionProvider>
+    // Needed for drag and drop (and any other gestures) anywhere in the app.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SessionProvider>
+        <Navigator />
+      </SessionProvider>
+    </GestureHandlerRootView>
   );
 }
