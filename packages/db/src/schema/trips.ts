@@ -4,6 +4,7 @@ import {
   check,
   date,
   index,
+  integer,
   pgSchema,
   primaryKey,
   text,
@@ -71,6 +72,10 @@ export const invites = tripsSchema.table(
       .notNull()
       .references(() => users.id),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    // One link can invite a whole group. null = unlimited until it expires.
+    maxUses: integer('max_uses'),
+    useCount: integer('use_count').notNull().default(0),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
     acceptedBy: uuid('accepted_by').references(() => users.id),
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

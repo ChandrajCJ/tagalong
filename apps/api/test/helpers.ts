@@ -1,4 +1,4 @@
-import { createDb } from '@tagalong/db';
+import { createDb, type Db } from '@tagalong/db';
 import type { AuthTokens } from '@tagalong/shared';
 import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -24,6 +24,7 @@ export const captureMailer = () => {
 export const useTestApp = () => {
   const ctx = {} as {
     app: FastifyInstance;
+    db: Db;
     codes: Map<string, string>;
     signIn: (email: string) => Promise<AuthTokens>;
   };
@@ -39,6 +40,7 @@ export const useTestApp = () => {
     const app = await buildApp({ env, db, redis, mailer });
 
     ctx.app = app;
+    ctx.db = db;
     ctx.codes = codes;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
@@ -72,3 +74,40 @@ export const useTestApp = () => {
 };
 
 export const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+
+/** Creates a trip and returns its id. */
+export const createTrip = async (app: FastifyInstance, token: string, name = 'Lisbon') => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/trips',
+    headers: bearer(token),
+    payload: { name, destination: 'Lisbon, Portugal' },
+  });
+  if (res.statusCode !== 201) throw new Error(`Create trip failed: ${res.body}`);
+  return res.json<{ id: string }>().id;
+};
+
+/** Signs in `email` and joins the trip through a fresh invite from `inviterToken`. */
+export const joinTrip = async (
+  ctx: ReturnType<typeof useTestApp>,
+  tripId: string,
+  inviterToken: string,
+  email: string,
+  role: 'editor' | 'viewer' = 'editor',
+) => {
+  const invite = await ctx.app.inject({
+    method: 'POST',
+    url: `/trips/${tripId}/invites`,
+    headers: bearer(inviterToken),
+    payload: { role },
+  });
+  const tokens = await ctx.signIn(email);
+  const res = await ctx.app.inject({
+    method: 'POST',
+    url: `/invites/${invite.json().token}/accept`,
+    headers: bearer(tokens.accessToken),
+  });
+  if (res.statusCode !== 200) throw new Error(`Join failed: ${res.body}`);
+  const me = await ctx.app.inject({ method: 'GET', url: '/me', headers: bearer(tokens.accessToken) });
+  return { ...tokens, userId: me.json<{ id: string }>().id };
+};

@@ -66,6 +66,7 @@ export const createTripsService = (db: Db) => ({
     return {
       ...trip,
       myRole,
+      myUserId: userId,
       members: members.map((m) => ({ ...m, role: m.role as TripRole })),
     };
   },

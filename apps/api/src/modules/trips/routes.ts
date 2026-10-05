@@ -1,14 +1,17 @@
-import { CreateTripInput } from '@tagalong/shared';
+import { CreateTripInput, UpdateMemberInput } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
 import { parse } from '../../lib/validate';
+import { createMembersService } from './members';
 import { createTripsService } from './service';
 
 const TripParams = z.object({ id: z.string().uuid() });
+const MemberParams = TripParams.extend({ userId: z.string().uuid() });
 
 export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
   const tripsService = createTripsService(deps.db);
+  const membersService = createMembersService(deps.db);
   app.addHook('preHandler', app.authenticate);
 
   app.get('/trips', async (request) => ({
@@ -24,5 +27,18 @@ export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
   app.get('/trips/:id', async (request) => {
     const { id } = parse(TripParams, request.params);
     return tripsService.get(id, request.user.sub);
+  });
+
+  app.patch('/trips/:id/members/:userId', async (request) => {
+    const { id, userId } = parse(MemberParams, request.params);
+    const { role } = parse(UpdateMemberInput, request.body);
+    await membersService.updateRole(id, userId, role, request.user.sub);
+    return tripsService.get(id, request.user.sub);
+  });
+
+  app.delete('/trips/:id/members/:userId', async (request, reply) => {
+    const { id, userId } = parse(MemberParams, request.params);
+    await membersService.remove(id, userId, request.user.sub);
+    return reply.status(204).send();
   });
 };

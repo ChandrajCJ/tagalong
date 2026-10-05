@@ -42,6 +42,8 @@ export const TripSummary = z.object({
 export type TripSummary = z.infer<typeof TripSummary>;
 
 export const Trip = TripSummary.extend({
+  /** The signed-in user's id, so screens can tell which member is "you". */
+  myUserId: z.string().uuid(),
   baseCurrency: z.string().length(3),
   members: z.array(TripMember),
   version: z.number().int(),

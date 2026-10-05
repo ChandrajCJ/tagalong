@@ -16,7 +16,11 @@ export const colors = {
   danger: '#A8431F',
 } as const;
 
-export const coverColors = ['#D8A47F', '#8FA6A0', '#6F8A99', '#7E8C6B'] as const;
+/** Member avatar colors, assigned in the order people joined. */
+export const avatarColors = ['#0E6B5C', '#B54A28', '#5B4E86', '#7A5F14', '#3F6E8C', '#8A3D5C'] as const;
+export const avatarColor = (index: number) => avatarColors[index % avatarColors.length]!;
+
+export const coverColors =['#D8A47F', '#8FA6A0', '#6F8A99', '#7E8C6B'] as const;
 
 export const fonts = {
   display: 'Fraunces_600SemiBold',

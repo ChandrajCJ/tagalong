@@ -37,6 +37,8 @@ function Navigator() {
         <Stack.Protected guard={status === 'signedIn'}>
           <Stack.Screen name="(app)" />
         </Stack.Protected>
+        {/* Invite links work whether or not you're signed in. */}
+        <Stack.Screen name="invite/[token]" />
       </Stack>
     </>
   );
