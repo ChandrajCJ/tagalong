@@ -135,6 +135,26 @@ describe('realtime gateway', () => {
     ownerClient.ws.close();
   });
 
+  it('relays "is typing" to the others only', async () => {
+    const owner = await t.signIn('owner@example.com');
+    const tripId = await createTrip(t.app, owner.accessToken);
+    const sam = await joinTrip(t, tripId, owner.accessToken, 'sam@example.com');
+    const ownerClient = await connect(port, owner.accessToken);
+    const samClient = await connect(port, sam.accessToken);
+    for (const c of [ownerClient, samClient]) {
+      c.ws.send(JSON.stringify({ op: 'subscribe', tripId }));
+      await waitFor(() => c.messages.find((m) => m.kind === 'subscribed'));
+    }
+
+    samClient.ws.send(JSON.stringify({ op: 'typing', tripId }));
+    const typing = await waitFor(() => ownerClient.messages.find((m) => m.kind === 'typing'));
+    expect(typing).toMatchObject({ typing: { tripId, displayName: 'sam' } });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(samClient.messages.some((m) => m.kind === 'typing')).toBe(false);
+    ownerClient.ws.close();
+    samClient.ws.close();
+  });
+
   it('stops sending a trip to someone who was removed', async () => {
     const owner = await t.signIn('owner@example.com');
     const tripId = await createTrip(t.app, owner.accessToken);

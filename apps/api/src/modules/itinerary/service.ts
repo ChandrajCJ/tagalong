@@ -12,6 +12,7 @@ import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
 import { conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import { postSystemMessage } from '../chat/channel';
 
 type CreateItem = z.output<typeof CreateItemInput>;
 type UpdateItem = z.output<typeof UpdateItemInput>;
@@ -112,13 +113,20 @@ export const createItineraryService = (db: Db, redis: Redis) => {
           if (!existing || existing.tripId !== tripId || existing.createdBy !== userId) {
             throw conflict('An item with that id already exists');
           }
-          return { item: toItem(existing), created: false };
+          return { item: toItem(existing), created: false, card: null };
         }
 
         await tx
           .insert(changeLog)
           .values({ tripId, entity: 'item', entityId: id, op: 'upsert', changedBy: userId });
-        return { item: toItem(inserted), created: true };
+        const card = await postSystemMessage(
+          tx,
+          tripId,
+          userId,
+          (name) => `${name} added “${input.title}” to the plan`,
+          { event: 'item_added', itemId: id },
+        );
+        return { item: toItem(inserted), created: true, card };
       });
 
       if (result.created) {
@@ -132,7 +140,17 @@ export const createItineraryService = (db: Db, redis: Redis) => {
           originClientId: origin,
         });
       }
-      return result;
+      if (result.card) {
+        // No origin: the person who added it should see the card in chat too.
+        await publishTripEvent(redis, {
+          type: 'message.created',
+          tripId,
+          entityId: result.card.id,
+          actorId: userId,
+          payload: result.card,
+        });
+      }
+      return { item: result.item, created: result.created };
     },
 
     /**

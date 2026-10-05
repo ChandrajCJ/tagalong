@@ -10,6 +10,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@tagalong/api": "workspace:*",
+    "@tagalong/db": "workspace:*",
     "bullmq": "^6.3.8",
     "ioredis": "^6.0.0",
     "pino": "^10.3.1",

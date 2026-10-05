@@ -10,6 +10,24 @@ type Listener = (message: TripMessage) => void;
 
 const MAX_BACKOFF_MS = 30_000;
 
+/** Which trip a server message is about, so it reaches only that trip's screens. */
+const tripOf = (m: ServerMessage): string | undefined => {
+  switch (m.kind) {
+    case 'event':
+      return m.event.tripId;
+    case 'presence':
+      return m.presence.tripId;
+    case 'typing':
+      return m.typing.tripId;
+    case 'subscribed':
+      return m.tripId;
+    case 'error':
+      return m.tripId;
+    case 'ready':
+      return undefined;
+  }
+};
+
 /**
  * One WebSocket for the whole app. It reconnects with backoff, re-subscribes
  * to the trips that are on screen, and tells them to refetch after a gap.
@@ -86,14 +104,7 @@ class RealtimeClient {
       } catch {
         return;
       }
-      const tripId =
-        parsed.kind === 'event'
-          ? parsed.event.tripId
-          : parsed.kind === 'presence'
-            ? parsed.presence.tripId
-            : 'tripId' in parsed
-              ? parsed.tripId
-              : undefined;
+      const tripId = tripOf(parsed);
       if (tripId) this.listeners.get(tripId)?.forEach((l) => l(parsed));
     };
 

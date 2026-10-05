@@ -6,7 +6,7 @@ import {
   newId,
   positionBetween,
 } from '@tagalong/shared';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
@@ -138,7 +138,18 @@ export default function PlanTab() {
   const closeSheet = () => {
     if (sheet.item && tripId) realtime.send({ op: 'editing', tripId, itemId: null });
     setSheet({ open: false });
+    setDraftTitle(undefined);
   };
+
+  // "Add to plan" from a chat message lands here with ?draft=<text>.
+  const { draft } = useLocalSearchParams<{ draft?: string }>();
+  const [draftTitle, setDraftTitle] = useState<string>();
+  useEffect(() => {
+    if (!draft || !canEdit) return;
+    setDraftTitle(draft);
+    setSheet({ open: true });
+    router.setParams({ draft: undefined });
+  }, [draft, canEdit]);
 
   const save = async (fields: ItemFields): Promise<SaveResult> => {
     if (!trip) return { error: 'Trip not loaded' };
@@ -370,6 +381,7 @@ export default function PlanTab() {
         visible={sheet.open}
         item={sheet.item}
         defaultDay={current}
+        draftTitle={draftTitle}
         days={days}
         currency={trip.baseCurrency}
         canEdit={canEdit}

@@ -45,6 +45,8 @@ interface Props {
   item?: ItineraryItem;
   /** Where a new item goes. */
   defaultDay: DayKey;
+  /** Prefills a new item's title, e.g. from a chat message. */
+  draftTitle?: string;
   days: DayKey[];
   currency: string;
   canEdit: boolean;
@@ -61,8 +63,8 @@ const normalizeTime = (value: string) => {
 };
 const validTime = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 
-const fromItem = (item: ItineraryItem | undefined, defaultDay: DayKey) => ({
-  title: item?.title ?? '',
+const fromItem = (item: ItineraryItem | undefined, defaultDay: DayKey, draftTitle = '') => ({
+  title: item?.title ?? draftTitle,
   type: item?.type ?? ('activity' as ItemType),
   day: item ? dayKeyOf(item) : defaultDay,
   startTime: item?.startTime ?? '',
@@ -73,8 +75,9 @@ const fromItem = (item: ItineraryItem | undefined, defaultDay: DayKey) => ({
 });
 
 export function ItemSheet(props: Props) {
-  const { visible, item, defaultDay, days, currency, canEdit, onSave, onDelete, onClose } = props;
-  const [form, setForm] = useState(() => fromItem(item, defaultDay));
+  const { visible, item, defaultDay, draftTitle, days, currency, canEdit, onSave, onDelete, onClose } =
+    props;
+  const [form, setForm] = useState(() => fromItem(item, defaultDay, draftTitle));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -82,7 +85,7 @@ export function ItemSheet(props: Props) {
   // Fresh form every time the sheet opens.
   useEffect(() => {
     if (visible) {
-      setForm(fromItem(item, defaultDay));
+      setForm(fromItem(item, defaultDay, draftTitle));
       setErrors({});
       setNotice(undefined);
     }

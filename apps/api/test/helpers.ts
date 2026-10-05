@@ -6,6 +6,7 @@ import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 import { buildApp } from '../src/app';
 import { loadEnv } from '../src/env';
+import type { Jobs } from '../src/lib/jobs';
 import type { Mailer } from '../src/lib/mailer';
 import { loadTestEnv } from './load-env';
 
@@ -25,7 +26,10 @@ export const useTestApp = () => {
   const ctx = {} as {
     app: FastifyInstance;
     db: Db;
+    redis: Redis;
     codes: Map<string, string>;
+    /** Push notifications the API asked for, instead of real queue jobs. */
+    notified: { tripId: string; userId: string }[];
     signIn: (email: string) => Promise<AuthTokens>;
   };
   let cleanup: () => Promise<void>;
@@ -37,11 +41,20 @@ export const useTestApp = () => {
     const { db, close } = createDb(env.DATABASE_URL, { max: 2 });
     const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
     const { mailer, codes } = captureMailer();
-    const app = await buildApp({ env, db, redis, mailer });
+    const notified: { tripId: string; userId: string }[] = [];
+    const jobs: Jobs = {
+      async notifyChat(tripId, userIds) {
+        notified.push(...userIds.map((userId) => ({ tripId, userId })));
+      },
+      async close() {},
+    };
+    const app = await buildApp({ env, db, redis, mailer, jobs });
 
     ctx.app = app;
     ctx.db = db;
+    ctx.redis = redis;
     ctx.codes = codes;
+    ctx.notified = notified;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
       const res = await app.inject({
@@ -65,6 +78,7 @@ export const useTestApp = () => {
 
   beforeEach(async () => {
     ctx.codes.clear();
+    ctx.notified.length = 0;
     await truncate();
   });
 

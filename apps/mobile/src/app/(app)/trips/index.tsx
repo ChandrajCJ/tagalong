@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { formatDateRange, tripCountdown } from '@/lib/format';
+import { registerForPush } from '@/lib/push';
 import { useSession } from '@/lib/session';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -24,6 +25,8 @@ export default function Trips() {
       const data = await request('/trips', { schema: TripList });
       setTrips(data.trips);
       setError(undefined);
+      // Ask for notifications once there's a trip to be notified about.
+      if (data.trips.length > 0) void registerForPush();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load your trips');
     }

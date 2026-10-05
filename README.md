@@ -50,6 +50,24 @@ pnpm lint && pnpm typecheck && pnpm test
 curl localhost:3000/health
 ```
 
+## Push notifications (optional)
+
+Chat pushes are built in, but a phone can only get a push token once the app has an
+Expo project id. One-time setup, with a free Expo account:
+
+```bash
+cd apps/mobile && npx eas-cli@latest init
+```
+
+That adds `extra.eas.projectId` to `app.json`. Then:
+
+- **iPhone:** works in Expo Go. Allow notifications when asked (after you're on a trip).
+- **Android:** Expo Go can't receive pushes; it needs a development build
+  (`npx eas-cli@latest build --profile development --platform android`).
+
+Pushes go to people who aren't looking at the app, about 20 seconds after the first
+unread message, as one summary. The worker logs each decision (`Chat notification`).
+
 ## Troubleshooting
 
 - **The phone can't reach the API.** The phone and laptop must be on the same Wi-Fi.

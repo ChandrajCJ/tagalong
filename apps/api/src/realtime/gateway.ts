@@ -6,6 +6,7 @@ import {
   Presence,
   TripEvent,
   tripChannel,
+  Typing,
   type ServerMessage,
 } from '@tagalong/shared';
 import { eq } from 'drizzle-orm';
@@ -14,12 +15,11 @@ import type { Redis } from 'ioredis';
 import type { WebSocket } from 'ws';
 import type { Env } from '../env';
 import { requireTripRole } from '../lib/access';
+import { onlineKey } from '../lib/presence';
 import { authPlugin, type AccessClaims } from '../plugins/auth';
 
 const HEARTBEAT_MS = 25_000;
 const PRESENCE_PREFIX = 'presence:';
-/** Sorted set of who's online per trip (score = last seen). Week 4's push reads it. */
-export const onlineKey = (tripId: string) => `online:${tripId}`;
 
 interface Conn {
   id: string;
@@ -105,9 +105,16 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
     }
 
     if (channel.startsWith(PRESENCE_PREFIX)) {
+      const origin = (data as { originClientId?: string }).originClientId;
+      const typing = Typing.safeParse((data as { typing?: unknown }).typing);
+      if (typing.success) {
+        for (const conn of rooms.get(typing.data.tripId) ?? []) {
+          if (conn.id !== origin) send(conn, { kind: 'typing', typing: typing.data });
+        }
+        return;
+      }
       const parsed = Presence.safeParse((data as { presence?: unknown }).presence);
       if (!parsed.success) return;
-      const origin = (data as { originClientId?: string }).originClientId;
       for (const conn of rooms.get(parsed.data.tripId) ?? []) {
         if (conn.id !== origin) send(conn, { kind: 'presence', presence: parsed.data });
       }
@@ -238,6 +245,16 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
         } else if (message.op === 'editing' && conn.trips.has(message.tripId)) {
           conn.editing.set(message.tripId, message.itemId);
           await publishPresence(conn, message.tripId, message.itemId);
+        } else if (message.op === 'typing' && conn.trips.has(message.tripId)) {
+          const typing: Typing = {
+            tripId: message.tripId,
+            userId: conn.userId,
+            displayName: conn.displayName,
+          };
+          await redis.publish(
+            `${PRESENCE_PREFIX}${message.tripId}`,
+            JSON.stringify({ typing, originClientId: conn.id }),
+          );
         }
       });
     },

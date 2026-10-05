@@ -11,6 +11,9 @@ export const TRIP_EVENT_TYPES = [
   'member.updated',
   'member.left',
   'trip.updated',
+  'message.created',
+  'reaction.changed',
+  'read.updated',
 ] as const;
 
 export const TripEvent = z.object({
@@ -34,8 +37,17 @@ export const ClientMessage = z.discriminatedUnion('op', [
     tripId: z.string().uuid(),
     itemId: z.string().uuid().nullable(),
   }),
+  z.object({ op: z.literal('typing'), tripId: z.string().uuid() }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
+
+/** Someone is typing in the trip chat. Never stored; it fades after a few seconds. */
+export const Typing = z.object({
+  tripId: z.string().uuid(),
+  userId: z.string().uuid(),
+  displayName: z.string(),
+});
+export type Typing = z.infer<typeof Typing>;
 
 /** Someone opened (or closed) an item's editor. Never stored. */
 export const Presence = z.object({
@@ -52,6 +64,7 @@ export const ServerMessage = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('subscribed'), tripId: z.string().uuid() }),
   z.object({ kind: z.literal('event'), event: TripEvent }),
   z.object({ kind: z.literal('presence'), presence: Presence }),
+  z.object({ kind: z.literal('typing'), typing: Typing }),
   z.object({
     kind: z.literal('error'),
     code: z.string(),

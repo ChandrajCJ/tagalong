@@ -12,6 +12,7 @@ import { requireTripRole } from '../../lib/access';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import { postSystemMessage } from '../chat/channel';
 import { createTripsService } from '../trips/service';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -134,7 +135,7 @@ export const createInvitesService = (db: Db, redis: Redis) => {
      * back, and someone who left before rejoins with the invite's role.
      */
     async accept(token: string, userId: string): Promise<Trip> {
-      const { tripId, joined } = await db.transaction(async (tx) => {
+      const { tripId, joined, card } = await db.transaction(async (tx) => {
         const [invite] = await tx
           .select()
           .from(invites)
@@ -155,7 +156,7 @@ export const createInvitesService = (db: Db, redis: Redis) => {
           .where(and(eq(tripMembers.tripId, invite.tripId), eq(tripMembers.userId, userId)));
 
         // Already in: nothing to do.
-        if (existing && !existing.leftAt) return { tripId: invite.tripId, joined: false };
+        if (existing && !existing.leftAt) return { tripId: invite.tripId, joined: false, card: null };
 
         if (existing) {
           await tx
@@ -177,16 +178,30 @@ export const createInvitesService = (db: Db, redis: Redis) => {
           op: 'upsert',
           changedBy: userId,
         });
-        return { tripId: invite.tripId, joined: true };
+        const card = await postSystemMessage(
+          tx,
+          invite.tripId,
+          userId,
+          (name) => `${name} joined the trip`,
+          { event: 'member_joined', userId },
+        );
+        return { tripId: invite.tripId, joined: true, card };
       });
 
-      if (joined) {
+      if (joined && card) {
         await publishTripEvent(redis, {
           type: 'member.joined',
           tripId,
           entityId: userId,
           actorId: userId,
           payload: { userId },
+        });
+        await publishTripEvent(redis, {
+          type: 'message.created',
+          tripId,
+          entityId: card.id,
+          actorId: userId,
+          payload: card,
         });
       }
       return tripsService.get(tripId, userId);

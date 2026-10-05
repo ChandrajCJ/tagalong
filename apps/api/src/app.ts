@@ -1,8 +1,11 @@
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import type { Deps } from './deps';
+import { bullJobs } from './lib/jobs';
 import { logMailer } from './lib/mailer';
 import { authRoutes } from './modules/auth/routes';
+import { chatRoutes } from './modules/chat/routes';
+import { devicesRoutes } from './modules/devices/routes';
 import { healthRoutes } from './modules/health/routes';
 import { invitesRoutes } from './modules/invites/routes';
 import { itineraryRoutes } from './modules/itinerary/routes';
@@ -10,7 +13,9 @@ import { tripsRoutes } from './modules/trips/routes';
 import { authPlugin } from './plugins/auth';
 import { errorsPlugin } from './plugins/errors';
 
-export const buildApp = async (deps: Omit<Deps, 'mailer'> & { mailer?: Deps['mailer'] }) => {
+type BuildDeps = Omit<Deps, 'mailer' | 'jobs'> & Partial<Pick<Deps, 'mailer' | 'jobs'>>;
+
+export const buildApp = async (deps: BuildDeps) => {
   const { env } = deps;
   const app = Fastify({
     logger:
@@ -23,7 +28,12 @@ export const buildApp = async (deps: Omit<Deps, 'mailer'> & { mailer?: Deps['mai
           },
   });
 
-  const fullDeps: Deps = { ...deps, mailer: deps.mailer ?? logMailer(app.log) };
+  const fullDeps: Deps = {
+    ...deps,
+    mailer: deps.mailer ?? logMailer(app.log),
+    jobs: deps.jobs ?? bullJobs(deps.redis),
+  };
+  app.addHook('onClose', async () => fullDeps.jobs.close());
 
   await app.register(errorsPlugin);
   await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PATCH', 'DELETE'] });
@@ -34,6 +44,8 @@ export const buildApp = async (deps: Omit<Deps, 'mailer'> & { mailer?: Deps['mai
   await app.register(tripsRoutes, { deps: fullDeps });
   await app.register(invitesRoutes, { deps: fullDeps });
   await app.register(itineraryRoutes, { deps: fullDeps });
+  await app.register(chatRoutes, { deps: fullDeps });
+  await app.register(devicesRoutes, { deps: fullDeps });
 
   return app;
 };

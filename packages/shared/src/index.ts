@@ -2,6 +2,7 @@ export * from './ids';
 export * from './positions';
 export * from './roles';
 export * from './schemas/auth';
+export * from './schemas/chat';
 export * from './schemas/events';
 export * from './schemas/invites';
 export * from './schemas/itinerary';
