@@ -79,7 +79,7 @@ const refreshTokens = async (): Promise<boolean> => {
 };
 
 interface RequestOptions<S extends z.ZodTypeAny> {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   schema?: S;
   auth?: boolean;

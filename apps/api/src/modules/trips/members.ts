@@ -77,7 +77,7 @@ export const createMembersService = (db: Db, redis: Redis) => ({
       }
       await tx
         .update(tripMembers)
-        .set({ leftAt: sql`now()` })
+        .set({ leftAt: sql`now()`, removedBy: leaving ? null : actorId })
         .where(activeMember(tripId, targetUserId));
       await tx.insert(changeLog).values({
         tripId,

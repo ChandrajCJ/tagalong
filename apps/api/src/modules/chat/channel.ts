@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { channels, messages, users, type Db, type Tx } from '@tagalong/db';
-import { newId, type ChatMessage } from '@tagalong/shared';
+import { newId, type ChatMessage, type Poll } from '@tagalong/shared';
 
 type MessageRow = typeof messages.$inferSelect;
 
@@ -8,6 +8,7 @@ export const toMessage = (
   row: MessageRow,
   senderName: string | null,
   reactions: ChatMessage['reactions'] = [],
+  poll: Poll | null = null,
 ): ChatMessage => ({
   id: row.id,
   tripId: row.tripId,
@@ -19,6 +20,7 @@ export const toMessage = (
   payload: (row.payload as Record<string, unknown> | null) ?? null,
   createdAt: row.createdAt.toISOString(),
   reactions,
+  poll,
 });
 
 /** The trip's main chat channel, created on first use. */

@@ -1,4 +1,10 @@
-import { MarkReadInput, SendMessageInput, ToggleReactionInput } from '@tagalong/shared';
+import {
+  CreatePollInput,
+  MarkReadInput,
+  SendMessageInput,
+  ToggleReactionInput,
+  VotePollInput,
+} from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
@@ -8,6 +14,7 @@ import { createChatService } from './service';
 
 const TripParams = z.object({ id: z.string().uuid() });
 const MessageParams = z.object({ messageId: z.string().uuid() });
+const PollParams = z.object({ pollId: z.string().uuid() });
 const PageQuery = z.object({
   before: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
@@ -34,6 +41,29 @@ export const chatRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
     const { messageId } = parse(MessageParams, request.params);
     const { emoji } = parse(ToggleReactionInput, request.body);
     return chat.toggleReaction(messageId, request.user.sub, emoji, originOf(request));
+  });
+
+  app.post('/trips/:id/polls', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    const input = parse(CreatePollInput, request.body);
+    const { message, created } = await chat.createPoll(
+      id,
+      request.user.sub,
+      input,
+      originOf(request),
+    );
+    return reply.status(created ? 201 : 200).send(message);
+  });
+
+  app.post('/polls/:pollId/vote', async (request) => {
+    const { pollId } = parse(PollParams, request.params);
+    const { optionIds } = parse(VotePollInput, request.body);
+    return chat.votePoll(pollId, request.user.sub, optionIds, originOf(request));
+  });
+
+  app.post('/polls/:pollId/close', async (request) => {
+    const { pollId } = parse(PollParams, request.params);
+    return chat.closePoll(pollId, request.user.sub, originOf(request));
   });
 
   app.post('/trips/:id/read', async (request) => {

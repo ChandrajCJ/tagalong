@@ -50,6 +50,8 @@ export const tripMembers = tripsSchema.table(
     role: text('role').notNull(),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
     leftAt: timestamp('left_at', { withTimezone: true }),
+    /** Set when an owner removed them, so an old invite link can't bring them back. */
+    removedBy: uuid('removed_by').references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
     primaryKey({ columns: [t.tripId, t.userId] }),

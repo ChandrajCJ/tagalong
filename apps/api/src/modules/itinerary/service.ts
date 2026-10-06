@@ -48,7 +48,7 @@ const sameDay = (date: string | null) => (date ? eq(items.date, date) : isNull(i
 const byPosition = sql`${items.position} collate "C"`;
 
 /** The key that puts a new item after everything already on that day. */
-const endOfDay = async (tx: Tx, tripId: string, date: string | null) => {
+export const endOfDay = async (tx: Tx, tripId: string, date: string | null) => {
   const [last] = await tx
     .select({ position: items.position })
     .from(items)

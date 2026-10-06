@@ -23,6 +23,7 @@ const inviteUrl = (token: string) => Linking.createURL(`/invite/${token}`);
 export default function InviteScreen() {
   const { trip } = useTrip();
   const [role, setRole] = useState<Role>('editor');
+  const [singleUse, setSingleUse] = useState(false);
   const [link, setLink] = useState<string>();
   const [active, setActive] = useState<Invite[]>([]);
   const [busy, setBusy] = useState(false);
@@ -48,7 +49,7 @@ export default function InviteScreen() {
     try {
       const invite = await request(`/trips/${trip.id}/invites`, {
         method: 'POST',
-        body: { role },
+        body: { role, ...(singleUse ? { maxUses: 1 } : {}) },
         schema: Invite,
       });
       setLink(inviteUrl(invite.token!));
@@ -122,6 +123,30 @@ export default function InviteScreen() {
           </View>
         </View>
 
+        <Pressable
+          accessibilityRole="switch"
+          aria-checked={singleUse}
+          onPress={() => {
+            setSingleUse((v) => !v);
+            setLink(undefined);
+          }}
+          style={styles.toggle}
+        >
+          <Feather
+            name={singleUse ? 'check-square' : 'square'}
+            size={20}
+            color={singleUse ? colors.accent : colors.lineStrong}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleTitle}>One person only</Text>
+            <Body style={{ fontSize: 13 }}>
+              {singleUse
+                ? 'The link stops working after the first person joins.'
+                : 'Anyone with the link can join, until you turn it off.'}
+            </Body>
+          </View>
+        </Pressable>
+
         {link ? (
           <View style={{ gap: space.md }}>
             <View style={styles.linkBox}>
@@ -161,7 +186,8 @@ export default function InviteScreen() {
                       {inv.role === 'editor' ? 'Editor link' : 'Viewer link'} · by {inv.createdByName}
                     </Text>
                     <Body style={{ fontSize: 13 }}>
-                      Used {inv.useCount} {inv.useCount === 1 ? 'time' : 'times'} · expires{' '}
+                      {inv.maxUses === 1 ? 'One person only · ' : ''}used {inv.useCount}{' '}
+                      {inv.useCount === 1 ? 'time' : 'times'} · expires{' '}
                       {new Date(inv.expiresAt).toLocaleDateString()}
                     </Body>
                   </View>
@@ -185,6 +211,8 @@ const styles = StyleSheet.create({
   segmentOn: { borderColor: colors.accent, borderWidth: 2, backgroundColor: colors.accentSoft },
   segmentTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.muted },
   segmentSub: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  toggle: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md, minHeight: 44 },
+  toggleTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   linkBox: { padding: space.lg, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   linkText: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   list: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },

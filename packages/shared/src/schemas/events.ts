@@ -14,6 +14,11 @@ export const TRIP_EVENT_TYPES = [
   'message.created',
   'reaction.changed',
   'read.updated',
+  'idea.upserted',
+  'idea.deleted',
+  'idea.voted',
+  'poll.voted',
+  'poll.closed',
 ] as const;
 
 export const TripEvent = z.object({

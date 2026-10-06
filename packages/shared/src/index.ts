@@ -4,6 +4,7 @@ export * from './roles';
 export * from './schemas/auth';
 export * from './schemas/chat';
 export * from './schemas/events';
+export * from './schemas/ideas';
 export * from './schemas/invites';
 export * from './schemas/itinerary';
 export * from './schemas/trips';

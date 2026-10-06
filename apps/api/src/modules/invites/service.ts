@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { changeLog, invites, tripMembers, trips, users, type Db } from '@tagalong/db';
 import {
   CreateInviteInput,
@@ -99,6 +99,21 @@ export const createInvitesService = (db: Db, redis: Redis) => {
     },
 
     async preview(token: string, userId: string): Promise<InvitePreview> {
+      const [stale] = await db
+        .select({ tripId: invites.tripId })
+        .from(invites)
+        .innerJoin(tripMembers, eq(tripMembers.tripId, invites.tripId))
+        .where(
+          and(
+            eq(invites.tokenHash, sha256(token)),
+            eq(tripMembers.userId, userId),
+            isNotNull(tripMembers.removedBy),
+            sql`${invites.createdAt} <= ${tripMembers.leftAt}`,
+          ),
+        )
+        .limit(1);
+      if (stale) throw notFound(GONE);
+
       const [row] = await db
         .select({
           tripId: trips.id,
@@ -151,17 +166,26 @@ export const createInvitesService = (db: Db, redis: Redis) => {
         if (!trip) throw notFound(GONE);
 
         const [existing] = await tx
-          .select({ leftAt: tripMembers.leftAt })
+          .select({ leftAt: tripMembers.leftAt, removedBy: tripMembers.removedBy })
           .from(tripMembers)
           .where(and(eq(tripMembers.tripId, invite.tripId), eq(tripMembers.userId, userId)));
 
         // Already in: nothing to do.
         if (existing && !existing.leftAt) return { tripId: invite.tripId, joined: false, card: null };
 
+        /*
+         * Someone an owner removed can't let themselves back in with a link
+         * that was already circulating. A link made after the removal is the
+         * owner deliberately inviting them again, so that one still works.
+         */
+        if (existing?.removedBy && existing.leftAt && invite.createdAt <= existing.leftAt) {
+          throw notFound(GONE);
+        }
+
         if (existing) {
           await tx
             .update(tripMembers)
-            .set({ leftAt: null, role: invite.role, joinedAt: new Date() })
+            .set({ leftAt: null, removedBy: null, role: invite.role, joinedAt: new Date() })
             .where(and(eq(tripMembers.tripId, invite.tripId), eq(tripMembers.userId, userId)));
         } else {
           await tx.insert(tripMembers).values({ tripId: invite.tripId, userId, role: invite.role });

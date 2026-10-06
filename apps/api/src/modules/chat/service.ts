@@ -2,6 +2,9 @@ import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   channels,
   messages,
+  pollOptions,
+  pollVotes,
+  polls,
   reactions,
   readStates,
   tripMembers,
@@ -9,21 +12,24 @@ import {
   type Db,
 } from '@tagalong/db';
 import {
+  CreatePollInput,
   newId,
   SendMessageInput,
   type ChatMessage,
   type MessagePage,
+  type Poll,
   type ReadState,
 } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
 import { mainChannelId, toMessage } from './channel';
 
 type SendMessage = z.output<typeof SendMessageInput>;
+type CreatePoll = z.output<typeof CreatePollInput>;
 
 /** Cursors are opaque to the app: "<created_at ISO>|<id>", base64url. */
 const encodeCursor = (m: { createdAt: Date; id: string }) =>
@@ -83,6 +89,64 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
     return row!.lastReadAt;
   };
 
+  /** Polls attached to these messages, with their options and who voted. */
+  const pollsFor = async (messageIds: string[], userId: string) => {
+    const byMessage = new Map<string, Poll>();
+    if (messageIds.length === 0) return byMessage;
+
+    const pollRows = await db.select().from(polls).where(inArray(polls.messageId, messageIds));
+    if (pollRows.length === 0) return byMessage;
+    const pollIds = pollRows.map((p) => p.id);
+
+    const optionRows = await db
+      .select()
+      .from(pollOptions)
+      .where(inArray(pollOptions.pollId, pollIds))
+      .orderBy(pollOptions.position);
+    const voteRows = await db
+      .select({
+        pollId: pollVotes.pollId,
+        optionId: pollVotes.optionId,
+        userId: pollVotes.userId,
+        displayName: users.displayName,
+      })
+      .from(pollVotes)
+      .innerJoin(users, eq(users.id, pollVotes.userId))
+      .where(inArray(pollVotes.pollId, pollIds));
+
+    for (const p of pollRows) {
+      const votes = voteRows.filter((v) => v.pollId === p.id);
+      byMessage.set(p.messageId, {
+        id: p.id,
+        question: p.question,
+        multi: p.multi,
+        closedAt: p.closedAt?.toISOString() ?? null,
+        createdBy: p.createdBy,
+        options: optionRows
+          .filter((o) => o.pollId === p.id)
+          .map((o) => {
+            const mine = votes.filter((v) => v.optionId === o.id);
+            return {
+              id: o.id,
+              label: o.label,
+              votes: mine.length,
+              voters: mine.map((v) => ({ userId: v.userId, displayName: v.displayName })),
+              mine: mine.some((v) => v.userId === userId),
+            };
+          }),
+        voterCount: new Set(votes.map((v) => v.userId)).size,
+      });
+    }
+    return byMessage;
+  };
+
+  /** Reads one poll back in the shape the app expects. */
+  const hydratePoll = async (messageId: string, userId: string) => {
+    const poll = (await pollsFor([messageId], userId)).get(messageId);
+    if (!poll) throw notFound('Poll not found');
+    return poll;
+  };
+
   const loadMessage = async (messageId: string) => {
     const [row] = await db
       .select()
@@ -116,10 +180,14 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
         .limit(limit + 1);
 
       const page = rows.slice(0, limit);
-      const grouped = await reactionsFor(page.map((r) => r.message.id), userId);
+      const ids = page.map((r) => r.message.id);
+      const grouped = await reactionsFor(ids, userId);
+      const polled = await pollsFor(ids, userId);
       const last = page.at(-1);
       return {
-        messages: page.map((r) => toMessage(r.message, r.senderName, grouped.get(r.message.id))),
+        messages: page.map((r) =>
+          toMessage(r.message, r.senderName, grouped.get(r.message.id), polled.get(r.message.id)),
+        ),
         nextCursor: rows.length > limit && last ? encodeCursor(last.message) : null,
         readStates: await readStatesFor(channelId),
       };
@@ -223,6 +291,146 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
         originClientId: origin,
       });
       return { messageId, reactions: list };
+    },
+
+    /**
+     * A poll is a chat message with options attached, so it shows up in the
+     * conversation where the decision is being made.
+     */
+    async createPoll(tripId: string, userId: string, input: CreatePoll, origin?: string) {
+      await requireTripRole(db, tripId, userId, 'editor');
+      const id = input.id ?? newId();
+      const channelId = await mainChannelId(db, tripId);
+      const now = new Date();
+
+      const result = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(messages)
+          .values({
+            id,
+            channelId,
+            tripId,
+            senderId: userId,
+            kind: 'poll',
+            body: input.question,
+            createdAt: now,
+          })
+          .onConflictDoNothing()
+          .returning();
+
+        if (!inserted) {
+          const [existing] = await tx.select().from(messages).where(eq(messages.id, id));
+          if (!existing || existing.senderId !== userId || existing.tripId !== tripId) {
+            throw conflict('A message with that id already exists');
+          }
+          return { row: existing, created: false };
+        }
+
+        const [poll] = await tx
+          .insert(polls)
+          .values({
+            messageId: id,
+            tripId,
+            question: input.question,
+            multi: input.multi,
+            createdBy: userId,
+          })
+          .returning({ id: polls.id });
+        await tx
+          .insert(pollOptions)
+          .values(input.options.map((label, i) => ({ pollId: poll!.id, label, position: i })));
+        await tx.update(channels).set({ lastMessageAt: now }).where(eq(channels.id, channelId));
+        return { row: inserted, created: true };
+      });
+
+      const [sender] = await db
+        .select({ name: users.displayName })
+        .from(users)
+        .where(eq(users.id, userId));
+      const message = toMessage(
+        result.row,
+        sender?.name ?? null,
+        [],
+        await hydratePoll(id, userId),
+      );
+      if (!result.created) return { message, created: false };
+
+      await advanceRead(channelId, userId, message.id, result.row.createdAt);
+      await publishTripEvent(redis, {
+        type: 'message.created',
+        tripId,
+        entityId: message.id,
+        actorId: userId,
+        payload: message,
+        originClientId: origin,
+      });
+      return { message, created: true };
+    },
+
+    /**
+     * Replaces this person's picks. An empty list clears their vote, and on a
+     * single-choice poll only the first option counts. Viewers may vote.
+     */
+    async votePoll(pollId: string, userId: string, optionIds: string[], origin?: string) {
+      const [poll] = await db.select().from(polls).where(eq(polls.id, pollId));
+      if (!poll) throw notFound('Poll not found');
+      await requireTripRole(db, poll.tripId, userId, 'viewer');
+      if (poll.closedAt) throw conflict('This poll is closed');
+
+      const valid = await db
+        .select({ id: pollOptions.id })
+        .from(pollOptions)
+        .where(eq(pollOptions.pollId, pollId));
+      const allowed = new Set(valid.map((o) => o.id));
+      const picks = [...new Set(optionIds)].filter((o) => allowed.has(o));
+      if (picks.length !== new Set(optionIds).size) throw badRequest('Unknown poll option');
+      const chosen = poll.multi ? picks : picks.slice(0, 1);
+
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(pollVotes)
+          .where(and(eq(pollVotes.pollId, pollId), eq(pollVotes.userId, userId)));
+        if (chosen.length > 0) {
+          await tx
+            .insert(pollVotes)
+            .values(chosen.map((optionId) => ({ optionId, pollId, userId })));
+        }
+      });
+
+      const result = await hydratePoll(poll.messageId, userId);
+      await publishTripEvent(redis, {
+        type: 'poll.voted',
+        tripId: poll.tripId,
+        entityId: poll.messageId,
+        actorId: userId,
+        payload: { messageId: poll.messageId, poll: result },
+        originClientId: origin,
+      });
+      return result;
+    },
+
+    /** Only the person who asked, or a trip owner, can close a poll. */
+    async closePoll(pollId: string, userId: string, origin?: string) {
+      const [poll] = await db.select().from(polls).where(eq(polls.id, pollId));
+      if (!poll) throw notFound('Poll not found');
+      const role = await requireTripRole(db, poll.tripId, userId, 'viewer');
+      if (poll.createdBy !== userId && role !== 'owner') {
+        throw forbidden('Only the person who asked can close this poll');
+      }
+      if (!poll.closedAt) {
+        await db.update(polls).set({ closedAt: new Date() }).where(eq(polls.id, pollId));
+      }
+
+      const result = await hydratePoll(poll.messageId, userId);
+      await publishTripEvent(redis, {
+        type: 'poll.closed',
+        tripId: poll.tripId,
+        entityId: poll.messageId,
+        actorId: userId,
+        payload: { messageId: poll.messageId, poll: result },
+        originClientId: origin,
+      });
+      return result;
     },
 
     async markRead(tripId: string, userId: string, messageId: string, origin?: string) {

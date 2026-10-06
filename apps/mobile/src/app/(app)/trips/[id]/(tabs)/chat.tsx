@@ -4,6 +4,7 @@ import {
   hasRole,
   MessagePage,
   newId,
+  Poll,
   type ReadState,
 } from '@tagalong/shared';
 import * as Clipboard from 'expo-clipboard';
@@ -22,6 +23,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MessageActions } from '@/components/message-actions';
+import { PollCard } from '@/components/poll-card';
+import { PollComposer, type PollDraft } from '@/components/poll-composer';
 import { Avatar, Body, Button } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import {
@@ -52,6 +55,7 @@ export default function ChatTab() {
   const [typing, setTyping] = useState<Record<string, { name: string; until: number }>>({});
   const [actionsFor, setActionsFor] = useState<LocalMessage | null>(null);
   const [focused, setFocused] = useState(false);
+  const [askingPoll, setAskingPoll] = useState(false);
   const lastTypingSent = useRef(0);
   const lastMarkedRead = useRef<string | null>(null);
 
@@ -130,6 +134,19 @@ export default function ChatTab() {
             msg.id === p.messageId ? applyReaction(msg, p.emoji, p.added, p.userId === me) : msg,
           ) ?? prev,
       );
+    } else if (event.type === 'poll.voted' || event.type === 'poll.closed') {
+      const p = event.payload as { messageId: string; poll: unknown };
+      const parsed = Poll.safeParse(p.poll);
+      if (!parsed.success) return;
+      // The payload carries the sender's own picks, so work ours out again.
+      const poll: Poll = {
+        ...parsed.data,
+        options: parsed.data.options.map((o) => ({
+          ...o,
+          mine: o.voters.some((v) => v.userId === me),
+        })),
+      };
+      setMessages((prev) => prev?.map((msg) => (msg.id === p.messageId ? { ...msg, poll } : msg)) ?? prev);
     } else if (event.type === 'read.updated') {
       const p = event.payload as ReadState;
       setReadStates((prev) => [...prev.filter((r) => r.userId !== p.userId), p]);
@@ -190,6 +207,7 @@ export default function ChatTab() {
       payload: null,
       createdAt: new Date().toISOString(),
       reactions: [],
+      poll: null,
       status: 'sending',
     };
     setDraft('');
@@ -224,6 +242,63 @@ export default function ChatTab() {
     }
   };
 
+  const setPoll = (messageId: string, poll: Poll) =>
+    setMessages((prev) => prev?.map((m) => (m.id === messageId ? { ...m, poll } : m)) ?? prev);
+
+  const askPoll = async (poll: PollDraft): Promise<string | null> => {
+    if (!tripId) return 'Trip not loaded';
+    try {
+      const saved = await request(`/trips/${tripId}/polls`, {
+        method: 'POST',
+        body: { id: newId(), ...poll },
+        schema: ChatMessage,
+      });
+      setMessages((prev) => mergeMessages(prev ?? [], [saved]));
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Could not ask that';
+    }
+  };
+
+  /** Tapping an option adds it, or takes it back if it was already yours. */
+  const votePoll = async (message: LocalMessage, optionId: string) => {
+    const poll = message.poll;
+    if (!poll) return;
+    const picked = poll.options.find((o) => o.id === optionId);
+    const optionIds = !picked?.mine
+      ? poll.multi
+        ? [...poll.options.filter((o) => o.mine).map((o) => o.id), optionId]
+        : [optionId]
+      : poll.options.filter((o) => o.mine && o.id !== optionId).map((o) => o.id);
+
+    // Move the bars straight away, then confirm with the server.
+    const optimistic: Poll = {
+      ...poll,
+      options: poll.options.map((o) => {
+        const mine = optionIds.includes(o.id);
+        return { ...o, mine, votes: o.votes + (mine ? 1 : 0) - (o.mine ? 1 : 0) };
+      }),
+      voterCount: poll.voterCount + (optionIds.length > 0 ? 1 : 0) - (poll.options.some((o) => o.mine) ? 1 : 0),
+    };
+    setPoll(message.id, optimistic);
+
+    try {
+      setPoll(message.id, await request(`/polls/${poll.id}/vote`, { method: 'POST', body: { optionIds }, schema: Poll }));
+    } catch {
+      setPoll(message.id, poll);
+      void load();
+    }
+  };
+
+  const closePoll = async (message: LocalMessage) => {
+    if (!message.poll) return;
+    try {
+      setPoll(message.id, await request(`/polls/${message.poll.id}/close`, { method: 'POST', schema: Poll }));
+    } catch {
+      void load();
+    }
+  };
+
   const memberIndex = useMemo(
     () => new Map((trip?.members ?? []).map((m, i) => [m.userId, i])),
     [trip?.members],
@@ -243,6 +318,25 @@ export default function ChatTab() {
       return (
         <View style={styles.systemWrap}>
           <Text style={styles.system}>{m.body}</Text>
+        </View>
+      );
+    }
+    if (m.kind === 'poll' && m.poll) {
+      return (
+        <View style={[styles.row, m.senderId === me && styles.rowMine, { marginTop: space.md }]}>
+          <View style={styles.pollCol}>
+            <Text style={styles.sender}>
+              {m.senderId === me ? 'You asked' : `${m.senderName} asked`}
+            </Text>
+            <PollCard
+              poll={m.poll}
+              memberCount={trip.members.length}
+              canClose={m.senderId === me}
+              onPick={(optionId) => void votePoll(m, optionId)}
+              onClose={() => void closePoll(m)}
+            />
+            <Text style={styles.meta}>{timeOf(m.createdAt)}</Text>
+          </View>
         </View>
       );
     }
@@ -357,6 +451,14 @@ export default function ChatTab() {
 
         {canPost ? (
           <View style={styles.composer}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ask the group a question"
+              onPress={() => setAskingPoll(true)}
+              style={styles.pollButton}
+            >
+              <Feather name="bar-chart-2" size={20} color={colors.accent} />
+            </Pressable>
             <TextInput
               accessibilityLabel="Message"
               value={draft}
@@ -383,6 +485,8 @@ export default function ChatTab() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      <PollComposer visible={askingPoll} onAsk={askPoll} onClose={() => setAskingPoll(false)} />
 
       <MessageActions
         message={actionsFor}
@@ -417,6 +521,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.sm, marginTop: 3 },
   rowMine: { justifyContent: 'flex-end' },
   bubbleCol: { maxWidth: '78%', gap: 3 },
+  pollCol: { maxWidth: '86%', gap: 3 },
+  pollButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   sender: { fontFamily: fonts.bold, fontSize: 12, color: colors.muted, marginLeft: 4 },
   bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   bubbleMine: { backgroundColor: colors.accent, borderBottomRightRadius: 6 },

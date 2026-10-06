@@ -9,6 +9,7 @@ import {
   primaryKey,
   text,
   time,
+  timestamp,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -68,6 +69,58 @@ export const items = itinerarySchema.table(
       'items_type_check',
       sql.raw(`type in ('activity', 'meal', 'transport', 'stay', 'flight', 'other')`),
     ),
+  ],
+);
+
+/**
+ * A "maybe": something the group hasn't committed to yet. Once it has enough
+ * support, someone promotes it and it becomes a normal item in the plan.
+ */
+export const ideas = itinerarySchema.table(
+  'ideas',
+  {
+    id: id(),
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    note: text('note'),
+    url: text('url'),
+    type: text('type').notNull().default('activity'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    /** The plan item this idea became, once someone promoted it. */
+    promotedItemId: uuid('promoted_item_id').references(() => items.id, { onDelete: 'set null' }),
+    version: version(),
+    ...timestamps(),
+    ...softDelete(),
+  },
+  (t) => [
+    index('ideas_trip_idx').on(t.tripId),
+    check(
+      'ideas_type_check',
+      sql.raw(`type in ('activity', 'meal', 'transport', 'stay', 'flight', 'other')`),
+    ),
+  ],
+);
+
+/** One row per person per idea, so changing your mind is a single update. */
+export const ideaVotes = itinerarySchema.table(
+  'idea_votes',
+  {
+    ideaId: uuid('idea_id')
+      .notNull()
+      .references(() => ideas.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    value: text('value').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ideaId, t.userId] }),
+    check('idea_votes_value_check', sql.raw(`value in ('up', 'down')`)),
   ],
 );
 

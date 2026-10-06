@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
+  integer,
   jsonb,
   pgSchema,
   primaryKey,
@@ -60,7 +62,64 @@ export const messages = chatSchema.table(
   },
   (t) => [
     index('messages_channel_recent_idx').on(t.channelId, t.createdAt.desc(), t.id.desc()),
-    check('messages_kind_check', sql.raw(`kind in ('text', 'system')`)),
+    check('messages_kind_check', sql.raw(`kind in ('text', 'system', 'poll')`)),
+  ],
+);
+
+/**
+ * A question asked in the chat. It hangs off a message, so it appears in the
+ * conversation where the decision is actually being made.
+ */
+export const polls = chatSchema.table('polls', {
+  id: id(),
+  messageId: uuid('message_id')
+    .notNull()
+    .unique()
+    .references(() => messages.id, { onDelete: 'cascade' }),
+  tripId: uuid('trip_id')
+    .notNull()
+    .references(() => trips.id, { onDelete: 'cascade' }),
+  question: text('question').notNull(),
+  /** Whether people may pick more than one option. */
+  multi: boolean('multi').notNull().default(false),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  createdBy: uuid('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const pollOptions = chatSchema.table(
+  'poll_options',
+  {
+    id: id(),
+    pollId: uuid('poll_id')
+      .notNull()
+      .references(() => polls.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    position: integer('position').notNull(),
+  },
+  (t) => [index('poll_options_poll_idx').on(t.pollId, t.position)],
+);
+
+/** `poll_id` is carried here too, so replacing a single-choice vote is one delete. */
+export const pollVotes = chatSchema.table(
+  'poll_votes',
+  {
+    optionId: uuid('option_id')
+      .notNull()
+      .references(() => pollOptions.id, { onDelete: 'cascade' }),
+    pollId: uuid('poll_id')
+      .notNull()
+      .references(() => polls.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.optionId, t.userId] }),
+    index('poll_votes_poll_idx').on(t.pollId, t.userId),
   ],
 );
 

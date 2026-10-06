@@ -10,7 +10,7 @@ Design canvas: https://claude.ai/artifact/QvbZKYGYkiFyCYEnDs3bf7
 | Path | What it is |
 |---|---|
 | `apps/mobile` | Expo + Expo Router app (iOS and Android) |
-| `apps/api` | Fastify API (auth, trips, invites, plan) and the realtime gateway (`src/gateway.ts`) |
+| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat) and the realtime gateway (`src/gateway.ts`) |
 | `apps/worker` | BullMQ background worker |
 | `packages/shared` | zod schemas and types used by the app and the API |
 | `packages/db` | Drizzle schema, migrations and seed data |
@@ -37,6 +37,11 @@ pnpm db:seed                  # demo@tagalong.app with a Lisbon trip
 pnpm dev:backend              # API on :3000, realtime gateway on :3002, and the worker
 pnpm --filter @tagalong/mobile dev   # Expo; scan the QR code with your phone
 ```
+
+**Ideas and polls:** the Ideas tab is the group's "maybe" list — anyone adds one,
+everyone votes (viewers included), and an editor moves it into the plan with
+**Add to plan**. In the chat, the chart button next to the composer asks the group
+a question; results update live as people tap.
 
 **Testing live updates with two people:** sign in on your phone as one user and in a
 second place as another (a second phone, or sign out and use an invite link). Both
@@ -86,3 +91,5 @@ unread message, as one summary. The worker logs each decision (`Chat notificatio
 - Ids are UUIDv7 and can be generated on the client, so retries and offline creation are safe.
 - Trip changes write to `sync.change_log` in the same transaction.
 - Schema changes go through migrations (`pnpm db:generate`), never by hand.
+- Writes that only express an opinion (voting on an idea or a poll) are open to
+  viewers; anything that changes the trip needs `editor`.

@@ -78,4 +78,50 @@ describe('trip members', () => {
     expect(trip.statusCode).toBe(200);
     expect(trip.json()).toMatchObject({ myRole: 'viewer', memberCount: 2 });
   });
+
+  it("stops someone the owner removed using a link that was already going round", async () => {
+    const owner = await t.signIn('owner@example.com');
+    const tripId = await createTrip(t.app, owner.accessToken);
+
+    // A link shared with the group before anything happened.
+    const invite = await t.app.inject({
+      method: 'POST',
+      url: `/trips/${tripId}/invites`,
+      headers: bearer(owner.accessToken),
+      payload: { role: 'editor' },
+    });
+    const token = invite.json<{ token: string }>().token;
+
+    const sam = await t.signIn('sam@example.com');
+    await t.app.inject({ method: 'POST', url: `/invites/${token}/accept`, headers: bearer(sam.accessToken) });
+    const samId = await myId(sam.accessToken);
+    await remove(owner.accessToken, tripId, samId);
+
+    const preview = await t.app.inject({ method: 'GET', url: `/invites/${token}`, headers: bearer(sam.accessToken) });
+    expect(preview.statusCode).toBe(404);
+
+    const again = await t.app.inject({ method: 'POST', url: `/invites/${token}/accept`, headers: bearer(sam.accessToken) });
+    expect(again.statusCode).toBe(404);
+  });
+
+  it('still lets someone who left on their own come back with the same link', async () => {
+    const owner = await t.signIn('owner@example.com');
+    const tripId = await createTrip(t.app, owner.accessToken);
+    const invite = await t.app.inject({
+      method: 'POST',
+      url: `/trips/${tripId}/invites`,
+      headers: bearer(owner.accessToken),
+      payload: { role: 'editor' },
+    });
+    const token = invite.json<{ token: string }>().token;
+
+    const sam = await t.signIn('sam@example.com');
+    const accept = () =>
+      t.app.inject({ method: 'POST', url: `/invites/${token}/accept`, headers: bearer(sam.accessToken) });
+    await accept();
+    const samId = await myId(sam.accessToken);
+    await remove(sam.accessToken, tripId, samId); // leaving, not removed
+
+    expect((await accept()).statusCode).toBe(200);
+  });
 });

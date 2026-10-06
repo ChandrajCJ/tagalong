@@ -12,7 +12,7 @@ const tab = (title: string, icon: IconName) => ({
   ),
 });
 
-/** Bottom tabs from the design: Overview · Plan · Chat · Photos · Money. */
+/** Bottom tabs from the design, plus Ideas: Overview · Plan · Ideas · Chat · Photos · Money. */
 export default function TripTabs() {
   return (
     <Tabs
@@ -27,6 +27,7 @@ export default function TripTabs() {
     >
       <Tabs.Screen name="index" options={tab('Overview', 'home')} />
       <Tabs.Screen name="plan" options={tab('Plan', 'calendar')} />
+      <Tabs.Screen name="ideas" options={tab('Ideas', 'zap')} />
       <Tabs.Screen name="chat" options={tab('Chat', 'message-square')} />
       <Tabs.Screen name="photos" options={tab('Photos', 'image')} />
       <Tabs.Screen name="money" options={tab('Money', 'credit-card')} />
