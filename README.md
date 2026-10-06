@@ -10,7 +10,7 @@ Design canvas: https://claude.ai/artifact/QvbZKYGYkiFyCYEnDs3bf7
 | Path | What it is |
 |---|---|
 | `apps/mobile` | Expo + Expo Router app (iOS and Android) |
-| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat) and the realtime gateway (`src/gateway.ts`) |
+| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat, documents) and the realtime gateway (`src/gateway.ts`) |
 | `apps/worker` | BullMQ background worker |
 | `packages/shared` | zod schemas and types used by the app and the API |
 | `packages/db` | Drizzle schema, migrations and seed data |
@@ -25,7 +25,7 @@ nvm use
 corepack enable pnpm
 pnpm install
 cp .env.example .env          # then set JWT_SECRET (openssl rand -hex 32)
-pnpm infra:up                 # Postgres (PostGIS) and Redis
+pnpm infra:up                 # Postgres (PostGIS), Redis and object storage
 pnpm db:migrate
 pnpm --filter @tagalong/db db:migrate:test
 pnpm db:seed                  # demo@tagalong.app with a Lisbon trip
@@ -42,6 +42,11 @@ pnpm --filter @tagalong/mobile dev   # Expo; scan the QR code with your phone
 everyone votes (viewers included), and an editor moves it into the plan with
 **Add to plan**. In the chat, the chart button next to the composer asks the group
 a question; results update live as people tap.
+
+**Docs:** the Docs tab holds tickets and booking confirmations. Files go straight
+from the phone to object storage and are served back through links that expire,
+so nothing in the bucket is public. Local storage is SeaweedFS on port 8333
+(`pnpm infra:up` starts it); the bucket is created on first API start.
 
 **Testing live updates with two people:** sign in on your phone as one user and in a
 second place as another (a second phone, or sign out and use an invite link). Both
@@ -80,6 +85,8 @@ unread message, as one summary. The worker logs each decision (`Chat notificatio
   `EXPO_PUBLIC_API_URL=http://<your-laptop-ip>:3000` in `apps/mobile/.env`.
 - **`pnpm infra:up` fails.** Start Docker Desktop or Rancher Desktop first.
 - **Redis is on port 6380**, so it doesn't clash with a Redis you may already run locally.
+- **Uploads fail.** Check storage is up (`docker compose ps storage`). An unsigned
+  request to `localhost:8333` answering 403 is correct, not a fault.
 - **Live updates don't arrive.** Check `curl localhost:3002/health` shows the gateway, and
   that nothing blocks port 3002. Override the address with `EXPO_PUBLIC_GATEWAY_URL`.
   The app refetches the plan whenever it reconnects, so nothing is lost meanwhile.

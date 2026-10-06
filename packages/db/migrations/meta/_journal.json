@@ -43,6 +43,13 @@
       "when": 1791291844574,
       "tag": "0005_member_removed_by",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791295039734,
+      "tag": "0006_documents",
+      "breakpoints": true
     }
   ]
 }

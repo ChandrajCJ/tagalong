@@ -31,9 +31,21 @@ jobs:
       TEST_DATABASE_URL: postgres://tagalong:tagalong@localhost:5432/tagalong_test
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-secret-that-is-long-enough-for-tests
+      S3_ENDPOINT: http://localhost:8333
       TURBO_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4
+      # Started as a step, not a service, because it needs its config mounted.
+      - name: Start object storage
+        run: |
+          docker run -d --name storage -p 8333:8333 \
+            -v "$PWD/infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro" \
+            chrislusf/seaweedfs:3.68 \
+            server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null "http://localhost:8333/" && break
+            sleep 2
+          done
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:

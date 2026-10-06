@@ -19,6 +19,8 @@ export const TRIP_EVENT_TYPES = [
   'idea.voted',
   'poll.voted',
   'poll.closed',
+  'document.upserted',
+  'document.deleted',
 ] as const;
 
 export const TripEvent = z.object({

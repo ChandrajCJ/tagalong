@@ -9,6 +9,13 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
+  S3_ENDPOINT: z.string().url().default('http://localhost:8333'),
+  S3_REGION: z.string().default('us-east-1'),
+  S3_BUCKET: z.string().default('tagalong'),
+  S3_ACCESS_KEY: z.string().default('tagalong'),
+  S3_SECRET_KEY: z.string().default('tagalong-secret'),
+  /** How long an upload or download link stays valid. */
+  S3_URL_TTL_SEC: z.coerce.number().int().default(10 * 60),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().default(15 * 60),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().default(30),
 });

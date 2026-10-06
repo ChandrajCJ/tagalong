@@ -22,6 +22,7 @@ import {
   type DayKey,
 } from '@/lib/plan';
 import { colors, fonts, radius, space } from '@/theme';
+import { TimeField } from './time-field';
 import { Body, Button, Field, Label } from './ui';
 
 /** The fields the sheet edits, in the shape the API takes. */
@@ -54,14 +55,6 @@ interface Props {
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
-
-/** "9:30" → "09:30"; "1830" → "18:30". Anything else is returned as typed. */
-const normalizeTime = (value: string) => {
-  const v = value.trim();
-  const m = v.match(/^(\d{1,2}):?(\d{2})$/);
-  return m ? `${m[1]!.padStart(2, '0')}:${m[2]}` : v;
-};
-const validTime = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 
 const fromItem = (item: ItineraryItem | undefined, defaultDay: DayKey, draftTitle = '') => ({
   title: item?.title ?? draftTitle,
@@ -98,13 +91,13 @@ export function ItemSheet(props: Props) {
   };
 
   const save = async () => {
-    const startTime = normalizeTime(form.startTime);
-    const endTime = normalizeTime(form.endTime);
+    // The picker can only produce valid times, so the one thing left to catch
+    // is an end before the start.
+    const { startTime, endTime } = form;
     const cost = form.cost.trim().replace(',', '.');
     const next: Record<string, string> = {};
     if (!form.title.trim()) next.title = 'Give it a name';
-    if (startTime && !validTime(startTime)) next.startTime = 'Use a time like 09:30';
-    if (endTime && !validTime(endTime)) next.endTime = 'Use a time like 18:00';
+    if (startTime && endTime && endTime < startTime) next.endTime = 'Ends before it starts';
     if (cost && (Number.isNaN(Number(cost)) || Number(cost) < 0)) next.cost = 'Enter an amount like 25 or 12.50';
     if (Object.values(next).some(Boolean)) return setErrors(next);
 
@@ -203,31 +196,21 @@ export function ItemSheet(props: Props) {
             </View>
 
             <View style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="Starts"
-                  value={form.startTime}
-                  onChangeText={(v) => set('startTime', v)}
-                  onBlur={() => set('startTime', normalizeTime(form.startTime))}
-                  placeholder="09:30"
-                  keyboardType="numbers-and-punctuation"
-                  error={errors.startTime}
-                  editable={canEdit}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field
-                  label="Ends"
-                  value={form.endTime}
-                  onChangeText={(v) => set('endTime', v)}
-                  onBlur={() => set('endTime', normalizeTime(form.endTime))}
-                  placeholder="11:00"
-                  keyboardType="numbers-and-punctuation"
-                  error={errors.endTime}
-                  editable={canEdit}
-                />
-              </View>
+              <TimeField
+                label="Starts"
+                value={form.startTime}
+                onChange={(v) => set('startTime', v)}
+                editable={canEdit}
+              />
+              <TimeField
+                label="Ends"
+                value={form.endTime}
+                placeholder="Open end"
+                onChange={(v) => set('endTime', v)}
+                editable={canEdit}
+              />
             </View>
+            {errors.endTime ? <Text style={styles.fieldError}>{errors.endTime}</Text> : null}
 
             <Field
               label="Where"
@@ -309,6 +292,7 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
-  row: { flexDirection: 'row', gap: space.md },
+  row: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
+  fieldError: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger, marginTop: -space.sm },
   footer: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
 });

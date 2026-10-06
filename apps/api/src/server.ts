@@ -3,11 +3,13 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { buildApp } from './app';
 import { loadEnv } from './env';
+import { ensureBucket } from './lib/storage';
 
 const env = loadEnv();
 const { db, close: closeDb } = createDb(env.DATABASE_URL);
 const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
+await ensureBucket(env);
 const app = await buildApp({ env, db, redis });
 
 // Prove the API → queue → worker path on every start.

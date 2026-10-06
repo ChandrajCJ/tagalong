@@ -3,6 +3,7 @@ import type { Redis } from 'ioredis';
 import type { Env } from './env';
 import type { Jobs } from './lib/jobs';
 import type { Mailer } from './lib/mailer';
+import type { Storage } from './lib/storage';
 
 /** Everything route modules need, passed in so tests can swap pieces. */
 export interface Deps {
@@ -11,4 +12,5 @@ export interface Deps {
   redis: Redis;
   mailer: Mailer;
   jobs: Jobs;
+  storage: Storage;
 }

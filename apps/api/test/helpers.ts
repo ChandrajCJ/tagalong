@@ -8,6 +8,7 @@ import { buildApp } from '../src/app';
 import { loadEnv } from '../src/env';
 import type { Jobs } from '../src/lib/jobs';
 import type { Mailer } from '../src/lib/mailer';
+import type { Storage } from '../src/lib/storage';
 import { loadTestEnv } from './load-env';
 
 /** Captures sign-in codes instead of sending them. */
@@ -21,6 +22,33 @@ export const captureMailer = () => {
   return { mailer, codes };
 };
 
+/**
+ * Storage without the storage: upload links are fake, and a file only "exists"
+ * once a test says it was uploaded, which is what the real PUT would do.
+ */
+export const fakeStorage = () => {
+  const objects = new Map<string, number>();
+  const storage: Storage = {
+    async uploadUrl(key) {
+      return `https://storage.test/upload/${encodeURIComponent(key)}`;
+    },
+    async downloadUrl(key, fileName) {
+      return `https://storage.test/get/${encodeURIComponent(key)}?name=${encodeURIComponent(fileName)}`;
+    },
+    async sizeOf(key) {
+      return objects.get(key) ?? null;
+    },
+    async remove(key) {
+      objects.delete(key);
+    },
+  };
+  /** Stands in for the phone's PUT to the signed URL. */
+  const putObject = (uploadUrl: string, size = 1024) => {
+    objects.set(decodeURIComponent(uploadUrl.split('/upload/')[1]!), size);
+  };
+  return { storage, objects, putObject };
+};
+
 /** Builds a fresh app per test file and empties the database before each test. */
 export const useTestApp = () => {
   const ctx = {} as {
@@ -28,6 +56,8 @@ export const useTestApp = () => {
     db: Db;
     redis: Redis;
     codes: Map<string, string>;
+    /** Stands in for the phone PUTting the file to the signed URL. */
+    putObject: (uploadUrl: string, size?: number) => void;
     /** Push notifications the API asked for, instead of real queue jobs. */
     notified: { tripId: string; userId: string }[];
     signIn: (email: string) => Promise<AuthTokens>;
@@ -48,13 +78,15 @@ export const useTestApp = () => {
       },
       async close() {},
     };
-    const app = await buildApp({ env, db, redis, mailer, jobs });
+    const { storage, putObject } = fakeStorage();
+    const app = await buildApp({ env, db, redis, mailer, jobs, storage });
 
     ctx.app = app;
     ctx.db = db;
     ctx.redis = redis;
     ctx.codes = codes;
     ctx.notified = notified;
+    ctx.putObject = putObject;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
       const res = await app.inject({

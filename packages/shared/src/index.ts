@@ -3,6 +3,7 @@ export * from './positions';
 export * from './roles';
 export * from './schemas/auth';
 export * from './schemas/chat';
+export * from './schemas/documents';
 export * from './schemas/events';
 export * from './schemas/ideas';
 export * from './schemas/invites';

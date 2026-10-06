@@ -26,8 +26,24 @@ services:
       timeout: 3s
       retries: 20
 
-  # Object storage (S3-compatible) is added in the photos phase. MinIO's public
-  # images are no longer available, so pick an alternative then (e.g. SeaweedFS).
+  # S3-compatible object storage for documents and, later, photos.
+  # SeaweedFS rather than MinIO: MinIO's public images are no longer pullable.
+  storage:
+    image: chrislusf/seaweedfs:3.68
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    ports:
+      - '8333:8333' # the S3 API
+    volumes:
+      - storagedata:/data
+      - ./infra/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      # The S3 port answers 403 to an unsigned request (which is correct), so
+      # health is taken from the master's status endpoint instead.
+      test: ['CMD-SHELL', 'wget -q -O - "http://$$(hostname):9333/cluster/status"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   pgdata:
+  storagedata:

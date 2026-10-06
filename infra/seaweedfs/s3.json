@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "tagalong",
+      "credentials": [{ "accessKey": "tagalong", "secretKey": "tagalong-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

@@ -3,9 +3,11 @@ import Fastify from 'fastify';
 import type { Deps } from './deps';
 import { bullJobs } from './lib/jobs';
 import { logMailer } from './lib/mailer';
+import { s3Storage } from './lib/storage';
 import { authRoutes } from './modules/auth/routes';
 import { chatRoutes } from './modules/chat/routes';
 import { devicesRoutes } from './modules/devices/routes';
+import { documentsRoutes } from './modules/documents/routes';
 import { healthRoutes } from './modules/health/routes';
 import { ideasRoutes } from './modules/ideas/routes';
 import { invitesRoutes } from './modules/invites/routes';
@@ -14,7 +16,8 @@ import { tripsRoutes } from './modules/trips/routes';
 import { authPlugin } from './plugins/auth';
 import { errorsPlugin } from './plugins/errors';
 
-type BuildDeps = Omit<Deps, 'mailer' | 'jobs'> & Partial<Pick<Deps, 'mailer' | 'jobs'>>;
+type BuildDeps = Omit<Deps, 'mailer' | 'jobs' | 'storage'> &
+  Partial<Pick<Deps, 'mailer' | 'jobs' | 'storage'>>;
 
 export const buildApp = async (deps: BuildDeps) => {
   const { env } = deps;
@@ -33,6 +36,7 @@ export const buildApp = async (deps: BuildDeps) => {
     ...deps,
     mailer: deps.mailer ?? logMailer(app.log),
     jobs: deps.jobs ?? bullJobs(deps.redis),
+    storage: deps.storage ?? s3Storage(env),
   };
   app.addHook('onClose', async () => fullDeps.jobs.close());
 
@@ -47,6 +51,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(itineraryRoutes, { deps: fullDeps });
   await app.register(ideasRoutes, { deps: fullDeps });
   await app.register(chatRoutes, { deps: fullDeps });
+  await app.register(documentsRoutes, { deps: fullDeps });
   await app.register(devicesRoutes, { deps: fullDeps });
 
   return app;
