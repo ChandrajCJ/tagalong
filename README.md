@@ -10,7 +10,7 @@ Design canvas: https://claude.ai/artifact/QvbZKYGYkiFyCYEnDs3bf7
 | Path | What it is |
 |---|---|
 | `apps/mobile` | Expo + Expo Router app (iOS and Android) |
-| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat, documents) and the realtime gateway (`src/gateway.ts`) |
+| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat, documents, bookings) and the realtime gateway (`src/gateway.ts`) |
 | `apps/worker` | BullMQ background worker |
 | `packages/shared` | zod schemas and types used by the app and the API |
 | `packages/db` | Drizzle schema, migrations and seed data |
@@ -47,6 +47,11 @@ a question; results update live as people tap.
 from the phone to object storage and are served back through links that expire,
 so nothing in the bucket is public. Local storage is SeaweedFS on port 8333
 (`pnpm infra:up` starts it); the bucket is created on first API start.
+
+**Bookings:** tap any plan item to open its detail screen: its bookings (flight,
+stay, train, tickets, car, table) with confirmation codes you can copy, the
+attached confirmation file, and a discussion thread that stays out of the main
+chat. The trip overview shows the next booking under **Next up**.
 
 **Testing live updates with two people:** sign in on your phone as one user and in a
 second place as another (a second phone, or sign out and use an invite link). Both

@@ -116,7 +116,8 @@ export default function ChatTab() {
     const { event } = m;
     if (event.type === 'message.created') {
       const parsed = ChatMessage.safeParse(event.payload);
-      if (!parsed.success) return;
+      // Messages in a plan item's thread belong to that item's screen, not here.
+      if (!parsed.success || parsed.data.itemId) return;
       setMessages((prev) => mergeMessages(prev ?? [], [parsed.data]));
       // Whoever sent it has stopped typing.
       if (parsed.data.senderId) {
@@ -148,7 +149,8 @@ export default function ChatTab() {
       };
       setMessages((prev) => prev?.map((msg) => (msg.id === p.messageId ? { ...msg, poll } : msg)) ?? prev);
     } else if (event.type === 'read.updated') {
-      const p = event.payload as ReadState;
+      const p = event.payload as ReadState & { itemId?: string | null };
+      if (p.itemId) return;
       setReadStates((prev) => [...prev.filter((r) => r.userId !== p.userId), p]);
     }
   });
@@ -208,6 +210,7 @@ export default function ChatTab() {
       createdAt: new Date().toISOString(),
       reactions: [],
       poll: null,
+      itemId: null,
       status: 'sending',
     };
     setDraft('');

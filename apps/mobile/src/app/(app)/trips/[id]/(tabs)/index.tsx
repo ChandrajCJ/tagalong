@@ -1,11 +1,14 @@
 import Feather from '@expo/vector-icons/Feather';
-import { hasRole } from '@tagalong/shared';
+import { hasRole, NextUp } from '@tagalong/shared';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Body, Button, Label } from '@/components/ui';
+import { request } from '@/lib/api';
+import { BOOKING_META, formatInZone, relativeFrom, routeOf, titleOf } from '@/lib/bookings';
 import { formatDateRange, tripCountdown } from '@/lib/format';
+import { useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
@@ -87,6 +90,8 @@ export default function TripOverview() {
           <Body>{trip.destination}</Body>
         </View>
 
+        <NextUpCard tripId={trip.id} />
+
         <Label style={{ marginTop: space.sm }}>Get ready</Label>
         <View style={styles.list}>
           {trip.memberCount === 1 && canInvite ? (
@@ -115,6 +120,76 @@ export default function TripOverview() {
           />
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * The next booking that hasn't started: "TP1234 · Thu 08:15 · in 2 days".
+ * Its own component so it can fetch and listen without disturbing the hooks
+ * of the screen around it, which returns early while the trip loads.
+ */
+function NextUpCard({ tripId }: { tripId: string }) {
+  const [next, setNext] = useState<NextUp | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  const load = useCallback(async () => {
+    const data = await request(`/trips/${tripId}/next-up`, { schema: NextUp }).catch(() => null);
+    if (data) setNext(data);
+  }, [tripId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  useTripRealtime(tripId, (m) => {
+    if (m.kind === 'reconnected') return void load();
+    if (m.kind !== 'event') return;
+    // A booking changed, or the plan item it sits on was renamed or removed.
+    if (m.event.type.startsWith('booking.') || m.event.type.startsWith('item.')) void load();
+  });
+
+  // Keep "in 3 hours" honest while the screen stays open, and move on once it starts.
+  const startsAt = next?.booking?.startsAt;
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (startsAt && new Date(startsAt) <= now) void load();
+  }, [startsAt, now, load]);
+
+  const booking = next?.booking;
+  if (!booking?.startsAt) return null;
+  const meta = BOOKING_META[booking.type];
+  const detail = routeOf(booking) ?? booking.reference;
+
+  return (
+    <View style={{ gap: space.sm }}>
+      <Label style={{ marginTop: space.sm }}>Next up</Label>
+      <Pressable
+        accessibilityRole={booking.itemId ? 'button' : undefined}
+        accessibilityLabel={`Next up: ${next?.itemTitle ?? titleOf(booking)}, ${relativeFrom(booking.startsAt, now)}`}
+        disabled={!booking.itemId}
+        onPress={() => router.push(`/trips/${tripId}/items/${booking.itemId}`)}
+        style={({ pressed }) => [styles.nextUp, pressed && { opacity: 0.8 }]}
+      >
+        <View style={styles.nextIcon}>
+          <Feather name={meta.icon} size={20} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.nextTitle} numberOfLines={1}>
+            {next?.itemTitle ?? titleOf(booking)}
+          </Text>
+          <Text style={styles.nextWhen}>
+            {formatInZone(booking.startsAt, booking.timezone)} · {relativeFrom(booking.startsAt, now)}
+          </Text>
+          {detail ? <Text style={styles.nextDetail}>{detail}</Text> : null}
+        </View>
+        {booking.itemId ? <Feather name="chevron-right" size={18} color={colors.onAccentMuted} /> : null}
+      </Pressable>
     </View>
   );
 }
@@ -173,4 +248,9 @@ const styles = StyleSheet.create({
   divider: { borderBottomWidth: 1, borderBottomColor: '#EFEAE2' },
   actionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   actionTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  nextUp: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.accent },
+  nextIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  nextTitle: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
+  nextWhen: { fontFamily: fonts.medium, fontSize: 13, color: colors.onAccentMuted },
+  nextDetail: { fontFamily: fonts.bold, fontSize: 13, letterSpacing: 0.5, color: '#FFFFFF' },
 });

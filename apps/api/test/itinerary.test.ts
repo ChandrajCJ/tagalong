@@ -67,6 +67,24 @@ describe('itinerary items', () => {
     expect((await list(owner.accessToken, tripId)).map((i) => i.title)).toEqual(['C', 'A', 'B']);
   });
 
+  it('puts an item at the end of its new day when moved without a position', async () => {
+    const { owner, tripId } = await setup();
+    // The first item on each day gets the same key, so a mover that kept its
+    // old key would tie with the item already on the new day.
+    const stays = (await addItem(owner.accessToken, tripId, { date: '2027-06-13', title: 'Already there' })).json();
+    const mover = (await addItem(owner.accessToken, tripId, { date: '2027-06-12', title: 'Moving' })).json();
+    expect(mover.position).toBe(stays.position);
+
+    const moved = await patch(owner.accessToken, mover.id, { version: mover.version, date: '2027-06-13' });
+    expect(moved.statusCode).toBe(200);
+    expect(moved.json().position > stays.position).toBe(true);
+
+    const onDay = (await list(owner.accessToken, tripId)).filter((i) =>
+      ['Already there', 'Moving'].includes(i.title),
+    );
+    expect(onDay.map((i) => i.title)).toEqual(['Already there', 'Moving']);
+  });
+
   it('rejects a stale edit with the latest copy', async () => {
     const { owner, tripId } = await setup();
     const sam = await joinTrip(t, tripId, owner.accessToken, 'sam@example.com');

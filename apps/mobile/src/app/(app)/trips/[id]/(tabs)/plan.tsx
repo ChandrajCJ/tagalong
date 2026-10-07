@@ -17,7 +17,6 @@ import { ApiError, request } from '@/lib/api';
 import {
   ANYTIME,
   byPosition,
-  dateOfKey,
   dayKeyOf,
   dayOfMonth,
   formatCost,
@@ -27,7 +26,7 @@ import {
   weekdayOf,
   type DayKey,
 } from '@/lib/plan';
-import { realtime, useTripRealtime } from '@/lib/realtime';
+import { useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -39,7 +38,7 @@ export default function PlanTab() {
   const [items, setItems] = useState<ItineraryItem[] | null>(null);
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<DayKey | null>(null);
-  const [sheet, setSheet] = useState<{ open: boolean; item?: ItineraryItem }>({ open: false });
+  const [sheet, setSheet] = useState(false);
   const [editors, setEditors] = useState<Editors>({});
   const [toast, setToast] = useState<string>();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -126,18 +125,15 @@ export default function PlanTab() {
     [items, current],
   );
 
-  const lastPositionOn = (key: DayKey, except?: string) => {
-    const onDay = (items ?? []).filter((i) => dayKeyOf(i) === key && i.id !== except).sort(byPosition);
+  const lastPositionOn = (key: DayKey) => {
+    const onDay = (items ?? []).filter((i) => dayKeyOf(i) === key).sort(byPosition);
     return onDay.at(-1)?.position ?? null;
   };
 
-  const openSheet = (item?: ItineraryItem) => {
-    setSheet({ open: true, item });
-    if (item && canEdit && tripId) realtime.send({ op: 'editing', tripId, itemId: item.id });
-  };
+  // The sheet here only adds; editing happens on the item's own screen.
+  const openSheet = () => setSheet(true);
   const closeSheet = () => {
-    if (sheet.item && tripId) realtime.send({ op: 'editing', tripId, itemId: null });
-    setSheet({ open: false });
+    setSheet(false);
     setDraftTitle(undefined);
   };
 
@@ -147,75 +143,38 @@ export default function PlanTab() {
   useEffect(() => {
     if (!draft || !canEdit) return;
     setDraftTitle(draft);
-    setSheet({ open: true });
+    setSheet(true);
     router.setParams({ draft: undefined });
   }, [draft, canEdit]);
 
+  /** Shows the new item straight away, then confirms with the server. */
   const save = async (fields: ItemFields): Promise<SaveResult> => {
     if (!trip) return { error: 'Trip not loaded' };
-    const existing = sheet.item;
-
-    if (!existing) {
-      // Show it straight away, then confirm with the server.
-      const id = newId();
-      const position = positionBetween(lastPositionOn(fields.date ?? ANYTIME), null);
-      const optimistic: ItineraryItem = {
-        ...fields,
-        id,
-        tripId: trip.id,
-        position,
-        createdBy: trip.myUserId,
-        version: 0,
-        updatedAt: new Date().toISOString(),
-      };
-      upsertLocal(optimistic);
-      setSelected(fields.date ?? ANYTIME);
-      try {
-        upsertLocal(
-          await request(`/trips/${trip.id}/items`, {
-            method: 'POST',
-            body: { ...fields, id, position },
-            schema: ItineraryItem,
-          }),
-        );
-        return { ok: true };
-      } catch (e) {
-        removeLocal(id);
-        return { error: e instanceof ApiError ? e.message : 'Could not add that' };
-      }
-    }
-
-    const movedDay = fields.date !== existing.date;
-    const body = {
+    const id = newId();
+    const position = positionBetween(lastPositionOn(fields.date ?? ANYTIME), null);
+    const optimistic: ItineraryItem = {
       ...fields,
-      version: existing.version,
-      ...(movedDay
-        ? { position: positionBetween(lastPositionOn(fields.date ?? ANYTIME, existing.id), null) }
-        : {}),
+      id,
+      tripId: trip.id,
+      position,
+      createdBy: trip.myUserId,
+      version: 0,
+      updatedAt: new Date().toISOString(),
     };
+    upsertLocal(optimistic);
+    setSelected(fields.date ?? ANYTIME);
     try {
-      upsertLocal(await request(`/items/${existing.id}`, { method: 'PATCH', body, schema: ItineraryItem }));
+      upsertLocal(
+        await request(`/trips/${trip.id}/items`, {
+          method: 'POST',
+          body: { ...fields, id, position },
+          schema: ItineraryItem,
+        }),
+      );
       return { ok: true };
     } catch (e) {
-      const latest = e instanceof ApiError && e.status === 409 && ItineraryItem.safeParse(e.data.current);
-      if (latest && latest.success) {
-        upsertLocal(latest.data);
-        setSheet({ open: true, item: latest.data });
-        return { conflict: latest.data };
-      }
-      return { error: e instanceof ApiError ? e.message : 'Could not save that' };
-    }
-  };
-
-  const remove = async () => {
-    const existing = sheet.item;
-    if (!existing) return;
-    removeLocal(existing.id);
-    try {
-      await request(`/items/${existing.id}`, { method: 'DELETE' });
-    } catch (e) {
-      showToast(e instanceof ApiError ? e.message : 'Could not delete that');
-      void load();
+      removeLocal(id);
+      return { error: e instanceof ApiError ? e.message : 'Could not add that' };
     }
   };
 
@@ -274,8 +233,8 @@ export default function PlanTab() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${item.title}${item.startTime ? ` at ${item.startTime}` : ''}`}
-            accessibilityHint={canEdit ? 'Double tap to edit. Hold to drag.' : 'Double tap for details.'}
-            onPress={() => openSheet(item)}
+            accessibilityHint={canEdit ? 'Double tap for details. Hold to drag.' : 'Double tap for details.'}
+            onPress={() => router.push(`/trips/${trip.id}/items/${item.id}`)}
             onLongPress={canEdit ? drag : undefined}
             delayLongPress={250}
             disabled={isActive}
@@ -378,15 +337,13 @@ export default function PlanTab() {
       ) : null}
 
       <ItemSheet
-        visible={sheet.open}
-        item={sheet.item}
+        visible={sheet}
         defaultDay={current}
         draftTitle={draftTitle}
         days={days}
         currency={trip.baseCurrency}
         canEdit={canEdit}
         onSave={save}
-        onDelete={remove}
         onClose={closeSheet}
       />
     </SafeAreaView>

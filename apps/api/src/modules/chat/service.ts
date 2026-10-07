@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   channels,
+  items,
   messages,
   pollOptions,
   pollVotes,
@@ -26,7 +27,7 @@ import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
-import { mainChannelId, toMessage } from './channel';
+import { itemChannelId, mainChannelId, toMessage } from './channel';
 
 type SendMessage = z.output<typeof SendMessageInput>;
 type CreatePoll = z.output<typeof CreatePollInput>;
@@ -156,96 +157,122 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
     return row;
   };
 
-  return {
-    /** Newest first. Pass `before` (a cursor) to page back through history. */
-    async list(tripId: string, userId: string, before?: string, limit = 30): Promise<MessagePage> {
-      await requireTripRole(db, tripId, userId, 'viewer');
-      const channelId = await mainChannelId(db, tripId);
-      const cursor = before ? decodeCursor(before) : null;
-
-      const rows = await db
-        .select({ message: messages, senderName: users.displayName })
-        .from(messages)
-        .leftJoin(users, eq(users.id, messages.senderId))
-        .where(
-          and(
-            eq(messages.channelId, channelId),
-            isNull(messages.deletedAt),
-            cursor
-              ? sql`(${messages.createdAt}, ${messages.id}) < (${cursor.at.toISOString()}::timestamptz, ${cursor.id}::uuid)`
-              : undefined,
-          ),
-        )
-        .orderBy(desc(messages.createdAt), desc(messages.id))
-        .limit(limit + 1);
-
-      const page = rows.slice(0, limit);
-      const ids = page.map((r) => r.message.id);
-      const grouped = await reactionsFor(ids, userId);
-      const polled = await pollsFor(ids, userId);
-      const last = page.at(-1);
-      return {
-        messages: page.map((r) =>
-          toMessage(r.message, r.senderName, grouped.get(r.message.id), polled.get(r.message.id)),
+  /** One page of a channel, newest first. Shared by the main chat and item threads. */
+  const pageOf = async (
+    channelId: string,
+    userId: string,
+    itemId: string | null,
+    before?: string,
+    limit = 30,
+  ): Promise<MessagePage> => {
+    const cursor = before ? decodeCursor(before) : null;
+    const rows = await db
+      .select({ message: messages, senderName: users.displayName })
+      .from(messages)
+      .leftJoin(users, eq(users.id, messages.senderId))
+      .where(
+        and(
+          eq(messages.channelId, channelId),
+          isNull(messages.deletedAt),
+          cursor
+            ? sql`(${messages.createdAt}, ${messages.id}) < (${cursor.at.toISOString()}::timestamptz, ${cursor.id}::uuid)`
+            : undefined,
         ),
-        nextCursor: rows.length > limit && last ? encodeCursor(last.message) : null,
-        readStates: await readStatesFor(channelId),
-      };
-    },
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(limit + 1);
 
-    /** Retrying with the same client-generated id returns the same message. */
-    async send(tripId: string, userId: string, input: SendMessage, origin?: string) {
-      await requireTripRole(db, tripId, userId, 'editor');
-      const id = input.id ?? newId();
-      const channelId = await mainChannelId(db, tripId);
-      const now = new Date();
+    const page = rows.slice(0, limit);
+    const ids = page.map((r) => r.message.id);
+    const grouped = await reactionsFor(ids, userId);
+    const polled = await pollsFor(ids, userId);
+    const last = page.at(-1);
+    return {
+      messages: page.map((r) =>
+        toMessage(
+          r.message,
+          r.senderName,
+          grouped.get(r.message.id),
+          polled.get(r.message.id),
+          itemId,
+        ),
+      ),
+      nextCursor: rows.length > limit && last ? encodeCursor(last.message) : null,
+      readStates: await readStatesFor(channelId),
+    };
+  };
 
-      const result = await db.transaction(async (tx) => {
-        const [inserted] = await tx
-          .insert(messages)
-          .values({
-            id,
-            channelId,
-            tripId,
-            senderId: userId,
-            kind: 'text',
-            body: input.body,
-            replyToId: input.replyToId ?? null,
-            createdAt: now,
-          })
-          .onConflictDoNothing()
-          .returning();
+  /**
+   * Writes a text message into a channel. Retrying with the same
+   * client-generated id returns the same message.
+   */
+  const post = async (
+    tripId: string,
+    channelId: string,
+    itemId: string | null,
+    userId: string,
+    input: SendMessage,
+    origin?: string,
+  ) => {
+    const id = input.id ?? newId();
+    const now = new Date();
 
-        if (!inserted) {
-          const [existing] = await tx.select().from(messages).where(eq(messages.id, id));
-          if (!existing || existing.senderId !== userId || existing.tripId !== tripId) {
-            throw conflict('A message with that id already exists');
-          }
-          return { row: existing, created: false };
+    const result = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(messages)
+        .values({
+          id,
+          channelId,
+          tripId,
+          senderId: userId,
+          kind: 'text',
+          body: input.body,
+          replyToId: input.replyToId ?? null,
+          createdAt: now,
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      if (!inserted) {
+        const [existing] = await tx.select().from(messages).where(eq(messages.id, id));
+        if (
+          !existing ||
+          existing.senderId !== userId ||
+          existing.tripId !== tripId ||
+          existing.channelId !== channelId
+        ) {
+          throw conflict('A message with that id already exists');
         }
-        await tx.update(channels).set({ lastMessageAt: now }).where(eq(channels.id, channelId));
-        return { row: inserted, created: true };
-      });
+        return { row: existing, created: false };
+      }
+      await tx.update(channels).set({ lastMessageAt: now }).where(eq(channels.id, channelId));
+      return { row: inserted, created: true };
+    });
 
-      const [sender] = await db
-        .select({ name: users.displayName })
-        .from(users)
-        .where(eq(users.id, userId));
-      const message = toMessage(result.row, sender?.name ?? null);
-      if (!result.created) return { message, created: false };
+    const [sender] = await db
+      .select({ name: users.displayName })
+      .from(users)
+      .where(eq(users.id, userId));
+    const message = toMessage(result.row, sender?.name ?? null, [], null, itemId);
+    if (!result.created) return { message, created: false };
 
-      // You've obviously read your own message.
-      await advanceRead(channelId, userId, message.id, result.row.createdAt);
-      await publishTripEvent(redis, {
-        type: 'message.created',
-        tripId,
-        entityId: message.id,
-        actorId: userId,
-        payload: message,
-        originClientId: origin,
-      });
+    // You've obviously read your own message.
+    await advanceRead(channelId, userId, message.id, result.row.createdAt);
+    await publishTripEvent(redis, {
+      type: 'message.created',
+      tripId,
+      entityId: message.id,
+      actorId: userId,
+      payload: message,
+      originClientId: origin,
+    });
 
-      // Everyone else may get a push; the worker skips whoever is online.
+    /*
+     * Pushes are for the main chat only. A thread is a side conversation
+     * about one item, and the push summary ("5 new messages") counts the
+     * main chat, so a thread message would announce nothing it could show.
+     */
+    if (itemId === null) {
       const others = await db
         .select({ userId: tripMembers.userId })
         .from(tripMembers)
@@ -260,7 +287,42 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
         tripId,
         others.map((o) => o.userId),
       );
-      return { message, created: true };
+    }
+    return { message, created: true };
+  };
+
+  /** The plan item a thread hangs off, with access checked. */
+  const threadOf = async (itemId: string, userId: string, minRole: 'viewer' | 'editor') => {
+    const [item] = await db
+      .select({ tripId: items.tripId })
+      .from(items)
+      .where(and(eq(items.id, itemId), isNull(items.deletedAt)));
+    if (!item) throw notFound('That item no longer exists');
+    await requireTripRole(db, item.tripId, userId, minRole);
+    return { tripId: item.tripId, channelId: await itemChannelId(db, item.tripId, itemId) };
+  };
+
+  return {
+    /** Newest first. Pass `before` (a cursor) to page back through history. */
+    async list(tripId: string, userId: string, before?: string, limit = 30): Promise<MessagePage> {
+      await requireTripRole(db, tripId, userId, 'viewer');
+      return pageOf(await mainChannelId(db, tripId), userId, null, before, limit);
+    },
+
+    async send(tripId: string, userId: string, input: SendMessage, origin?: string) {
+      await requireTripRole(db, tripId, userId, 'editor');
+      return post(tripId, await mainChannelId(db, tripId), null, userId, input, origin);
+    },
+
+    /** A plan item's own thread, so a debate about one restaurant stays with it. */
+    async listThread(itemId: string, userId: string, before?: string, limit = 30) {
+      const { channelId } = await threadOf(itemId, userId, 'viewer');
+      return pageOf(channelId, userId, itemId, before, limit);
+    },
+
+    async sendThread(itemId: string, userId: string, input: SendMessage, origin?: string) {
+      const { tripId, channelId } = await threadOf(itemId, userId, 'editor');
+      return post(tripId, channelId, itemId, userId, input, origin);
     },
 
     async toggleReaction(messageId: string, userId: string, emoji: string, origin?: string) {
@@ -438,12 +500,17 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       const row = await loadMessage(messageId);
       if (row.tripId !== tripId) throw notFound('Message not found');
       const lastReadAt = await advanceRead(row.channelId, userId, messageId, row.createdAt);
+      // Say which conversation this was, so reading a thread doesn't move "Seen by" in the main chat.
+      const [channel] = await db
+        .select({ itemId: channels.itemId })
+        .from(channels)
+        .where(eq(channels.id, row.channelId));
       await publishTripEvent(redis, {
         type: 'read.updated',
         tripId,
         entityId: userId,
         actorId: userId,
-        payload: { userId, lastReadAt: lastReadAt.toISOString() },
+        payload: { userId, lastReadAt: lastReadAt.toISOString(), itemId: channel?.itemId ?? null },
         originClientId: origin,
       });
       return { lastReadAt: lastReadAt.toISOString() };

@@ -5,6 +5,7 @@ import { bullJobs } from './lib/jobs';
 import { logMailer } from './lib/mailer';
 import { s3Storage } from './lib/storage';
 import { authRoutes } from './modules/auth/routes';
+import { bookingsRoutes } from './modules/bookings/routes';
 import { chatRoutes } from './modules/chat/routes';
 import { devicesRoutes } from './modules/devices/routes';
 import { documentsRoutes } from './modules/documents/routes';
@@ -52,6 +53,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(ideasRoutes, { deps: fullDeps });
   await app.register(chatRoutes, { deps: fullDeps });
   await app.register(documentsRoutes, { deps: fullDeps });
+  await app.register(bookingsRoutes, { deps: fullDeps });
   await app.register(devicesRoutes, { deps: fullDeps });
 
   return app;

@@ -46,6 +46,8 @@ export const ChatMessage = z.object({
   reactions: z.array(MessageReaction),
   /** Only on poll messages. */
   poll: Poll.nullable(),
+  /** The plan item whose thread this belongs to; null for the main chat. */
+  itemId: z.string().uuid().nullable(),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 

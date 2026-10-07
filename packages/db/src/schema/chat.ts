@@ -36,6 +36,8 @@ export const channels = chatSchema.table(
     check('channels_kind_check', sql.raw(`kind in ('trip', 'item')`)),
     // Exactly one main channel per trip.
     uniqueIndex('channels_one_main_per_trip').on(t.tripId).where(sql.raw(`kind = 'trip'`)),
+    // And one thread per plan item, for the same reason.
+    uniqueIndex('channels_one_thread_per_item').on(t.itemId).where(sql.raw(`kind = 'item'`)),
   ],
 );
 

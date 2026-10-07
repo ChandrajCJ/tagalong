@@ -25,6 +25,11 @@ export const itineraryRoutes = async (app: FastifyInstance, { deps }: { deps: De
     return reply.status(created ? 201 : 200).send(item);
   });
 
+  app.get('/items/:itemId', async (request) => {
+    const { itemId } = parse(ItemParams, request.params);
+    return service.get(itemId, request.user.sub);
+  });
+
   app.patch('/items/:itemId', async (request) => {
     const { itemId } = parse(ItemParams, request.params);
     const input = parse(UpdateItemInput, request.body);

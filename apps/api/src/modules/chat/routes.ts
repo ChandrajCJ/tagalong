@@ -15,6 +15,7 @@ import { createChatService } from './service';
 const TripParams = z.object({ id: z.string().uuid() });
 const MessageParams = z.object({ messageId: z.string().uuid() });
 const PollParams = z.object({ pollId: z.string().uuid() });
+const ItemParams = z.object({ itemId: z.string().uuid() });
 const PageQuery = z.object({
   before: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
@@ -34,6 +35,24 @@ export const chatRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
     const { id } = parse(TripParams, request.params);
     const input = parse(SendMessageInput, request.body);
     const { message, created } = await chat.send(id, request.user.sub, input, originOf(request));
+    return reply.status(created ? 201 : 200).send(message);
+  });
+
+  app.get('/items/:itemId/messages', async (request) => {
+    const { itemId } = parse(ItemParams, request.params);
+    const { before, limit } = parse(PageQuery, request.query);
+    return chat.listThread(itemId, request.user.sub, before, limit);
+  });
+
+  app.post('/items/:itemId/messages', async (request, reply) => {
+    const { itemId } = parse(ItemParams, request.params);
+    const input = parse(SendMessageInput, request.body);
+    const { message, created } = await chat.sendThread(
+      itemId,
+      request.user.sub,
+      input,
+      originOf(request),
+    );
     return reply.status(created ? 201 : 200).send(message);
   });
 

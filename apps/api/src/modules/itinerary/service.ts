@@ -81,6 +81,17 @@ export const createItineraryService = (db: Db, redis: Redis) => {
       return rows.map(toItem);
     },
 
+    /** One item, for its detail screen. */
+    async get(itemId: string, userId: string): Promise<ItineraryItem> {
+      const [row] = await db
+        .select()
+        .from(items)
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt)));
+      if (!row) throw notFound('That item no longer exists');
+      await requireTripRole(db, row.tripId, userId, 'viewer');
+      return toItem(row);
+    },
+
     /** Retrying with the same client-generated id returns the same item. */
     async create(tripId: string, userId: string, input: CreateItem, origin?: string) {
       await requireTripRole(db, tripId, userId, 'editor');
@@ -165,6 +176,15 @@ export const createItineraryService = (db: Db, redis: Redis) => {
       ) as Partial<typeof items.$inferInsert>;
 
       const updated = await db.transaction(async (tx) => {
+        /*
+         * Moving to another day without saying where: put it at the end of
+         * that day. Otherwise it keeps a key from its old day, which can land
+         * it anywhere on the new one or tie with an item already there.
+         */
+        const movedDay = changes.date !== undefined && changes.date !== current.date;
+        if (movedDay && changes.position === undefined) {
+          changes.position = await endOfDay(tx, current.tripId, changes.date ?? null);
+        }
         const [row] = await tx
           .update(items)
           .set({ ...changes, version: sql`${items.version} + 1` })

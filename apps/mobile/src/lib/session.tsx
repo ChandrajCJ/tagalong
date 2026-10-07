@@ -45,7 +45,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       SecureStore.getItemAsync(KEY).catch(() => null),
       SecureStore.getItemAsync(INVITE_KEY).catch(() => null),
     ]).then(([raw, invite]) => {
-      let parsed: AuthTokens | null = null;
+      let parsed: AuthTokens | null;
       try {
         const result = raw ? AuthTokens.safeParse(JSON.parse(raw)) : null;
         parsed = result?.success ? result.data : null;
