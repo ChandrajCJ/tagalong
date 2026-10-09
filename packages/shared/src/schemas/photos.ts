@@ -35,6 +35,9 @@ export const Photo = z.object({
   caption: z.string().nullable(),
   version: z.number().int(),
   createdAt: z.string(),
+  /** How many people hearted it, and whether this person did. */
+  favourites: z.number().int(),
+  favourited: z.boolean(),
   /** Short-lived signed links. Null until the thumbnail exists. */
   thumbUrl: z.string().url().nullable(),
   url: z.string().url().nullable(),
@@ -75,3 +78,16 @@ export const PhotoUpload = z.object({
   expiresIn: z.number().int(),
 });
 export type PhotoUpload = z.infer<typeof PhotoUpload>;
+
+/** What a heart changes, broadcast so every album updates its count. */
+export const PhotoFavourited = z.object({
+  photoId: z.string().uuid(),
+  userId: z.string().uuid(),
+  added: z.boolean(),
+  count: z.number().int(),
+});
+export type PhotoFavourited = z.infer<typeof PhotoFavourited>;
+
+/** The answer to a heart: the new count, and this person's own state. */
+export const FavouriteResult = z.object({ favourites: z.number().int(), favourited: z.boolean() });
+export type FavouriteResult = z.infer<typeof FavouriteResult>;

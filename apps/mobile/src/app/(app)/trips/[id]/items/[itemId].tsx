@@ -4,14 +4,18 @@ import {
   BookingList,
   ChatMessage,
   DocumentList,
+  FavouriteResult,
   hasRole,
   ItineraryItem,
   MessagePage,
   newId,
+  PhotoList,
+  type Photo,
   type BookingType,
   type ItemType,
   type TripDocument,
 } from '@tagalong/shared';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -28,8 +32,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookingCard } from '@/components/booking-card';
-import { BookingSheet, type BookingFields, type SaveResult as BookingSaveResult } from '@/components/booking-sheet';
-import { ItemSheet, type ItemFields, type SaveResult as ItemSaveResult } from '@/components/item-sheet';
+import {
+  BookingSheet,
+  type BookingFields,
+  type SaveResult as BookingSaveResult,
+} from '@/components/booking-sheet';
+import {
+  ItemSheet,
+  type ItemFields,
+  type SaveResult as ItemSaveResult,
+} from '@/components/item-sheet';
+import { PhotoViewer } from '@/components/photo-viewer';
 import { Avatar, Body, Button, Label } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { mergeMessages, timeOf, type LocalMessage } from '@/lib/chat';
@@ -64,8 +77,13 @@ export default function ItemDetail() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState(false);
-  const [bookingSheet, setBookingSheet] = useState<{ open: boolean; booking?: Booking }>({ open: false });
+  const [bookingSheet, setBookingSheet] = useState<{ open: boolean; booking?: Booking }>({
+    open: false,
+  });
   const [draft, setDraft] = useState('');
+  // Photos taken during this item, matched by time on the server.
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
 
   const tripId = trip?.id;
   const canEdit = !!trip && hasRole(trip.myRole, 'editor');
@@ -73,17 +91,24 @@ export default function ItemDetail() {
   const load = useCallback(async () => {
     if (!tripId || !itemId) return;
     try {
-      const [loaded, bookingList, docList, thread] = await Promise.all([
+      const [loaded, bookingList, docList, thread, taken] = await Promise.all([
         request(`/items/${itemId}`, { schema: ItineraryItem }),
         request(`/trips/${tripId}/bookings`, { schema: BookingList }),
         request(`/trips/${tripId}/documents`, { schema: DocumentList }),
         request(`/items/${itemId}/messages`, { schema: MessagePage }),
+        request(`/items/${itemId}/photos`, { schema: PhotoList }),
       ]);
+      setPhotos(taken.photos);
       setItem(loaded);
       setBookings(bookingList.bookings);
       setDocs(docList.documents.filter((d) => d.status === 'ready'));
       // Keep anything still sending; the server's copy replaces the rest.
-      setMessages((prev) => mergeMessages(prev.filter((m) => m.status), thread.messages));
+      setMessages((prev) =>
+        mergeMessages(
+          prev.filter((m) => m.status),
+          thread.messages,
+        ),
+      );
       setCursor(thread.nextCursor);
       setError(undefined);
     } catch (e) {
@@ -95,6 +120,12 @@ export default function ItemDetail() {
     void load();
   }, [load]);
 
+  const loadPhotos = useCallback(async () => {
+    if (!itemId) return;
+    const taken = await request(`/items/${itemId}/photos`, { schema: PhotoList }).catch(() => null);
+    if (taken) setPhotos(taken.photos);
+  }, [itemId]);
+
   useTripRealtime(tripId, (m) => {
     if (m.kind === 'reconnected') return void load();
     if (m.kind === 'error' && m.code === 'removed') return router.replace('/trips');
@@ -103,7 +134,12 @@ export default function ItemDetail() {
 
     if (event.type === 'item.upserted' && event.entityId === itemId) {
       const parsed = ItineraryItem.safeParse(event.payload);
-      if (parsed.success) setItem((cur) => (cur && cur.version > parsed.data.version ? cur : parsed.data));
+      if (parsed.success)
+        setItem((cur) => (cur && cur.version > parsed.data.version ? cur : parsed.data));
+      // New times can mean different photos.
+      void loadPhotos();
+    } else if (event.type.startsWith('photo.')) {
+      void loadPhotos();
     } else if (event.type === 'item.deleted' && event.entityId === itemId) {
       router.back();
     } else if (event.type === 'booking.upserted') {
@@ -175,7 +211,8 @@ export default function ItemDetail() {
       );
       return { ok: true };
     } catch (e) {
-      const latest = e instanceof ApiError && e.status === 409 && ItineraryItem.safeParse(e.data.current);
+      const latest =
+        e instanceof ApiError && e.status === 409 && ItineraryItem.safeParse(e.data.current);
       if (latest && latest.success) {
         setItem(latest.data);
         return { conflict: latest.data };
@@ -221,6 +258,24 @@ export default function ItemDetail() {
     if (!existing) return;
     setBookings((prev) => prev.filter((b) => b.id !== existing.id));
     await request(`/bookings/${existing.id}`, { method: 'DELETE' }).catch(() => void load());
+  };
+
+  const favourite = async (photo: Photo) => {
+    const on = !photo.favourited;
+    const set = (favourites: number, favourited: boolean) =>
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === photo.id ? { ...p, favourites, favourited } : p)),
+      );
+    set(photo.favourites + (on ? 1 : -1), on);
+    try {
+      const saved = await request(`/photos/${photo.id}/favourite`, {
+        method: on ? 'PUT' : 'DELETE',
+        schema: FavouriteResult,
+      });
+      set(saved.favourites, saved.favourited);
+    } catch {
+      set(photo.favourites, photo.favourited);
+    }
   };
 
   const openDoc = async (doc: TripDocument) => {
@@ -273,7 +328,11 @@ export default function ItemDetail() {
   const meta = ITEM_TYPE_META[item.type];
   const when = [
     dayKeyOf(item) === 'anytime' ? 'Anytime' : shortDate(item.date!),
-    item.startTime ? (item.endTime ? `${item.startTime}–${item.endTime}` : item.startTime) : null,
+    item.startTime
+      ? item.endTime
+        ? `${item.startTime}–${item.endTime}${item.endTime <= item.startTime ? ' (next day)' : ''}`
+        : item.startTime
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -283,7 +342,12 @@ export default function ItemDetail() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.iconButton}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => router.back()}
+          style={styles.iconButton}
+        >
           <Feather name="chevron-left" size={24} color={colors.ink} />
         </Pressable>
         {canEdit ? (
@@ -294,7 +358,10 @@ export default function ItemDetail() {
         ) : null}
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <View style={{ gap: space.sm }}>
             <View style={styles.typeRow}>
@@ -328,7 +395,9 @@ export default function ItemDetail() {
                 <View key={b.id} style={{ gap: space.sm }}>
                   <BookingCard
                     booking={b}
-                    onPress={canEdit ? () => setBookingSheet({ open: true, booking: b }) : undefined}
+                    onPress={
+                      canEdit ? () => setBookingSheet({ open: true, booking: b }) : undefined
+                    }
                   />
                   {doc ? (
                     <Pressable
@@ -366,22 +435,63 @@ export default function ItemDetail() {
             ) : null}
           </View>
 
+          {photos.length > 0 ? (
+            <View style={{ gap: space.md }}>
+              <Label>Photos · {photos.length}</Label>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoStrip}
+              >
+                {photos.map((photo) => (
+                  <Pressable
+                    key={photo.id}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel={`Photo by ${photo.uploaderName ?? 'someone'}`}
+                    onPress={() => setViewingPhoto(photo.id)}
+                  >
+                    <Image
+                      source={
+                        photo.thumbUrl
+                          ? { uri: photo.thumbUrl, cacheKey: `${photo.id}-thumb` }
+                          : undefined
+                      }
+                      style={styles.photoThumb}
+                      contentFit="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
           <View style={{ gap: space.md }}>
             <Label>Discussion</Label>
             {cursor ? <Button label="Show earlier" variant="ghost" onPress={loadOlder} /> : null}
             {thread.length === 0 ? (
-              <Body style={{ fontSize: 13 }}>Talk about this one here. It stays out of the main chat.</Body>
+              <Body style={{ fontSize: 13 }}>
+                Talk about this one here. It stays out of the main chat.
+              </Body>
             ) : (
               thread.map((m) => {
                 const isMe = m.senderId === trip.myUserId;
                 return (
-                  <View key={m.id} style={[styles.msgRow, isMe && { flexDirection: 'row-reverse' }]}>
+                  <View
+                    key={m.id}
+                    style={[styles.msgRow, isMe && { flexDirection: 'row-reverse' }]}
+                  >
                     <Avatar
                       name={m.senderName ?? '?'}
                       color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)}
                       size={26}
                     />
-                    <View style={[styles.bubble, isMe ? styles.bubbleMine : styles.bubbleTheirs, m.status === 'sending' && { opacity: 0.6 }]}>
+                    <View
+                      style={[
+                        styles.bubble,
+                        isMe ? styles.bubbleMine : styles.bubbleTheirs,
+                        m.status === 'sending' && { opacity: 0.6 },
+                      ]}
+                    >
                       {!isMe ? <Text style={styles.sender}>{m.senderName}</Text> : null}
                       <Text style={[styles.msgBody, isMe && { color: '#FFFFFF' }]}>{m.body}</Text>
                       <Text style={[styles.msgTime, isMe && { color: colors.onAccentMuted }]}>
@@ -431,6 +541,17 @@ export default function ItemDetail() {
         onDelete={deleteItem}
         onClose={closeEdit}
       />
+      <PhotoViewer
+        photos={photos}
+        startId={viewingPhoto}
+        canDelete={(photo) => photo.uploadedBy === trip.myUserId || trip.myRole === 'owner'}
+        onDelete={async (photo) => {
+          setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+          await request(`/photos/${photo.id}`, { method: 'DELETE' }).catch(() => void loadPhotos());
+        }}
+        onFavourite={(photo) => void favourite(photo)}
+        onClose={() => setViewingPhoto(null)}
+      />
       <BookingSheet
         visible={bookingSheet.open}
         booking={bookingSheet.booking}
@@ -448,26 +569,92 @@ export default function ItemDetail() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.md, paddingTop: space.sm },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+  },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  editButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: space.md },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: space.md,
+  },
   editText: { fontFamily: fonts.bold, fontSize: 15, color: colors.accent },
   body: { padding: space.xl, paddingTop: space.sm, gap: space.xxl, paddingBottom: space.xxl },
   typeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   typeText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   title: { fontFamily: fonts.display, fontSize: 28, color: colors.ink },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  notes: { padding: space.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
-  docRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  notes: {
+    padding: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  docRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    minHeight: 44,
+    paddingHorizontal: space.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
   docName: { flex: 1, fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
   bubble: { maxWidth: '78%', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 2 },
   bubbleMine: { backgroundColor: colors.accent, borderBottomRightRadius: 4 },
-  bubbleTheirs: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: 4 },
+  bubbleTheirs: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderBottomLeftRadius: 4,
+  },
   sender: { fontFamily: fonts.bold, fontSize: 12, color: colors.muted },
   msgBody: { fontFamily: fonts.body, fontSize: 15, lineHeight: 20, color: colors.ink },
   msgTime: { fontFamily: fonts.body, fontSize: 11, color: colors.muted },
-  composer: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm, paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.md, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
-  input: { flex: 1, minHeight: 44, maxHeight: 120, borderRadius: 22, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.bg, paddingHorizontal: space.lg, paddingTop: 12, paddingBottom: 12, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
-  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  photoStrip: { gap: space.sm },
+  photoThumb: { width: 96, height: 96, borderRadius: radius.md, backgroundColor: colors.line },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 120,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.bg,
+    paddingHorizontal: space.lg,
+    paddingTop: 12,
+    paddingBottom: 12,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  send: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

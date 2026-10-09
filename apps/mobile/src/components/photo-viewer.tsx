@@ -26,6 +26,8 @@ interface Props {
   startId: string | null;
   canDelete: (photo: Photo) => boolean;
   onDelete: (photo: Photo) => Promise<void>;
+  /** Hearts it, or takes the heart back. */
+  onFavourite: (photo: Photo) => void;
   onClose: () => void;
 }
 
@@ -45,7 +47,7 @@ const takenLabel = (takenAt: string | null) => {
 };
 
 /** Full screen, swipe between photos (design: PhotoViewer.dc.html). */
-export function PhotoViewer({ photos, startId, canDelete, onDelete, onClose }: Props) {
+export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite, onClose }: Props) {
   const { width, height } = useWindowDimensions();
   const startIndex = Math.max(0, photos.findIndex((p) => p.id === startId));
   const [index, setIndex] = useState(startIndex);
@@ -139,6 +141,20 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onClose }: P
         </SafeAreaView>
 
         <SafeAreaView edges={['bottom']} style={styles.bottomBar} pointerEvents="box-none">
+          {current ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={current.favourited ? 'Remove your heart' : 'Heart this photo'}
+              aria-checked={current.favourited}
+              onPress={() => onFavourite(current)}
+              style={styles.action}
+            >
+              <Feather name="heart" size={20} color={current.favourited ? '#FF6B6B' : '#FFFFFF'} />
+              <Text style={styles.actionText}>
+                {current.favourites > 0 ? current.favourites : 'Heart'}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Share photo" onPress={share} style={styles.action}>
             <Feather name="share" size={20} color="#FFFFFF" />
             <Text style={styles.actionText}>Share</Text>

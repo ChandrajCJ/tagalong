@@ -121,7 +121,7 @@ const chunk = <T>(list: T[], size: number) =>
   Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
 
 /** "Sat 13 Jun". */
-const dayLabel = (iso: string) => {
+export const dayLabel = (iso: string) => {
   const { month, day } = parseIso(iso);
   return `${weekdayOf(iso)} ${day} ${MONTH_NAMES[month]!.slice(0, 3)}`;
 };
@@ -167,4 +167,12 @@ export const groupByDay = (photos: Photo[], tripStart: string | null): DaySectio
     });
   }
   return sections;
+};
+
+/** "Sat 12 Jun" or "Sat 12 – Mon 14 Jun", from photos' local times. */
+export const dateSpan = (from: string | null, to: string | null) => {
+  if (!from) return '';
+  const a = dayLabel(from.slice(0, 10));
+  if (!to || to.slice(0, 10) === from.slice(0, 10)) return a;
+  return `${a} – ${dayLabel(to.slice(0, 10))}`;
 };

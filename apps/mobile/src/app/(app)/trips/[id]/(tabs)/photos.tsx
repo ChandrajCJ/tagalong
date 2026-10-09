@@ -1,5 +1,14 @@
 import Feather from '@expo/vector-icons/Feather';
-import { hasRole, MAX_PHOTOS_PER_BATCH, Photo, PhotoList } from '@tagalong/shared';
+import {
+  clusterPlaces,
+  FavouriteResult,
+  hasRole,
+  MAX_PHOTOS_PER_BATCH,
+  Photo,
+  PhotoFavourited,
+  PhotoList,
+  type Place,
+} from '@tagalong/shared';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
@@ -14,6 +23,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PhotoMap } from '@/components/photo-map';
 import { PhotoViewer } from '@/components/photo-viewer';
 import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
@@ -24,6 +34,16 @@ import { colors, fonts, radius, space } from '@/theme';
 
 const GAP = 3;
 
+const chunkRows = (list: Photo[]) =>
+  Array.from({ length: Math.ceil(list.length / 3) }, (_, i) => list.slice(i * 3, i * 3 + 3));
+
+type Mode = 'days' | 'map' | 'favourites';
+const MODES: { key: Mode; label: string }[] = [
+  { key: 'days', label: 'By day' },
+  { key: 'map', label: 'Map' },
+  { key: 'favourites', label: 'Favourites' },
+];
+
 /** Everyone's photos in one album, by day (design: Album.dc.html). */
 export default function PhotosTab() {
   const { trip, reload: reloadTrip } = useTrip();
@@ -32,7 +52,9 @@ export default function PhotosTab() {
   const [error, setError] = useState<string>();
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [lastFailed, setLastFailed] = useState<UploadProgress['failed']>([]);
-  const [viewing, setViewing] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>('days');
+  // What the viewer pages through: the whole album, one place, or the favourites.
+  const [viewing, setViewing] = useState<{ photos: Photo[]; startId: string } | null>(null);
   const loadedAt = useRef(0);
   const expiresIn = useRef(600);
 
@@ -85,6 +107,9 @@ export default function PhotosTab() {
       void request(`/photos/${event.entityId}`, { schema: Photo })
         .then(upsert)
         .catch(() => {});
+    } else if (event.type === 'photo.favourited') {
+      const change = PhotoFavourited.safeParse(event.payload);
+      if (change.success) applyFavourite(change.data);
     } else if (event.type === 'photo.deleted') {
       setPhotos((prev) => prev?.filter((p) => p.id !== event.entityId) ?? prev);
     } else if (event.type.startsWith('member.')) {
@@ -92,11 +117,60 @@ export default function PhotosTab() {
     }
   });
 
+  /** Someone's heart: the count for everyone, and "mine" only if it was me. */
+  const applyFavourite = useCallback(
+    ({ photoId, userId, added, count }: PhotoFavourited) => {
+      const update = (p: Photo) =>
+        p.id !== photoId
+          ? p
+          : { ...p, favourites: count, favourited: userId === trip?.myUserId ? added : p.favourited };
+      setPhotos((prev) => prev?.map(update) ?? prev);
+      setViewing((v) => (v ? { ...v, photos: v.photos.map(update) } : v));
+    },
+    [trip?.myUserId],
+  );
+
   const sections = useMemo(
     () => groupByDay((photos ?? []).filter((p) => p.status === 'ready'), trip?.startDate ?? null),
     [photos, trip?.startDate],
   );
   const flat = useMemo(() => sections.flatMap((s) => s.data.flat()), [sections]);
+  const byId = useMemo(() => new Map(flat.map((p) => [p.id, p])), [flat]);
+  const places = useMemo(
+    () =>
+      clusterPlaces(
+        flat
+          .filter((p) => p.latitude !== null && p.longitude !== null)
+          .map((p) => ({ id: p.id, latitude: p.latitude!, longitude: p.longitude!, takenAt: p.takenAt })),
+      ),
+    [flat],
+  );
+  // The group's favourites: most-hearted first, then in the order they were taken.
+  const favourites = useMemo(
+    () => flat.filter((p) => p.favourites > 0).sort((a, b) => b.favourites - a.favourites),
+    [flat],
+  );
+
+  const openPlace = (place: Place) => {
+    const inPlace = place.photoIds.map((id) => byId.get(id)).filter((p): p is Photo => !!p);
+    if (inPlace.length > 0) setViewing({ photos: inPlace, startId: inPlace[0]!.id });
+  };
+
+  const favourite = async (photo: Photo) => {
+    const on = !photo.favourited;
+    const count = photo.favourites + (on ? 1 : -1);
+    // Show it straight away; the server's answer (or a rollback) follows.
+    applyFavourite({ photoId: photo.id, userId: trip!.myUserId, added: on, count });
+    try {
+      const saved = await request(`/photos/${photo.id}/favourite`, {
+        method: on ? 'PUT' : 'DELETE',
+        schema: FavouriteResult,
+      });
+      applyFavourite({ photoId: photo.id, userId: trip!.myUserId, added: on, count: saved.favourites });
+    } catch {
+      applyFavourite({ photoId: photo.id, userId: trip!.myUserId, added: !on, count: photo.favourites });
+    }
+  };
 
   const send = async (picked: { id?: string; asset: ImagePicker.ImagePickerAsset }[]) => {
     if (!tripId || picked.length === 0) return;
@@ -144,7 +218,7 @@ export default function PhotosTab() {
           key={photo.id}
           accessibilityRole="imagebutton"
           accessibilityLabel={`Photo by ${photo.uploaderName ?? 'someone'}`}
-          onPress={() => setViewing(photo.id)}
+          onPress={() => setViewing({ photos: mode === 'favourites' ? favourites : flat, startId: photo.id })}
           style={{ width: size, height: size }}
         >
           <Image
@@ -189,6 +263,25 @@ export default function PhotosTab() {
           </Pressable>
         ) : null}
       </View>
+
+      {flat.length > 0 ? (
+        <View style={styles.modes} accessibilityRole="tablist">
+          {MODES.map((m) => {
+            const on = mode === m.key;
+            return (
+              <Pressable
+                key={m.key}
+                accessibilityRole="tab"
+                aria-selected={on}
+                onPress={() => setMode(m.key)}
+                style={[styles.mode, on && styles.modeOn]}
+              >
+                <Text style={[styles.modeText, on && { color: '#FFFFFF' }]}>{m.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       {progress ? (
         <View style={styles.banner} accessibilityLiveRegion="polite">
@@ -245,6 +338,35 @@ export default function PhotosTab() {
           </Body>
           {canAdd ? <Button label="Add photos" onPress={pick} /> : null}
         </View>
+      ) : mode === 'map' ? (
+        places.length === 0 ? (
+          <View style={styles.center}>
+            <Feather name="map" size={28} color={colors.accent} />
+            <Body style={{ textAlign: 'center' }}>
+              No photos have a location yet. Phones add one when location is on for the camera.
+            </Body>
+          </View>
+        ) : (
+          <View style={{ flex: 1 }}>
+            <PhotoMap places={places} photosById={byId} onOpenPlace={openPlace} />
+          </View>
+        )
+      ) : mode === 'favourites' ? (
+        favourites.length === 0 ? (
+          <View style={styles.center}>
+            <Feather name="heart" size={28} color={colors.accent} />
+            <Body style={{ textAlign: 'center' }}>
+              No favourites yet. Open a photo and tap the heart; the group&apos;s best rise here.
+            </Body>
+          </View>
+        ) : (
+          <SectionList
+            sections={[{ key: 'favourites', title: 'Group favourites', data: chunkRows(favourites) }]}
+            keyExtractor={(row) => row.map((p) => p.id).join()}
+            renderItem={renderRow}
+            contentContainerStyle={[styles.list, { paddingTop: space.md }]}
+          />
+        )
       ) : (
         <SectionList
           sections={sections}
@@ -268,10 +390,14 @@ export default function PhotosTab() {
       )}
 
       <PhotoViewer
-        photos={flat}
-        startId={viewing}
+        photos={viewing?.photos ?? []}
+        startId={viewing?.startId ?? null}
         canDelete={canDelete}
-        onDelete={remove}
+        onDelete={async (photo) => {
+          await remove(photo);
+          setViewing((v) => (v ? { ...v, photos: v.photos.filter((p) => p.id !== photo.id) } : v));
+        }}
+        onFavourite={(photo) => void favourite(photo)}
         onClose={() => setViewing(null)}
       />
     </SafeAreaView>
@@ -288,6 +414,10 @@ const styles = StyleSheet.create({
   bar: { width: '100%', height: 4, borderRadius: 2, backgroundColor: 'rgba(14,107,92,0.2)', overflow: 'hidden' },
   barFill: { height: 4, backgroundColor: colors.accent },
   list: { paddingHorizontal: space.xl, paddingBottom: 96 },
+  modes: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.xl, paddingBottom: space.sm },
+  mode: { minHeight: 36, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
+  modeOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  modeText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm, backgroundColor: colors.bg },
   sectionTitle: { fontFamily: fonts.display, fontSize: 18, color: colors.ink },
   sectionMeta: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },

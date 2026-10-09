@@ -1,6 +1,6 @@
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import { changeLog, photos, users, type Db } from '@tagalong/db';
-import { CreatePhotoInput, newId, type Photo } from '@tagalong/shared';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { changeLog, items, photoFavourites, photos, users, type Db } from '@tagalong/db';
+import { CreatePhotoInput, newId, photoWindow, type Photo } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 import type { z } from 'zod';
 import type { Env } from '../../env';
@@ -13,6 +13,8 @@ import { postSystemMessage } from '../chat/channel';
 
 type CreatePhoto = z.output<typeof CreatePhotoInput>;
 type Row = typeof photos.$inferSelect;
+type Fav = { count: number; mine: boolean };
+const NO_FAVS: Fav = { count: 0, mine: false };
 
 /** Postgres's "unique_violation", wherever the driver puts it. */
 const isUniqueViolation = (e: unknown): boolean => {
@@ -39,7 +41,33 @@ export const createPhotosService = (
   const ttl = env.S3_URL_TTL_SEC;
 
   /** Signs fresh links for one viewer. Never stored or broadcast: they expire. */
-  const toPhoto = async (r: Row, uploaderName: string | null): Promise<Photo> => {
+  /** Heart counts for many photos in one query, and which ones this person hearted. */
+  const favouritesFor = async (photoIds: string[], userId: string) => {
+    const counts = new Map<string, Fav>();
+    if (photoIds.length === 0) return counts;
+    const rows = await db
+      .select({
+        photoId: photoFavourites.photoId,
+        count: sql<number>`count(*)::int`,
+        mine: sql<boolean>`bool_or(${photoFavourites.userId} = ${userId})`,
+      })
+      .from(photoFavourites)
+      .where(inArray(photoFavourites.photoId, photoIds))
+      .groupBy(photoFavourites.photoId);
+    for (const r of rows) counts.set(r.photoId, { count: r.count, mine: r.mine });
+    return counts;
+  };
+
+  /** Rows to app-shaped photos, with hearts and freshly signed links. */
+  const hydrate = async (rows: { photo: Row; uploaderName: string | null }[], userId: string) => {
+    const favs = await favouritesFor(
+      rows.map((r) => r.photo.id),
+      userId,
+    );
+    return Promise.all(rows.map((r) => toPhoto(r.photo, r.uploaderName, favs.get(r.photo.id))));
+  };
+
+  const toPhoto = async (r: Row, uploaderName: string | null, fav: Fav = NO_FAVS): Promise<Photo> => {
     const ready = r.status === 'ready';
     const [thumbUrl, url] = await Promise.all([
       ready && r.thumbKey ? storage.downloadUrl(r.thumbKey, `${r.id}.webp`, ttl) : null,
@@ -62,6 +90,8 @@ export const createPhotosService = (
       caption: r.caption,
       version: r.version,
       createdAt: r.createdAt.toISOString(),
+      favourites: fav.count,
+      favourited: fav.mine,
       thumbUrl,
       url,
     };
@@ -98,7 +128,7 @@ export const createPhotosService = (
         // A photo with no date from the camera sorts by when it was added.
         .orderBy(sql`coalesce(${photos.takenAt}, ${photos.createdAt}) asc`, asc(photos.id));
       return {
-        photos: await Promise.all(rows.map((r) => toPhoto(r.photo, r.uploaderName))),
+        photos: await hydrate(rows, userId),
         expiresIn: ttl,
       };
     },
@@ -110,7 +140,77 @@ export const createPhotosService = (
       if (photo.status !== 'ready' && photo.uploadedBy !== userId) {
         throw notFound('That photo is no longer here');
       }
-      return toPhoto(photo, uploaderName);
+      const [one] = await hydrate([{ photo, uploaderName }], userId);
+      return one!;
+    },
+
+    /**
+     * The photos taken during a plan item, by comparing wall-clock times: the
+     * item's date and times against each photo's EXIF time. An item with no
+     * start time claims none, rather than every photo of its day.
+     */
+    async forItem(itemId: string, userId: string) {
+      const [item] = await db
+        .select()
+        .from(items)
+        .where(and(eq(items.id, itemId), isNull(items.deletedAt)));
+      if (!item) throw notFound('That item no longer exists');
+      await requireTripRole(db, item.tripId, userId, 'viewer');
+
+      const window = photoWindow({
+        date: item.date,
+        startTime: item.startTime?.slice(0, 5) ?? null,
+        endTime: item.endTime?.slice(0, 5) ?? null,
+      });
+      if (!window) return { photos: [], expiresIn: ttl };
+
+      const rows = await db
+        .select({ photo: photos, uploaderName: users.displayName })
+        .from(photos)
+        .innerJoin(users, eq(users.id, photos.uploadedBy))
+        .where(
+          and(
+            eq(photos.tripId, item.tripId),
+            eq(photos.status, 'ready'),
+            isNull(photos.deletedAt),
+            sql`${photos.takenAt} between ${window.from}::timestamp and ${window.to}::timestamp`,
+          ),
+        )
+        .orderBy(asc(photos.takenAt), asc(photos.id));
+      return { photos: await hydrate(rows, userId), expiresIn: ttl };
+    },
+
+    /**
+     * A heart, on or off. Open to viewers: liking a photo is an opinion, not
+     * an edit. Returns the new count so every album can update.
+     */
+    async favourite(photoId: string, userId: string, on: boolean, origin?: string) {
+      const { photo } = await loadLive(photoId);
+      await requireTripRole(db, photo.tripId, userId, 'viewer');
+      if (photo.status !== 'ready') throw notFound('That photo is no longer here');
+
+      if (on) {
+        await db.insert(photoFavourites).values({ photoId, userId }).onConflictDoNothing();
+      } else {
+        await db
+          .delete(photoFavourites)
+          .where(and(eq(photoFavourites.photoId, photoId), eq(photoFavourites.userId, userId)));
+      }
+      const [{ count } = { count: 0 }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(photoFavourites)
+        .where(eq(photoFavourites.photoId, photoId));
+
+      const change = { photoId, userId, added: on, count };
+      await publishTripEvent(redis, {
+        type: 'photo.favourited',
+        tripId: photo.tripId,
+        entityId: photoId,
+        actorId: userId,
+        payload: change,
+        originClientId: origin,
+      });
+      return { favourites: count, favourited: on };
     },
 
     /** Step one: record the photo and hand back where to send the bytes. */

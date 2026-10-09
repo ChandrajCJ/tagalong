@@ -313,3 +313,125 @@ describe('deleting', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe('favourites', () => {
+  const heart = (photoId: string, token: string, on = true) =>
+    ctx.app.inject({
+      method: on ? 'PUT' : 'DELETE',
+      url: `/photos/${photoId}/favourite`,
+      headers: bearer(token),
+    });
+
+  it('counts one heart per person, and knows which are mine', async () => {
+    const { owner, editor, viewer, tripId } = await setup();
+    const photo = await upload(tripId, owner.accessToken);
+
+    await heart(photo.id, editor.accessToken);
+    await heart(photo.id, editor.accessToken); // twice is still one
+    const res = await heart(photo.id, viewer.accessToken); // viewers may heart too
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ favourites: 2, favourited: true });
+
+    const [asViewer] = await album(tripId, viewer.accessToken);
+    const [asOwner] = await album(tripId, owner.accessToken);
+    expect(asViewer).toMatchObject({ favourites: 2, favourited: true });
+    expect(asOwner).toMatchObject({ favourites: 2, favourited: false });
+  });
+
+  it('takes a heart back', async () => {
+    const { owner, editor, tripId } = await setup();
+    const photo = await upload(tripId, owner.accessToken);
+    await heart(photo.id, editor.accessToken);
+    const res = await heart(photo.id, editor.accessToken, false);
+    expect(res.json()).toEqual({ favourites: 0, favourited: false });
+  });
+
+  it("won't let a stranger heart a photo", async () => {
+    const { owner, tripId } = await setup();
+    const photo = await upload(tripId, owner.accessToken);
+    const stranger = await ctx.signIn('stranger@example.com');
+    expect((await heart(photo.id, stranger.accessToken)).statusCode).toBe(404);
+  });
+});
+
+describe("a plan item's photos", () => {
+  const addItem = async (tripId: string, token: string, body: Record<string, unknown>) => {
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: `/trips/${tripId}/items`,
+      headers: bearer(token),
+      payload: { title: 'Sintra day trip', ...body },
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json<{ id: string }>().id;
+  };
+  const itemPhotos = async (itemId: string, token: string) => {
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: `/items/${itemId}/photos`,
+      headers: bearer(token),
+    });
+    expect(res.statusCode).toBe(200);
+    return res.json<PhotoList>().photos.map((p) => p.takenAt);
+  };
+
+  it('shows the photos taken during it, and none from either side', async () => {
+    const { owner, tripId } = await setup();
+    const itemId = await addItem(tripId, owner.accessToken, {
+      date: '2027-06-13',
+      startTime: '10:00',
+      endTime: '13:30',
+    });
+    for (const takenAt of [
+      '2027-06-13T09:59:00', // just before
+      '2027-06-13T10:00:00', // the first minute
+      '2027-06-13T12:15:00',
+      '2027-06-13T13:30:40', // the last minute
+      '2027-06-13T13:31:00', // just after
+      '2027-06-14T11:00:00', // same time, wrong day
+    ]) {
+      await upload(tripId, owner.accessToken, { takenAt });
+    }
+    expect(await itemPhotos(itemId, owner.accessToken)).toEqual([
+      '2027-06-13T10:00:00',
+      '2027-06-13T12:15:00',
+      '2027-06-13T13:30:40',
+    ]);
+  });
+
+  it('follows an evening past midnight', async () => {
+    const { owner, tripId } = await setup();
+    const itemId = await addItem(tripId, owner.accessToken, {
+      title: 'Fado night',
+      date: '2027-06-14',
+      startTime: '22:00',
+      endTime: '01:00',
+    });
+    await upload(tripId, owner.accessToken, { takenAt: '2027-06-14T23:50:00' });
+    await upload(tripId, owner.accessToken, { takenAt: '2027-06-15T00:40:00' });
+    await upload(tripId, owner.accessToken, { takenAt: '2027-06-15T09:00:00' });
+    expect(await itemPhotos(itemId, owner.accessToken)).toEqual([
+      '2027-06-14T23:50:00',
+      '2027-06-15T00:40:00',
+    ]);
+  });
+
+  it("claims nothing for an item with no time, rather than its whole day", async () => {
+    const { owner, tripId } = await setup();
+    const itemId = await addItem(tripId, owner.accessToken, { date: '2027-06-13' });
+    await upload(tripId, owner.accessToken, { takenAt: '2027-06-13T12:00:00' });
+    expect(await itemPhotos(itemId, owner.accessToken)).toEqual([]);
+  });
+
+  it("doesn't show another trip's photos taken at the same time", async () => {
+    const { owner, tripId } = await setup();
+    const otherTrip = await createTrip(ctx.app, owner.accessToken, 'Porto');
+    const itemId = await addItem(tripId, owner.accessToken, {
+      date: '2027-06-13',
+      startTime: '10:00',
+      endTime: '13:00',
+    });
+    await upload(otherTrip, owner.accessToken, { takenAt: '2027-06-13T11:00:00' });
+    expect(await itemPhotos(itemId, owner.accessToken)).toEqual([]);
+  });
+});

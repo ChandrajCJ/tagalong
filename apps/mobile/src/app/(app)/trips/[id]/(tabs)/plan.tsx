@@ -220,7 +220,9 @@ export default function PlanTab() {
   const renderItem = ({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => {
     const editor = Object.values(editors).find((e) => e.itemId === item.id);
     const meta = [
-      item.endTime && item.startTime ? `until ${item.endTime}` : null,
+      item.endTime && item.startTime
+        ? `until ${item.endTime}${item.endTime <= item.startTime ? ' (next day)' : ''}`
+        : null,
       item.placeName,
       item.costEstimateMinor != null && item.costCurrency
         ? `about ${formatCost(item.costEstimateMinor, item.costCurrency)} each`

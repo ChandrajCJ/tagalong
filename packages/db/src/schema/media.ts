@@ -6,6 +6,7 @@ import {
   index,
   integer,
   pgSchema,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -72,4 +73,19 @@ export const photos = mediaSchema.table(
       ),
     ),
   ],
+);
+
+/** Hearts. One per person per photo, so the count is always exact. */
+export const photoFavourites = mediaSchema.table(
+  'photo_favourites',
+  {
+    photoId: uuid('photo_id')
+      .notNull()
+      .references(() => photos.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.photoId, t.userId] })],
 );

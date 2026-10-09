@@ -71,6 +71,13 @@
       "when": 1791544560393,
       "tag": "0009_photo_batch_card",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791550489674,
+      "tag": "0010_photo_favourites",
+      "breakpoints": true
     }
   ]
 }

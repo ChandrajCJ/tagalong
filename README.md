@@ -57,7 +57,10 @@ chat. The trip overview shows the next booking under **Next up**.
 is converted to JPEG (iPhones shoot HEIC, which the server can't read), resized
 to 2560 px, and dated and placed from its EXIF. The worker makes the thumbnails,
 so it must be running (`pnpm dev:backend` starts it). The album is grouped by the
-day each photo was taken, as the clock read where it was taken.
+day each photo was taken, as the clock read where it was taken. Switch to **Map** to
+see them by place (on phones; the browser shows a list of places instead), or
+**Favourites** for the photos the group hearted. A plan item's screen shows the
+photos taken during it.
 
 **Testing live updates with two people:** sign in on your phone as one user and in a
 second place as another (a second phone, or sign out and use an invite link). Both

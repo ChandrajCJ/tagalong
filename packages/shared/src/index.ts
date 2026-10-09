@@ -13,3 +13,5 @@ export * from './schemas/photos';
 export * from './schemas/trips';
 export * from './zoned-time';
 export * from './exif';
+export * from './photo-window';
+export * from './places';

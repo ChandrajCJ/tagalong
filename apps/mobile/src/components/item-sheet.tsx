@@ -91,13 +91,12 @@ export function ItemSheet(props: Props) {
   };
 
   const save = async () => {
-    // The picker can only produce valid times, so the one thing left to catch
-    // is an end before the start.
+    // The picker can only produce valid times. An end earlier than the start
+    // isn't a mistake: it's an evening that runs past midnight.
     const { startTime, endTime } = form;
     const cost = form.cost.trim().replace(',', '.');
     const next: Record<string, string> = {};
     if (!form.title.trim()) next.title = 'Give it a name';
-    if (startTime && endTime && endTime < startTime) next.endTime = 'Ends before it starts';
     if (cost && (Number.isNaN(Number(cost)) || Number(cost) < 0)) next.cost = 'Enter an amount like 25 or 12.50';
     if (Object.values(next).some(Boolean)) return setErrors(next);
 
@@ -210,7 +209,9 @@ export function ItemSheet(props: Props) {
                 editable={canEdit}
               />
             </View>
-            {errors.endTime ? <Text style={styles.fieldError}>{errors.endTime}</Text> : null}
+            {form.startTime && form.endTime && form.endTime <= form.startTime ? (
+              <Text style={styles.fieldHint}>Ends the next day</Text>
+            ) : null}
 
             <Field
               label="Where"
@@ -293,6 +294,6 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   row: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  fieldError: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger, marginTop: -space.sm },
+  fieldHint: { fontFamily: fonts.medium, fontSize: 13, color: colors.accent, marginTop: -space.sm },
   footer: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
 });

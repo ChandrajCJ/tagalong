@@ -8,6 +8,7 @@ import { createPhotosService } from './service';
 
 const TripParams = z.object({ id: z.string().uuid() });
 const PhotoParams = z.object({ photoId: z.string().uuid() });
+const ItemParams = z.object({ itemId: z.string().uuid() });
 const BatchParams = z.object({ id: z.string().uuid(), batchId: z.string().uuid() });
 
 export const photosRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
@@ -38,6 +39,21 @@ export const photosRoutes = async (app: FastifyInstance, { deps }: { deps: Deps 
   app.post('/photos/:photoId/complete', async (request) => {
     const { photoId } = parse(PhotoParams, request.params);
     return service.complete(photoId, request.user.sub, originOf(request));
+  });
+
+  app.get('/items/:itemId/photos', async (request) => {
+    const { itemId } = parse(ItemParams, request.params);
+    return service.forItem(itemId, request.user.sub);
+  });
+
+  app.put('/photos/:photoId/favourite', async (request) => {
+    const { photoId } = parse(PhotoParams, request.params);
+    return service.favourite(photoId, request.user.sub, true, originOf(request));
+  });
+
+  app.delete('/photos/:photoId/favourite', async (request) => {
+    const { photoId } = parse(PhotoParams, request.params);
+    return service.favourite(photoId, request.user.sub, false, originOf(request));
   });
 
   app.delete('/photos/:photoId', async (request, reply) => {
