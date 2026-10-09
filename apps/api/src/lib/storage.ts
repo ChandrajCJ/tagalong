@@ -13,7 +13,8 @@ import type { Env } from '../env';
 type StorageEnv = Pick<
   Env,
   'S3_ENDPOINT' | 'S3_REGION' | 'S3_BUCKET' | 'S3_ACCESS_KEY' | 'S3_SECRET_KEY'
->;
+> &
+  Partial<Pick<Env, 'S3_PUBLIC_ENDPOINT'>>;
 
 /** What the file lives in. Swapped for a fake in tests. */
 export interface Storage {
@@ -29,9 +30,9 @@ export interface Storage {
   remove(key: string): Promise<void>;
 }
 
-export const s3Storage = (env: StorageEnv): Storage => {
-  const client = new S3Client({
-    endpoint: env.S3_ENDPOINT,
+const clientFor = (env: StorageEnv, endpoint: string) =>
+  new S3Client({
+    endpoint,
     region: env.S3_REGION,
     forcePathStyle: true,
     credentials: { accessKeyId: env.S3_ACCESS_KEY, secretAccessKey: env.S3_SECRET_KEY },
@@ -44,17 +45,28 @@ export const s3Storage = (env: StorageEnv): Storage => {
     responseChecksumValidation: 'WHEN_REQUIRED',
   });
 
+export const s3Storage = (env: StorageEnv): Storage => {
+  // How we reach storage ourselves.
+  const client = clientFor(env, env.S3_ENDPOINT);
+  /*
+   * How phones reach it, for the links we sign. These can differ: "localhost"
+   * from a phone is the phone itself, and in production the bucket sits behind
+   * a public domain. The host is part of the signature, so links must be
+   * signed for the address they'll actually be opened at.
+   */
+  const signer = env.S3_PUBLIC_ENDPOINT ? clientFor(env, env.S3_PUBLIC_ENDPOINT) : client;
+
   return {
     uploadUrl: (key, contentType, expiresIn) =>
       getSignedUrl(
-        client,
+        signer,
         new PutObjectCommand({ Bucket: env.S3_BUCKET, Key: key, ContentType: contentType }),
         { expiresIn },
       ),
 
     downloadUrl: (key, fileName, expiresIn) =>
       getSignedUrl(
-        client,
+        signer,
         new GetObjectCommand({
           Bucket: env.S3_BUCKET,
           Key: key,

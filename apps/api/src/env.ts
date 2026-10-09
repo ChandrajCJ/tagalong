@@ -10,6 +10,8 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   S3_ENDPOINT: z.string().url().default('http://localhost:8333'),
+  /** Where phones reach storage, if not the same address (see lib/storage.ts). */
+  S3_PUBLIC_ENDPOINT: z.string().url().optional(),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().default('tagalong'),
   S3_ACCESS_KEY: z.string().default('tagalong'),
