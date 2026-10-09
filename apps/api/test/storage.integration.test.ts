@@ -56,6 +56,20 @@ describe('object storage', async () => {
     expect(await storage.sizeOf(key)).toBeNull();
   });
 
+  maybe('writes and reads raw bytes, as the thumbnail worker does', async () => {
+    const key = `test/${crypto.randomUUID()}/thumb.webp`;
+    // Bytes that aren't valid text, so nothing gets "helpfully" re-encoded.
+    const body = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0xff, 0x80, 0x7f, 0x01]);
+
+    await storage.write(key, body, 'image/webp');
+    const back = await storage.read(key);
+    expect(back?.equals(body)).toBe(true);
+    expect(await storage.sizeOf(key)).toBe(body.length);
+
+    await storage.remove(key);
+    expect(await storage.read(key)).toBeNull();
+  });
+
   maybe('refuses a link whose signature was tampered with', async () => {
     const key = `test/${crypto.randomUUID()}/private.txt`;
     const put = await storage.uploadUrl(key, 'text/plain', 300);

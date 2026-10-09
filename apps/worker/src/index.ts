@@ -1,4 +1,13 @@
-import { expoPushSender, NOTIFY_QUEUE, processNotify, type NotifyJob } from '@tagalong/api/jobs';
+import {
+  expoPushSender,
+  MEDIA_QUEUE,
+  NOTIFY_QUEUE,
+  processNotify,
+  processThumbnail,
+  s3Storage,
+  type NotifyJob,
+  type ThumbnailJob,
+} from '@tagalong/api/jobs';
 import { createDb } from '@tagalong/db';
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';
@@ -10,6 +19,11 @@ const env = z
     NODE_ENV: z.string().default('development'),
     REDIS_URL: z.string().url(),
     DATABASE_URL: z.string().url(),
+    S3_ENDPOINT: z.string().url().default('http://localhost:8333'),
+    S3_REGION: z.string().default('us-east-1'),
+    S3_BUCKET: z.string().default('tagalong'),
+    S3_ACCESS_KEY: z.string().default('tagalong'),
+    S3_SECRET_KEY: z.string().default('tagalong-secret'),
   })
   .parse(process.env);
 
@@ -19,6 +33,7 @@ const log = pino(
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const redis = new Redis(env.REDIS_URL);
 const { db, close: closeDb } = createDb(env.DATABASE_URL, { max: 5 });
+const storage = s3Storage(env);
 
 // One queue per workload keeps slow jobs (video, AI) from blocking fast ones (push).
 const system = new Worker(
@@ -43,13 +58,24 @@ const notify = new Worker<NotifyJob>(
   { connection, concurrency: 5 },
 );
 
-for (const worker of [system, notify]) {
+// Resizing is CPU-bound: two at a time keeps the machine responsive.
+const media = new Worker<ThumbnailJob>(
+  MEDIA_QUEUE,
+  async (job) => {
+    const result = await processThumbnail({ db, redis, storage }, job.data);
+    log.info({ ...job.data, result }, 'Thumbnail');
+    return result;
+  },
+  { connection, concurrency: 2 },
+);
+
+for (const worker of [system, notify, media]) {
   worker.on('failed', (job, err) => log.error({ queue: worker.name, job: job?.name, err }, 'Job failed'));
 }
-log.info('Worker started, listening on queues "system" and "notify"');
+log.info('Worker started, listening on queues "system", "notify" and "media"');
 
 const shutdown = async () => {
-  await Promise.all([system.close(), notify.close()]);
+  await Promise.all([system.close(), notify.close(), media.close()]);
   connection.disconnect();
   redis.disconnect();
   await closeDb();

@@ -65,6 +65,11 @@ export const messages = chatSchema.table(
   (t) => [
     index('messages_channel_recent_idx').on(t.channelId, t.createdAt.desc(), t.id.desc()),
     check('messages_kind_check', sql.raw(`kind in ('text', 'system', 'poll')`)),
+    // One "Riya added 40 photos" card per upload batch, guaranteed by the
+    // database rather than by timing: a double tap can't post two.
+    uniqueIndex('messages_one_card_per_photo_batch')
+      .on(sql`(${t.payload}->>'batchId')`)
+      .where(sql.raw(`kind = 'system' and payload ? 'batchId'`)),
   ],
 );
 

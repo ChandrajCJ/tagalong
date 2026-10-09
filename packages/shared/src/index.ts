@@ -9,5 +9,7 @@ export * from './schemas/events';
 export * from './schemas/ideas';
 export * from './schemas/invites';
 export * from './schemas/itinerary';
+export * from './schemas/photos';
 export * from './schemas/trips';
 export * from './zoned-time';
+export * from './exif';

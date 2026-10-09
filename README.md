@@ -10,8 +10,8 @@ Design canvas: https://claude.ai/artifact/QvbZKYGYkiFyCYEnDs3bf7
 | Path | What it is |
 |---|---|
 | `apps/mobile` | Expo + Expo Router app (iOS and Android) |
-| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat, documents, bookings) and the realtime gateway (`src/gateway.ts`) |
-| `apps/worker` | BullMQ background worker |
+| `apps/api` | Fastify API (auth, trips, invites, plan, ideas, chat, documents, bookings, photos) and the realtime gateway (`src/gateway.ts`) |
+| `apps/worker` | BullMQ background worker: push notifications and photo thumbnails |
 | `packages/shared` | zod schemas and types used by the app and the API |
 | `packages/db` | Drizzle schema, migrations and seed data |
 | `docs/decisions` | Architecture decision records |
@@ -52,6 +52,12 @@ so nothing in the bucket is public. Local storage is SeaweedFS on port 8333
 stay, train, tickets, car, table) with confirmation codes you can copy, the
 attached confirmation file, and a discussion thread that stays out of the main
 chat. The trip overview shows the next booking under **Next up**.
+
+**Photos:** the Photos tab is the shared album. Pick any number of photos; each
+is converted to JPEG (iPhones shoot HEIC, which the server can't read), resized
+to 2560 px, and dated and placed from its EXIF. The worker makes the thumbnails,
+so it must be running (`pnpm dev:backend` starts it). The album is grouped by the
+day each photo was taken, as the clock read where it was taken.
 
 **Testing live updates with two people:** sign in on your phone as one user and in a
 second place as another (a second phone, or sign out and use an invite link). Both

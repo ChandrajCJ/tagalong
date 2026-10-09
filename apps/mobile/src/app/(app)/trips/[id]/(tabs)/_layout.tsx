@@ -13,8 +13,8 @@ const tab = (title: string, icon: IconName) => ({
 });
 
 /**
- * Bottom tabs: Overview · Plan · Ideas · Chat · Docs · Money. Six is already a
- * lot for a phone, so Photos stays hidden until Phase 3 builds it for real.
+ * Bottom tabs: Overview · Plan · Ideas · Chat · Photos · Docs. Six is already a
+ * lot for a phone, so Money stays hidden until it's built for real.
  */
 export default function TripTabs() {
   return (
@@ -32,9 +32,9 @@ export default function TripTabs() {
       <Tabs.Screen name="plan" options={tab('Plan', 'calendar')} />
       <Tabs.Screen name="ideas" options={tab('Ideas', 'zap')} />
       <Tabs.Screen name="chat" options={tab('Chat', 'message-square')} />
+      <Tabs.Screen name="photos" options={tab('Photos', 'image')} />
       <Tabs.Screen name="docs" options={tab('Docs', 'folder')} />
-      <Tabs.Screen name="photos" options={{ href: null }} />
-      <Tabs.Screen name="money" options={tab('Money', 'credit-card')} />
+      <Tabs.Screen name="money" options={{ href: null }} />
     </Tabs>
   );
 }

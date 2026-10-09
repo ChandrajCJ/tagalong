@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "messages_one_card_per_photo_batch" ON "chat"."messages" USING btree (("payload"->>'batchId')) WHERE kind = 'system' and payload ? 'batchId';

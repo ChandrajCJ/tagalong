@@ -28,6 +28,7 @@ export const captureMailer = () => {
  */
 export const fakeStorage = () => {
   const objects = new Map<string, number>();
+  const blobs = new Map<string, Buffer>();
   const storage: Storage = {
     async uploadUrl(key) {
       return `https://storage.test/upload/${encodeURIComponent(key)}`;
@@ -38,15 +39,25 @@ export const fakeStorage = () => {
     async sizeOf(key) {
       return objects.get(key) ?? null;
     },
+    async read(key) {
+      return blobs.get(key) ?? null;
+    },
+    async write(key, body) {
+      blobs.set(key, body);
+      objects.set(key, body.length);
+    },
     async remove(key) {
       objects.delete(key);
+      blobs.delete(key);
     },
   };
   /** Stands in for the phone's PUT to the signed URL. */
-  const putObject = (uploadUrl: string, size = 1024) => {
-    objects.set(decodeURIComponent(uploadUrl.split('/upload/')[1]!), size);
+  const putObject = (uploadUrl: string, size = 1024, body?: Buffer) => {
+    const key = decodeURIComponent(uploadUrl.split('/upload/')[1]!);
+    objects.set(key, body?.length ?? size);
+    if (body) blobs.set(key, body);
   };
-  return { storage, objects, putObject };
+  return { storage, objects, blobs, putObject };
 };
 
 /** Builds a fresh app per test file and empties the database before each test. */
@@ -57,9 +68,13 @@ export const useTestApp = () => {
     redis: Redis;
     codes: Map<string, string>;
     /** Stands in for the phone PUTting the file to the signed URL. */
-    putObject: (uploadUrl: string, size?: number) => void;
+    putObject: (uploadUrl: string, size?: number, body?: Buffer) => void;
     /** Push notifications the API asked for, instead of real queue jobs. */
     notified: { tripId: string; userId: string }[];
+    /** Photos the API asked the worker to make thumbnails for. */
+    thumbnails: string[];
+    /** The fake storage's contents, so tests can play the worker's part. */
+    storage: Storage;
     signIn: (email: string) => Promise<AuthTokens>;
   };
   let cleanup: () => Promise<void>;
@@ -72,9 +87,13 @@ export const useTestApp = () => {
     const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
     const { mailer, codes } = captureMailer();
     const notified: { tripId: string; userId: string }[] = [];
+    const thumbnails: string[] = [];
     const jobs: Jobs = {
       async notifyChat(tripId, userIds) {
         notified.push(...userIds.map((userId) => ({ tripId, userId })));
+      },
+      async makeThumbnail(photoId) {
+        thumbnails.push(photoId);
       },
       async close() {},
     };
@@ -87,6 +106,8 @@ export const useTestApp = () => {
     ctx.codes = codes;
     ctx.notified = notified;
     ctx.putObject = putObject;
+    ctx.thumbnails = thumbnails;
+    ctx.storage = storage;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
       const res = await app.inject({
@@ -111,6 +132,7 @@ export const useTestApp = () => {
   beforeEach(async () => {
     ctx.codes.clear();
     ctx.notified.length = 0;
+    ctx.thumbnails.length = 0;
     await truncate();
   });
 

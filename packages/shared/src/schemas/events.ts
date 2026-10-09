@@ -23,6 +23,8 @@ export const TRIP_EVENT_TYPES = [
   'document.deleted',
   'booking.upserted',
   'booking.deleted',
+  'photo.upserted',
+  'photo.deleted',
 ] as const;
 
 export const TripEvent = z.object({

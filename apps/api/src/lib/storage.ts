@@ -9,6 +9,12 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Env } from '../env';
 
+/** The settings storage needs; the API's full Env satisfies it, and so does the worker's. */
+type StorageEnv = Pick<
+  Env,
+  'S3_ENDPOINT' | 'S3_REGION' | 'S3_BUCKET' | 'S3_ACCESS_KEY' | 'S3_SECRET_KEY'
+>;
+
 /** What the file lives in. Swapped for a fake in tests. */
 export interface Storage {
   /** A link the phone can PUT the file straight to, so it never passes through us. */
@@ -17,10 +23,13 @@ export interface Storage {
   downloadUrl(key: string, fileName: string, expiresIn: number): Promise<string>;
   /** The object's size, or null if the upload never arrived. */
   sizeOf(key: string): Promise<number | null>;
+  /** The bytes themselves, for background work such as making thumbnails. */
+  read(key: string): Promise<Buffer | null>;
+  write(key: string, body: Buffer, contentType: string): Promise<void>;
   remove(key: string): Promise<void>;
 }
 
-export const s3Storage = (env: Env): Storage => {
+export const s3Storage = (env: StorageEnv): Storage => {
   const client = new S3Client({
     endpoint: env.S3_ENDPOINT,
     region: env.S3_REGION,
@@ -66,6 +75,22 @@ export const s3Storage = (env: Env): Storage => {
       }
     },
 
+    async read(key) {
+      try {
+        const object = await client.send(new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+        const bytes = await object.Body?.transformToByteArray();
+        return bytes ? Buffer.from(bytes) : null;
+      } catch {
+        return null;
+      }
+    },
+
+    async write(key, body, contentType) {
+      await client.send(
+        new PutObjectCommand({ Bucket: env.S3_BUCKET, Key: key, Body: body, ContentType: contentType }),
+      );
+    },
+
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
     },
@@ -73,7 +98,7 @@ export const s3Storage = (env: Env): Storage => {
 };
 
 /** Creates the bucket on first run, so a fresh checkout needs no setup step. */
-export const ensureBucket = async (env: Env) => {
+export const ensureBucket = async (env: StorageEnv) => {
   const client = new S3Client({
     endpoint: env.S3_ENDPOINT,
     region: env.S3_REGION,
