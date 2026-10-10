@@ -19,10 +19,14 @@ const ROLES: { role: Role; title: string; can: string }[] = [
 ];
 
 /**
- * The link opens the app on the friend's phone. In Expo Go this is an exp://
- * link; in a real build it becomes tagalong://invite/<token>.
+ * Once deployed, invites are web links (https://app.…/invite/<token>): they're
+ * tappable in every chat app and open the web app for friends who don't have
+ * Tagalong yet. Without a deployed web app (development), they fall back to a
+ * link that opens the app directly: exp:// in Expo Go, tagalong:// in a build.
  */
-const inviteUrl = (token: string) => Linking.createURL(`/invite/${token}`);
+const APP_URL = process.env.EXPO_PUBLIC_APP_URL?.replace(/\/$/, '');
+const inviteUrl = (token: string) =>
+  APP_URL ? `${APP_URL}/invite/${token}` : Linking.createURL(`/invite/${token}`);
 
 /** Invite your crew (design: Invite.dc.html). */
 export default function InviteScreen() {

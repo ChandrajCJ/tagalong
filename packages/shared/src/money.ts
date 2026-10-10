@@ -239,3 +239,20 @@ export const expensesCsv = (expenses: CsvExpense[], people: string[], baseCurren
   });
   return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
 };
+
+/**
+ * A link that opens any UPI app (Google Pay, PhonePe, Paytm, BHIM, a bank's
+ * app) with the payee and amount filled in, following NPCI's UPI deep link
+ * format. UPI is rupees only, so this is for trips kept in INR.
+ */
+export const upiPayLink = (p: { upiId: string; name: string; amountMinor: number; note: string }) => {
+  const params = new URLSearchParams({
+    pa: p.upiId,
+    pn: p.name.slice(0, 50),
+    am: amountText(p.amountMinor, 'INR'),
+    cu: 'INR',
+    tn: p.note.slice(0, 50),
+  });
+  // UPI apps expect %20 for spaces, not URLSearchParams' "+".
+  return `upi://pay?${params.toString().replace(/\+/g, '%20')}`;
+};

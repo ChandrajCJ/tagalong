@@ -1,0 +1,12 @@
+**/node_modules
+**/.turbo
+**/dist
+**/.expo
+.git
+.env
+.env.*
+deploy/.env
+deploy/seaweedfs.json
+deploy/backups
+apps/mobile/ios
+apps/mobile/android

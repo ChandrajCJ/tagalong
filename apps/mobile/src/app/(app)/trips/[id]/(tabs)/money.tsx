@@ -8,16 +8,18 @@ import {
   Settlement,
   suggestTransfers,
   TripMoney,
+  upiPayLink,
   type MoneyPerson,
   type SettlementMethod,
   type Transfer,
 } from '@tagalong/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ExpenseSheet, type ExpenseFields, type SaveResult } from '@/components/expense-sheet';
-import { SettleSheet } from '@/components/settle-sheet';
+import { SettleSheet, type PendingPayment } from '@/components/settle-sheet';
 import { Avatar, Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { CATEGORY_META, decodeDraft, exportCsv, nameOf, type ExpenseDraft } from '@/lib/money';
@@ -65,7 +67,7 @@ export default function MoneyTab() {
   const [data, setData] = useState<TripMoney | null>(null);
   const [error, setError] = useState<string>();
   const [sheet, setSheet] = useState<{ expense?: Expense; draft?: ExpenseDraft | null } | null>(null);
-  const [paying, setPaying] = useState<Transfer | null>(null);
+  const [paying, setPaying] = useState<PendingPayment | null>(null);
 
   const tripId = trip?.id;
   const me = trip?.myUserId ?? '';
@@ -190,7 +192,7 @@ export default function MoneyTab() {
     await request(`/expenses/${target.id}`, { method: 'DELETE' }).catch(() => void load());
   };
 
-  const recordPayment = async (payment: Transfer & { method: SettlementMethod }) => {
+  const recordPayment = async (payment: Transfer & { method: SettlementMethod; note: string | null }) => {
     try {
       const saved = await request(`/trips/${trip.id}/settlements`, {
         method: 'POST',
@@ -205,6 +207,36 @@ export default function MoneyTab() {
   };
 
   const canSettle = (t: { fromUser: string; toUser: string }) => canEdit || t.fromUser === me || t.toUser === me;
+
+  // UPI is rupees only, so the button shows on trips kept in INR.
+  const upiTrip = base === 'INR';
+  const upiOf = (userId: string) => trip.members.find((m) => m.userId === userId)?.upiId ?? null;
+  const myUpi = upiOf(me);
+
+  /** Opens the payer's UPI app with the amount filled in, then asks them to confirm it went through. */
+  const payWithUpi = async (t: Transfer) => {
+    const upiId = upiOf(t.toUser);
+    if (!upiId) return;
+    const link = upiPayLink({
+      upiId,
+      name: name(t.toUser),
+      amountMinor: t.amountMinor,
+      note: `${trip.name}: settle up`,
+    });
+    try {
+      await Linking.openURL(link);
+      setPaying({ ...t, viaUpi: true });
+    } catch {
+      Alert.alert(
+        'No UPI app found',
+        `Pay ${name(t.toUser)} ${money(t.amountMinor)} at ${upiId} from any UPI app, then mark it as paid.`,
+        [
+          { text: 'Copy UPI ID', onPress: () => void Clipboard.setStringAsync(upiId) },
+          { text: 'OK', style: 'cancel' },
+        ],
+      );
+    }
+  };
 
   const undoPayment = (s: Settlement) => {
     if (!canSettle(s)) return;
@@ -280,18 +312,43 @@ export default function MoneyTab() {
                       </Text>
                       <Text style={styles.transferAmount}>{money(t.amountMinor)}</Text>
                     </View>
-                    {canSettle(t) ? (
-                      <Button
-                        label="Mark paid"
-                        variant={t.fromUser === me || t.toUser === me ? 'primary' : 'outline'}
-                        onPress={() => setPaying(t)}
-                        style={{ minHeight: 44, paddingHorizontal: space.md }}
-                      />
-                    ) : null}
+                    <View style={{ gap: space.xs, alignItems: 'flex-end' }}>
+                      {upiTrip && t.fromUser === me && upiOf(t.toUser) ? (
+                        <Button
+                          label="Pay with UPI"
+                          onPress={() => void payWithUpi(t)}
+                          style={{ minHeight: 44, paddingHorizontal: space.md }}
+                        />
+                      ) : null}
+                      {canSettle(t) ? (
+                        <Button
+                          label="Mark paid"
+                          variant={
+                            (t.fromUser === me || t.toUser === me) && !(upiTrip && t.fromUser === me && upiOf(t.toUser))
+                              ? 'primary'
+                              : 'outline'
+                          }
+                          onPress={() => setPaying(t)}
+                          style={{ minHeight: 44, paddingHorizontal: space.md }}
+                        />
+                      ) : null}
+                    </View>
                   </View>
                 ))}
               </View>
               <Body style={{ fontSize: 13 }}>The fewest payments that square everyone up.</Body>
+              {upiTrip && !myUpi && suggested.some((t) => t.toUser === me) ? (
+                <Pressable accessibilityRole="button" onPress={() => router.push('/profile')} style={styles.upiNudge}>
+                  <Feather name="smartphone" size={16} color={colors.accentInk} />
+                  <Text style={styles.upiNudgeText}>Add your UPI ID so friends can pay you in one tap</Text>
+                  <Feather name="chevron-right" size={16} color={colors.accentInk} />
+                </Pressable>
+              ) : null}
+              {upiTrip && suggested.some((t) => t.fromUser === me && !upiOf(t.toUser)) ? (
+                <Body style={{ fontSize: 13 }}>
+                  To pay by UPI, ask {suggested.filter((t) => t.fromUser === me && !upiOf(t.toUser)).map((t) => name(t.toUser)).join(' and ')} to add a UPI ID in their profile.
+                </Body>
+              ) : null}
             </View>
           ) : data.expenses.length > 0 ? (
             <View style={styles.square}>
@@ -447,6 +504,8 @@ const styles = StyleSheet.create({
   transfer: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, paddingLeft: space.lg },
   transferText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   transferAmount: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 2 },
+  upiNudge: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44, padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
+  upiNudgeText: { flex: 1, fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
   square: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
   balance: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 52, paddingHorizontal: space.lg },
   balanceName: { flex: 1, fontFamily: fonts.medium, fontSize: 15, color: colors.ink },

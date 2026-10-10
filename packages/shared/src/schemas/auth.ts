@@ -29,5 +29,21 @@ export const Me = z.object({
   email: z.string().email(),
   displayName: z.string(),
   homeCurrency: z.string().length(3),
+  upiId: z.string().nullable(),
 });
 export type Me = z.infer<typeof Me>;
+
+/** A UPI ID (VPA) looks like name@bank: letters, digits, dots, hyphens and underscores, then a handle. */
+export const UPI_ID = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9._-]{2,256}@[a-z][a-z0-9]{1,63}$/, 'Use a UPI ID like name@okaxis');
+
+export const UpdateMeInput = z
+  .object({
+    displayName: z.string().trim().min(1, 'Enter your name').max(60).optional(),
+    upiId: UPI_ID.nullable().optional(),
+  })
+  .refine((v) => v.displayName !== undefined || v.upiId !== undefined, { message: 'Nothing to change' });
+export type UpdateMeInput = z.input<typeof UpdateMeInput>;

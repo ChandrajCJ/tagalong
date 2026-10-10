@@ -10,7 +10,9 @@ import {
   parseAmount,
   splitExpense,
   suggestTransfers,
+  upiPayLink,
 } from './money';
+import { UPI_ID } from './schemas/auth';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -203,5 +205,21 @@ describe('expensesCsv', () => {
       'Date,Description,Category,Paid by,Amount,Currency,Amount (EUR),Alex,Priya,Sam',
       '2026-06-12,"Dinner, Time Out Market",food,Alex,90.00,EUR,90.00,45.00,,45.00',
     ]);
+  });
+});
+
+describe('paying by UPI', () => {
+  it('opens a UPI app with the payee, amount and note filled in', () => {
+    const link = upiPayLink({ upiId: 'priya.s@okaxis', name: 'Priya S', amountMinor: 45050, note: 'Goa trip: settle up' });
+    expect(link).toBe('upi://pay?pa=priya.s%40okaxis&pn=Priya%20S&am=450.50&cu=INR&tn=Goa%20trip%3A%20settle%20up');
+  });
+
+  it('accepts real-looking UPI IDs and refuses others', () => {
+    for (const ok of ['priya.s@okaxis', 'ram-12@ybl', '9876543210@paytm', 'A.B_C@OKHDFCBANK']) {
+      expect(UPI_ID.safeParse(ok).success).toBe(true);
+    }
+    for (const bad of ['priya', '@okaxis', 'priya@', 'pri ya@okaxis', 'priya@ok axis', 'p@1bank']) {
+      expect(UPI_ID.safeParse(bad).success).toBe(false);
+    }
   });
 });

@@ -30,6 +30,7 @@ export default function AppLayout() {
       <Stack.Screen name="trips/index" />
       <Stack.Screen name="trips/new" options={{ presentation: 'modal' }} />
       <Stack.Screen name="trips/[id]" />
+      <Stack.Screen name="profile" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

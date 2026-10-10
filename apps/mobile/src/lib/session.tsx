@@ -1,7 +1,7 @@
 import { AuthTokens } from '@tagalong/shared';
-import * as SecureStore from 'expo-secure-store';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { connectTokenStore, request } from './api';
+import { secureStorage } from './storage';
 
 const KEY = 'tagalong.tokens';
 const INVITE_KEY = 'tagalong.pendingInvite';
@@ -19,9 +19,7 @@ interface SessionValue {
 
 const SessionContext = createContext<SessionValue | null>(null);
 
-// Storage can fail (for example on web); the app then keeps state for this session only.
-const persist = (key: string, value: string | null) =>
-  (value ? SecureStore.setItemAsync(key, value) : SecureStore.deleteItemAsync(key)).catch(() => {});
+const persist = (key: string, value: string | null) => secureStorage.set(key, value);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
@@ -42,8 +40,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     connectTokenStore({ get: () => tokens.current, set: save });
     Promise.all([
-      SecureStore.getItemAsync(KEY).catch(() => null),
-      SecureStore.getItemAsync(INVITE_KEY).catch(() => null),
+      secureStorage.get(KEY),
+      secureStorage.get(INVITE_KEY),
     ]).then(([raw, invite]) => {
       let parsed: AuthTokens | null;
       try {

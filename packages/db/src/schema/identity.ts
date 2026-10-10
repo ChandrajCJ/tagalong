@@ -24,6 +24,8 @@ export const users = identity.table(
     displayName: text('display_name').notNull(),
     avatarKey: text('avatar_key'),
     homeCurrency: char('home_currency', { length: 3 }).notNull().default('EUR'),
+    /** Where friends can pay them back through any UPI app, e.g. name@okaxis. Seen only by people on their trips. */
+    upiId: text('upi_id'),
     locale: text('locale'),
     timezone: text('timezone'),
     faceGroupingConsent: boolean('face_grouping_consent').notNull().default(false),

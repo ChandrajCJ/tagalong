@@ -114,3 +114,7 @@ unread message, as one summary. The worker logs each decision (`Chat notificatio
 - Schema changes go through migrations (`pnpm db:generate`), never by hand.
 - Writes that only express an opinion (voting on an idea or a poll) are open to
   viewers; anything that changes the trip needs `editor`.
+
+## Deploying
+
+Everything runs free on one server. Step by step: [docs/DEPLOY.md](docs/DEPLOY.md).

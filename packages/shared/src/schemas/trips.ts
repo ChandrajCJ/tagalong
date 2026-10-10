@@ -26,6 +26,8 @@ export const TripMember = z.object({
   userId: z.string().uuid(),
   displayName: z.string(),
   role: z.enum(TRIP_ROLES),
+  /** For paying them back through a UPI app. */
+  upiId: z.string().nullable().default(null),
 });
 export type TripMember = z.infer<typeof TripMember>;
 

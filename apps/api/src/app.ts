@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import type { Deps } from './deps';
 import { frankfurterRates } from './lib/fx';
 import { bullJobs } from './lib/jobs';
-import { logMailer } from './lib/mailer';
+import { logMailer, smtpMailer } from './lib/mailer';
 import { s3Storage } from './lib/storage';
 import { authRoutes } from './modules/auth/routes';
 import { bookingsRoutes } from './modules/bookings/routes';
@@ -38,7 +38,7 @@ export const buildApp = async (deps: BuildDeps) => {
 
   const fullDeps: Deps = {
     ...deps,
-    mailer: deps.mailer ?? logMailer(app.log),
+    mailer: deps.mailer ?? (env.SMTP_URL ? smtpMailer(env.SMTP_URL, env.MAIL_FROM) : logMailer(app.log)),
     jobs: deps.jobs ?? bullJobs(deps.redis),
     storage: deps.storage ?? s3Storage(env),
     rates: deps.rates ?? frankfurterRates(deps.redis, env.FX_API_URL),
@@ -46,7 +46,9 @@ export const buildApp = async (deps: BuildDeps) => {
   app.addHook('onClose', async () => fullDeps.jobs.close());
 
   await app.register(errorsPlugin);
-  await app.register(cors, { origin: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] });
+  // Phones don't send an Origin; this only limits which websites may call the API.
+  const origins = env.CORS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean);
+  await app.register(cors, { origin: origins?.length ? origins : true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] });
   await app.register(authPlugin, { secret: env.JWT_SECRET });
 
   await app.register(healthRoutes, { deps: fullDeps });

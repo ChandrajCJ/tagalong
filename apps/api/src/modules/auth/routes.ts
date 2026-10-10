@@ -1,4 +1,4 @@
-import { RefreshInput, RequestCodeInput, VerifyCodeInput } from '@tagalong/shared';
+import { RefreshInput, RequestCodeInput, UpdateMeInput, VerifyCodeInput } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Deps } from '../../deps';
 import { parse } from '../../lib/validate';
@@ -29,4 +29,9 @@ export const authRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
   });
 
   app.get('/me', { preHandler: app.authenticate }, async (request) => auth.me(request.user.sub));
+
+  app.patch('/me', { preHandler: app.authenticate }, async (request) => {
+    const input = parse(UpdateMeInput, request.body);
+    return auth.updateMe(request.user.sub, input);
+  });
 };

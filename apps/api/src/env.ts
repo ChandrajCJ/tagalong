@@ -20,8 +20,23 @@ const EnvSchema = z.object({
   S3_URL_TTL_SEC: z.coerce.number().int().default(10 * 60),
   /** Daily exchange rates (see lib/fx.ts). */
   FX_API_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
+  /** Sends sign-in codes, e.g. smtps://user:app-password@smtp.gmail.com:465. Logged instead when unset. */
+  SMTP_URL: z.string().url().optional(),
+  MAIL_FROM: z.string().default('Tagalong <no-reply@tagalong.app>'),
+  /** Websites allowed to call the API from a browser, comma-separated. Unset allows any (development). */
+  CORS_ORIGINS: z.string().optional(),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().default(15 * 60),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().default(30),
+}).superRefine((env, ctx) => {
+  // Development defaults are fine on a laptop and dangerous on the internet.
+  if (env.NODE_ENV !== 'production') return;
+  const problem = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+  if (!env.SMTP_URL) problem('SMTP_URL', 'required in production, or nobody can get a sign-in code');
+  if (env.JWT_SECRET.length < 32 || env.JWT_SECRET.startsWith('change-me')) {
+    problem('JWT_SECRET', 'use at least 32 random characters in production (openssl rand -hex 32)');
+  }
+  if (env.S3_SECRET_KEY === 'tagalong-secret') problem('S3_SECRET_KEY', 'change the development storage key');
+  if (!env.CORS_ORIGINS) problem('CORS_ORIGINS', 'list the web app address in production');
 });
 
 export type Env = z.infer<typeof EnvSchema>;

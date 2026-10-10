@@ -8,14 +8,12 @@ import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { formatDateRange, tripCountdown } from '@/lib/format';
 import { registerForPush } from '@/lib/push';
-import { useSession } from '@/lib/session';
 import { colors, fonts, radius, space } from '@/theme';
 
 const TripList = z.object({ trips: z.array(TripSummary) });
 
 /** Your trips (design: Home.dc.html). */
 export default function Trips() {
-  const { signOut } = useSession();
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
@@ -54,11 +52,11 @@ export default function Trips() {
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          onPress={signOut}
+          accessibilityLabel="Your profile"
+          onPress={() => router.push('/profile')}
           style={styles.avatar}
         >
-          <Text style={styles.avatarText}>Sign out</Text>
+          <Text style={styles.avatarText}>Profile</Text>
         </Pressable>
       </View>
 

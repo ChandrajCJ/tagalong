@@ -1,0 +1,130 @@
+# The whole of Tagalong on one server, all open source:
+# Postgres, Redis, SeaweedFS (files), the API, the realtime gateway, the
+# worker, and Caddy for HTTPS. Run from the repo root:
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+name: tagalong-prod
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://tagalong:${POSTGRES_PASSWORD}@postgres:5432/tagalong
+  REDIS_URL: redis://redis:6379
+  JWT_SECRET: ${JWT_SECRET}
+  S3_ENDPOINT: http://storage:8333
+  S3_PUBLIC_ENDPOINT: https://files.${DOMAIN}
+  S3_BUCKET: tagalong
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  SMTP_URL: ${SMTP_URL}
+  MAIL_FROM: ${MAIL_FROM}
+  CORS_ORIGINS: https://app.${DOMAIN}
+
+x-app: &app
+  build:
+    context: ..
+    target: server
+  image: tagalong-server
+  restart: unless-stopped
+  environment: *app-env
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+    storage:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tagalong
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: tagalong
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tagalong -d tagalong']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Saves to disk, so queued push notifications survive a restart.
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  storage:
+    image: chrislusf/seaweedfs:3.68
+    restart: unless-stopped
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    volumes:
+      - storagedata:/data
+      - ./seaweedfs.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O - "http://$$(hostname):9333/cluster/status"']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Brings the database up to date, then exits. Everything else waits for it.
+  migrate:
+    build:
+      context: ..
+      target: server
+    image: tagalong-server
+    environment: *app-env
+    command: ['pnpm', '--filter', '@tagalong/db', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ['pnpm', '--filter', '@tagalong/api', 'start']
+
+  gateway:
+    <<: *app
+    command: ['pnpm', '--filter', '@tagalong/api', 'start:gateway']
+
+  worker:
+    <<: *app
+    command: ['pnpm', '--filter', '@tagalong/worker', 'start']
+
+  proxy:
+    build:
+      context: ..
+      target: proxy
+      args:
+        EXPO_PUBLIC_API_URL: https://api.${DOMAIN}
+        EXPO_PUBLIC_GATEWAY_URL: wss://api.${DOMAIN}
+        EXPO_PUBLIC_APP_URL: https://app.${DOMAIN}
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      API_HOST: api.${DOMAIN}
+      FILES_HOST: files.${DOMAIN}
+      APP_HOST: app.${DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - caddydata:/data
+    depends_on:
+      - api
+      - gateway
+      - storage
+
+volumes:
+  pgdata:
+  redisdata:
+  storagedata:
+  caddydata:

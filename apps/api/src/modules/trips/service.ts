@@ -57,7 +57,7 @@ export const createTripsService = (db: Db) => ({
     if (!trip) throw new Error('Trip vanished after access check');
 
     const members = await db
-      .select({ userId: users.id, displayName: users.displayName, role: tripMembers.role })
+      .select({ userId: users.id, displayName: users.displayName, role: tripMembers.role, upiId: users.upiId })
       .from(tripMembers)
       .innerJoin(users, eq(users.id, tripMembers.userId))
       .where(and(eq(tripMembers.tripId, tripId), isNull(tripMembers.leftAt)))

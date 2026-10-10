@@ -13,12 +13,17 @@ import { SETTLEMENT_LABELS } from '@/lib/money';
 import { colors, fonts, radius, space } from '@/theme';
 import { Body, Button, Field, Label } from './ui';
 
+export type PendingPayment = Transfer & {
+  /** Set after the UPI app was opened: the money may already have gone. */
+  viaUpi?: boolean;
+};
+
 interface Props {
   /** The payment to record, usually one the app suggested. */
-  transfer: Transfer | null;
+  transfer: PendingPayment | null;
   currency: string;
   nameOf: (userId: string) => string;
-  onSave: (payment: Transfer & { method: SettlementMethod }) => Promise<string | null>;
+  onSave: (payment: Transfer & { method: SettlementMethod; note: string | null }) => Promise<string | null>;
   onClose: () => void;
 }
 
@@ -42,7 +47,13 @@ export function SettleSheet({ transfer, currency, nameOf, onSave, onClose }: Pro
     const amountMinor = parseAmount(amount, currency);
     if (!amountMinor) return setError(`Enter an amount like ${amountText(1250, currency)}`);
     setBusy(true);
-    const problem = await onSave({ ...transfer, amountMinor, method });
+    const problem = await onSave({
+      fromUser: transfer.fromUser,
+      toUser: transfer.toUser,
+      amountMinor,
+      method,
+      note: transfer.viaUpi && method === 'transfer' ? 'UPI' : null,
+    });
     setBusy(false);
     if (problem) setError(problem);
     else onClose();
@@ -63,7 +74,9 @@ export function SettleSheet({ transfer, currency, nameOf, onSave, onClose }: Pro
             <Text style={styles.person}>{nameOf(transfer.toUser)}</Text>
           </View>
           <Body style={{ fontSize: 13 }}>
-            Record it once the money has actually changed hands. A part payment is fine too.
+            {transfer.viaUpi
+              ? 'Did the payment go through in your UPI app? Mark it as paid here so everyone’s balances update. Tagalong can’t see your bank, so it relies on you.'
+              : 'Record it once the money has actually changed hands. A part payment is fine too.'}
           </Body>
 
           <Field

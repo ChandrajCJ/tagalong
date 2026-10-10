@@ -16,3 +16,8 @@ apps/mobile/ios/
 apps/mobile/android/
 apps/mobile/expo-env.d.ts
 *.tsbuildinfo
+
+# deploy secrets
+deploy/.env
+deploy/seaweedfs.json
+deploy/backups/

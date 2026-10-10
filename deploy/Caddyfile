@@ -1,0 +1,29 @@
+# HTTPS certificates come from Let's Encrypt automatically, for free.
+{
+	email {$ACME_EMAIL}
+}
+
+# The API, with the realtime gateway on /ws.
+{$API_HOST} {
+	encode gzip
+	@realtime path /ws*
+	reverse_proxy @realtime gateway:3002
+	reverse_proxy api:3000
+}
+
+# Photos and files. Upload and download links are signed for this address,
+# so the Host header must reach storage unchanged (Caddy's default).
+{$FILES_HOST} {
+	request_body {
+		max_size 60MB
+	}
+	reverse_proxy storage:8333
+}
+
+# The web app, which also opens invite links for people without the app.
+{$APP_HOST} {
+	encode gzip
+	root * /srv/web
+	try_files {path} {path}.html /index.html
+	file_server
+}
