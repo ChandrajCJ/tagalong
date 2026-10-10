@@ -2,7 +2,7 @@ import { newId, parseExif, Photo, PhotoUpload, type PhotoFacts } from '@tagalong
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
-import { Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { request } from './api';
 import { MONTH_NAMES, parseIso } from './dates';
 import { weekdayOf } from './plan';
@@ -33,6 +33,25 @@ const localStamp = (ms: number) => {
 let libraryPermission: Promise<boolean> | null = null;
 
 /**
+ * Read access to the library, plus, on Android 10 and later, the separate
+ * "photo locations" permission: without it Android blanks the GPS of every
+ * photo it hands to an app. The app declares it (app.json); asking here
+ * shows the prompt where the system supports it, and is harmless where not.
+ */
+const askLibraryAccess = async () => {
+  if (Platform.OS === 'android' && Number(Platform.Version) >= 29) {
+    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_MEDIA_LOCATION, {
+      title: 'Put your photos on the map',
+      message: 'Tagalong reads where each photo was taken so the group can see them on the trip map.',
+      buttonPositive: 'Allow',
+      buttonNegative: 'Not now',
+    }).catch(() => undefined);
+  }
+  const { granted } = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+  return granted;
+};
+
+/**
  * When and where, from the phone's photo library instead of the file.
  * Android's photo picker strips the location from what it hands over, for
  * privacy, so the EXIF has none; the library still knows it, given access.
@@ -41,7 +60,7 @@ let libraryPermission: Promise<boolean> | null = null;
 const libraryFacts = async (assetId: string): Promise<Partial<PhotoFacts>> => {
   if (Platform.OS === 'web') return {};
   try {
-    libraryPermission ??= MediaLibrary.requestPermissionsAsync(false, ['photo']).then((p) => p.granted);
+    libraryPermission ??= askLibraryAccess();
     if (!(await libraryPermission)) return {};
     const info = await MediaLibrary.getAssetInfoAsync(assetId);
     // Run the coordinates through the EXIF reader, so "0,0" and nonsense are refused the same way.
@@ -211,4 +230,44 @@ export const dateSpan = (from: string | null, to: string | null) => {
   const a = dayLabel(from.slice(0, 10));
   if (!to || to.slice(0, 10) === from.slice(0, 10)) return a;
   return `${a} – ${dayLabel(to.slice(0, 10))}`;
+};
+
+/**
+ * Saves full-size copies of photos to this phone's gallery, or downloads them
+ * in a browser. Returns how many made it.
+ */
+export const savePhotos = async (
+  list: Photo[],
+  onProgress?: (done: number) => void,
+): Promise<{ saved: number; failed: number }> => {
+  let saved = 0;
+  let failed = 0;
+  if (Platform.OS !== 'web') {
+    const { granted } = await MediaLibrary.requestPermissionsAsync(true);
+    if (!granted) return { saved: 0, failed: list.length };
+  }
+  for (const photo of list) {
+    try {
+      if (!photo.url) throw new Error('No link');
+      if (Platform.OS === 'web') {
+        const blob = await (await fetch(photo.url)).blob();
+        const href = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = `tagalong-${photo.id}.jpg`;
+        a.click();
+        URL.revokeObjectURL(href);
+      } else {
+        const FileSystem = await import('expo-file-system/legacy');
+        const target = `${FileSystem.cacheDirectory}tagalong-${photo.id}.jpg`;
+        const { uri } = await FileSystem.downloadAsync(photo.url, target);
+        await MediaLibrary.saveToLibraryAsync(uri);
+      }
+      saved += 1;
+    } catch {
+      failed += 1;
+    }
+    onProgress?.(saved + failed);
+  }
+  return { saved, failed };
 };

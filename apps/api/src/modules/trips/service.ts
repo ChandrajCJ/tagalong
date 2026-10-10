@@ -1,24 +1,28 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
-import { changeLog, tripMembers, trips, users, type Db } from '@tagalong/db';
+import { changeLog, expenses, tripMembers, trips, users, type Db } from '@tagalong/db';
 import {
   CreateTripInput,
   newId,
+  UpdateTripInput,
   type Trip,
   type TripRole,
   type TripSummary,
 } from '@tagalong/shared';
+import type { Redis } from 'ioredis';
 import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
-import { conflict } from '../../lib/errors';
+import { badRequest, conflict } from '../../lib/errors';
+import { publishTripEvent } from '../../lib/events';
 
 type CreateTrip = z.output<typeof CreateTripInput>;
+type UpdateTrip = z.output<typeof UpdateTripInput>;
 
 const activeMemberCount = sql<number>`(
   select count(*)::int from ${tripMembers} m
   where m.trip_id = ${trips.id} and m.left_at is null
 )`;
 
-export const createTripsService = (db: Db) => ({
+export const createTripsService = (db: Db, redis?: Redis) => ({
   async listForUser(userId: string): Promise<TripSummary[]> {
     const rows = await db
       .select({
@@ -110,5 +114,59 @@ export const createTripsService = (db: Db) => ({
     });
 
     return { trip: await this.get(id, userId), created };
+  },
+
+  /**
+   * Changes the trip's name, place, dates or currency. Editors can, since a
+   * trip's dates are everyone's business. The currency is locked once there
+   * are expenses, because every expense is stored converted into it.
+   */
+  async update(tripId: string, userId: string, input: UpdateTrip, origin?: string): Promise<Trip> {
+    await requireTripRole(db, tripId, userId, 'editor');
+    const { version, ...fields } = input;
+    const [current] = await db
+      .select({ startDate: trips.startDate, endDate: trips.endDate, baseCurrency: trips.baseCurrency })
+      .from(trips)
+      .where(eq(trips.id, tripId));
+    const start = fields.startDate !== undefined ? fields.startDate : current!.startDate;
+    const end = fields.endDate !== undefined ? fields.endDate : current!.endDate;
+    if (start && end && end < start) throw badRequest('End date must be on or after the start date');
+    if (fields.baseCurrency && fields.baseCurrency !== current!.baseCurrency) {
+      const [spent] = await db
+        .select({ id: expenses.id })
+        .from(expenses)
+        .where(and(eq(expenses.tripId, tripId), isNull(expenses.deletedAt)))
+        .limit(1);
+      if (spent) throw badRequest('The currency can’t change once there are expenses', 'currency_locked');
+    }
+
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(trips)
+        .set({
+          ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)),
+          version: sql`${trips.version} + 1`,
+        })
+        .where(and(eq(trips.id, tripId), eq(trips.version, version), isNull(trips.deletedAt)))
+        .returning({ id: trips.id });
+      if (!row) return false;
+      await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'upsert', changedBy: userId });
+      return true;
+    });
+    const trip = await this.get(tripId, userId);
+    if (!updated) {
+      throw conflict('Someone changed the trip while you were editing. Showing the latest version.', { current: trip });
+    }
+    if (redis) {
+      await publishTripEvent(redis, {
+        type: 'trip.updated',
+        tripId,
+        entityId: tripId,
+        actorId: userId,
+        version: trip.version,
+        originClientId: origin,
+      });
+    }
+    return trip;
   },
 });

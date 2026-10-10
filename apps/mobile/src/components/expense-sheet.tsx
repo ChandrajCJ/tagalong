@@ -452,6 +452,17 @@ export function ExpenseSheet({
                     );
                   })}
               </View>
+              {form.method === 'shares' ? (
+                <Text style={styles.hint}>
+                  Give each person a number: a couple might be 2, everyone else 1. The cost splits in that ratio.
+                </Text>
+              ) : form.method === 'exact' ? (
+                <Text style={styles.hint}>Type what each person spent; together it must make the total.</Text>
+              ) : form.method === 'percent' ? (
+                <Text style={styles.hint}>Give each person a percentage; together it must make 100%.</Text>
+              ) : (
+                <Text style={styles.hint}>Tick who shared it; the cost splits evenly between them.</Text>
+              )}
               {remaining ? <Text style={styles.hint}>{remaining}</Text> : null}
               {errors.split ? <Text style={styles.error}>{errors.split}</Text> : null}
             </View>

@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { useTrip } from '@/lib/trip-context';
+import { ROLE_HELP } from '@/lib/roles';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
 const ROLE_LABEL: Record<TripRole, string> = { owner: 'Owner', editor: 'Editor', viewer: 'Viewer' };
@@ -42,7 +43,10 @@ export default function Members() {
     const roleOptions = (['owner', 'editor', 'viewer'] as const)
       .filter((r) => r !== member.role)
       .map((r) => ({ text: `Make ${ROLE_LABEL[r].toLowerCase()}`, onPress: () => void setRole(member, r) }));
-    Alert.alert(member.displayName, `Currently ${ROLE_LABEL[member.role].toLowerCase()}`, [
+    Alert.alert(
+      member.displayName,
+      `Currently ${ROLE_LABEL[member.role].toLowerCase()}.\n\nOwner: ${ROLE_HELP.owner}\nEditor: ${ROLE_HELP.editor}\nViewer: ${ROLE_HELP.viewer}`,
+      [
       ...roleOptions,
       {
         text: 'Remove from trip',
@@ -80,7 +84,7 @@ export default function Members() {
         <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} style={styles.back}>
           <Feather name="chevron-left" size={22} color={colors.ink} />
         </Pressable>
-        <Title>Travelers</Title>
+        <Title>People on this trip</Title>
         <Body>
           {trip.memberCount} {trip.memberCount === 1 ? 'person' : 'people'} on {trip.name}.
           {isOwner ? ' Tap someone to change their role.' : ''}
@@ -124,7 +128,7 @@ export default function Members() {
 
         <Label style={{ marginTop: space.lg }}>Roles</Label>
         <Body style={{ fontSize: 13 }}>
-          Owners manage people. Editors plan, chat and invite. Viewers can look but not change anything.
+          Owner: {ROLE_HELP.owner} Editors: {ROLE_HELP.editor} Viewers: {ROLE_HELP.viewer}
         </Body>
 
         <Button label="Leave trip" variant="ghost" onPress={leave} style={{ marginTop: space.lg }} />

@@ -66,7 +66,7 @@ export function SettleSheet({ transfer, currency, nameOf, onSave, onClose }: Pro
         <SafeAreaView style={styles.sheet} edges={['bottom']}>
           <View style={styles.grabber} />
           <Text accessibilityRole="header" style={styles.title}>
-            Record a payment
+            Mark as paid
           </Text>
           <View style={styles.people}>
             <Text style={styles.person}>{nameOf(transfer.fromUser)}</Text>

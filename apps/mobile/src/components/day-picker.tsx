@@ -34,7 +34,7 @@ export function DayPicker({ visible, title, subtitle, days, busy, onPick, onClos
             onPress={() => onPick(null)}
             style={styles.option}
           >
-            <Text style={styles.optionText}>Anytime, no day yet</Text>
+            <Text style={styles.optionText}>No day yet</Text>
           </Pressable>
           {days
             .filter((d) => d !== ANYTIME)

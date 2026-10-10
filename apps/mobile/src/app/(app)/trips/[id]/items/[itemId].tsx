@@ -19,6 +19,7 @@ import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
@@ -33,6 +34,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookingCard } from '@/components/booking-card';
 import { titleOf } from '@/lib/bookings';
+import { openDirections } from '@/lib/directions';
 import { categoryFor, encodeDraft, type ExpenseDraft } from '@/lib/money';
 import {
   BookingSheet,
@@ -224,8 +226,12 @@ export default function ItemDetail() {
   };
 
   const deleteItem = async () => {
-    await request(`/items/${item.id}`, { method: 'DELETE' }).catch(() => {});
-    router.back();
+    try {
+      await request(`/items/${item.id}`, { method: 'DELETE' });
+      router.back();
+    } catch (e) {
+      Alert.alert('Couldn’t delete it', e instanceof ApiError ? e.message : 'Check your connection and try again.');
+    }
   };
 
   const saveBooking = async (fields: BookingFields): Promise<BookingSaveResult> => {
@@ -259,7 +265,10 @@ export default function ItemDetail() {
     const existing = bookingSheet.booking;
     if (!existing) return;
     setBookings((prev) => prev.filter((b) => b.id !== existing.id));
-    await request(`/bookings/${existing.id}`, { method: 'DELETE' }).catch(() => void load());
+    await request(`/bookings/${existing.id}`, { method: 'DELETE' }).catch((e: unknown) => {
+      Alert.alert('Couldn’t remove the booking', e instanceof ApiError ? e.message : 'Try again.');
+      void load();
+    });
   };
 
   const favourite = async (photo: Photo) => {
@@ -297,6 +306,7 @@ export default function ItemDetail() {
       kind: 'text',
       body,
       replyToId: null,
+      replyTo: null,
       payload: null,
       createdAt: new Date().toISOString(),
       reactions: [],
@@ -305,11 +315,16 @@ export default function ItemDetail() {
       status: 'sending',
     };
     setDraft('');
-    setMessages((prev) => mergeMessages(prev, [local]));
+    await deliver(local);
+  };
+
+  /** Sends (or re-sends, after a failure) a message in this item's discussion. */
+  const deliver = async (local: LocalMessage) => {
+    setMessages((prev) => mergeMessages(prev, [{ ...local, status: 'sending' }]));
     try {
       const saved = await request(`/items/${item.id}/messages`, {
         method: 'POST',
-        body: { id: local.id, body },
+        body: { id: local.id, body: local.body },
         schema: ChatMessage,
       });
       setMessages((prev) => mergeMessages(prev, [saved]));
@@ -329,7 +344,7 @@ export default function ItemDetail() {
 
   const meta = ITEM_TYPE_META[item.type];
   const when = [
-    dayKeyOf(item) === 'anytime' ? 'Anytime' : shortDate(item.date!),
+    dayKeyOf(item) === 'anytime' ? 'No day yet' : shortDate(item.date!),
     item.startTime
       ? item.endTime
         ? `${item.startTime}–${item.endTime}${item.endTime <= item.startTime ? ' (next day)' : ''}`
@@ -380,6 +395,14 @@ export default function ItemDetail() {
               <View style={styles.metaRow}>
                 <Feather name="map-pin" size={14} color={colors.muted} />
                 <Body style={{ flex: 1 }}>{item.placeName}</Body>
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={`Directions to ${item.placeName}`}
+                  onPress={() => openDirections(item.placeName!, trip.destination)}
+                  style={styles.expenseLink}
+                >
+                  <Text style={styles.expenseLinkText}>Directions</Text>
+                </Pressable>
               </View>
             ) : null}
             {item.costEstimateMinor != null && item.costCurrency ? (
@@ -419,6 +442,7 @@ export default function ItemDetail() {
                 <View key={b.id} style={{ gap: space.sm }}>
                   <BookingCard
                     booking={b}
+                    destination={trip.destination}
                     onPress={
                       canEdit ? () => setBookingSheet({ open: true, booking: b }) : undefined
                     }
@@ -483,7 +507,10 @@ export default function ItemDetail() {
 
           {photos.length > 0 ? (
             <View style={{ gap: space.md }}>
-              <Label>Photos · {photos.length}</Label>
+              <View style={{ gap: 2 }}>
+                <Label>Photos · {photos.length}</Label>
+                <Body style={{ fontSize: 12 }}>Taken during this, from the trip album.</Body>
+              </View>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -531,7 +558,11 @@ export default function ItemDetail() {
                       color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)}
                       size={26}
                     />
-                    <View
+                    <Pressable
+                      accessibilityRole={m.status === 'failed' ? 'button' : undefined}
+                      accessibilityHint={m.status === 'failed' ? 'Double tap to send again' : undefined}
+                      disabled={m.status !== 'failed'}
+                      onPress={() => void deliver(m)}
                       style={[
                         styles.bubble,
                         isMe ? styles.bubbleMine : styles.bubbleTheirs,
@@ -540,14 +571,27 @@ export default function ItemDetail() {
                     >
                       {!isMe ? <Text style={styles.sender}>{m.senderName}</Text> : null}
                       <Text style={[styles.msgBody, isMe && { color: '#FFFFFF' }]}>{m.body}</Text>
-                      <Text style={[styles.msgTime, isMe && { color: colors.onAccentMuted }]}>
-                        {m.status === 'failed' ? "Didn't send" : timeOf(m.createdAt)}
+                      <Text
+                        style={[
+                          styles.msgTime,
+                          isMe && { color: colors.onAccentMuted },
+                          m.status === 'failed' && { color: isMe ? '#FFFFFF' : colors.danger },
+                        ]}
+                      >
+                        {m.status === 'failed'
+                          ? "Didn't send. Tap to try again"
+                          : m.status === 'sending'
+                            ? 'Sending…'
+                            : timeOf(m.createdAt)}
                       </Text>
-                    </View>
+                    </Pressable>
                   </View>
                 );
               })
             )}
+            {!canEdit ? (
+              <Body style={{ fontSize: 13 }}>Viewers can read the discussion but not post.</Body>
+            ) : null}
           </View>
         </ScrollView>
 

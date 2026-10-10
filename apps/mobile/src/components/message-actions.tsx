@@ -8,6 +8,8 @@ interface Props {
   message: LocalMessage | null;
   canReact: boolean;
   canAddToPlan: boolean;
+  canReply: boolean;
+  onReply: () => void;
   onReact: (emoji: string) => void;
   onAddToPlan: () => void;
   onAddExpense: () => void;
@@ -15,11 +17,13 @@ interface Props {
   onClose: () => void;
 }
 
-/** Long-press menu for a message: react, add it to the plan or the money, or copy it. */
+/** Long-press menu for a message: react, reply, add it to the plan or the money, or copy it. */
 export function MessageActions({
   message,
   canReact,
   canAddToPlan,
+  canReply,
+  onReply,
   onReact,
   onAddToPlan,
   onAddExpense,
@@ -55,6 +59,7 @@ export function MessageActions({
               })}
             </View>
           ) : null}
+          {canReply ? <Action icon="corner-up-left" label="Reply" onPress={onReply} /> : null}
           {canAddToPlan ? (
             <>
               <Action icon="calendar" label="Add to plan" onPress={onAddToPlan} />

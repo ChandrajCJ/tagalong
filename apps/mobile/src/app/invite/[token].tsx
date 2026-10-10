@@ -7,6 +7,7 @@ import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { formatDateRange } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { ROLE_HELP } from '@/lib/roles';
 import { colors, fonts, space } from '@/theme';
 
 /** Opened from an invite link: tagalong://invite/<token>. */
@@ -94,9 +95,7 @@ export default function InviteScreen() {
           </View>
         </View>
         <Body>
-          {preview.role === 'editor'
-            ? 'Editors can plan, chat and add expenses.'
-            : 'Viewers can see the plan and photos but not change them.'}
+          {preview.role === 'editor' ? `Editors: ${ROLE_HELP.editor}` : `Viewers: ${ROLE_HELP.viewer}`}
         </Body>
       </View>
 

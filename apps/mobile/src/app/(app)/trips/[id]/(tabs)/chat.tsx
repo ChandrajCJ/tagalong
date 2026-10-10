@@ -40,11 +40,15 @@ import {
 } from '@/lib/chat';
 import { encodeDraft, type ExpenseDraft } from '@/lib/money';
 import { realtime, useTripRealtime } from '@/lib/realtime';
+import { secureStorage } from '@/lib/storage';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
 const TYPING_SHOWN_MS = 4000;
 const TYPING_SEND_EVERY_MS = 2500;
+
+/** Remembers that someone has seen how to reply and react. */
+const HOLD_TIP_KEY = 'tagalong.tip.holdMessage';
 
 /** The trip's group chat (design: Chat.dc.html). */
 export default function ChatTab() {
@@ -57,6 +61,28 @@ export default function ChatTab() {
   const [draft, setDraft] = useState('');
   const [typing, setTyping] = useState<Record<string, { name: string; until: number }>>({});
   const [actionsFor, setActionsFor] = useState<LocalMessage | null>(null);
+  const [replyingTo, setReplyingTo] = useState<LocalMessage | null>(null);
+  // A short message above the composer: "Copied", or what went wrong.
+  const [flash, setFlash] = useState<string>();
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const say = (text: string) => {
+    setFlash(text);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(undefined), 2500);
+  };
+  // Holding a message is how to reply or react; say so until someone has done it once.
+  const [showHoldTip, setShowHoldTip] = useState(false);
+  useEffect(() => {
+    void secureStorage.get(HOLD_TIP_KEY).then((seen) => setShowHoldTip(!seen));
+  }, []);
+  const openActions = (message: LocalMessage) => {
+    setActionsFor(message);
+    if (showHoldTip) {
+      setShowHoldTip(false);
+      void secureStorage.set(HOLD_TIP_KEY, '1');
+    }
+  };
+  const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   const [askingPoll, setAskingPoll] = useState(false);
   const lastTypingSent = useRef(0);
@@ -191,13 +217,19 @@ export default function ChatTab() {
     try {
       const saved = await request(`/trips/${tripId}/messages`, {
         method: 'POST',
-        body: { id: local.id, body: local.body },
+        body: { id: local.id, body: local.body, ...(local.replyToId ? { replyToId: local.replyToId } : {}) },
         schema: ChatMessage,
       });
       setMessages((prev) => mergeMessages(prev ?? [], [saved]));
     } catch {
       setMessages((prev) => mergeMessages(prev ?? [], [{ ...local, status: 'failed' }]));
     }
+  };
+
+  /** Who wrote the message a reply quotes: "You", their name, or the app for activity cards. */
+  const quotedName = (name: string | null) => {
+    if (name === null) return 'Tagalong';
+    return name === trip?.members.find((x) => x.userId === me)?.displayName ? 'You' : name;
   };
 
   const send = () => {
@@ -211,7 +243,10 @@ export default function ChatTab() {
       senderName: mine?.displayName ?? null,
       kind: 'text',
       body,
-      replyToId: null,
+      replyToId: replyingTo?.id ?? null,
+      replyTo: replyingTo
+        ? { id: replyingTo.id, senderName: replyingTo.senderName, body: replyingTo.body.slice(0, 140), deleted: false }
+        : null,
       payload: null,
       createdAt: new Date().toISOString(),
       reactions: [],
@@ -220,6 +255,7 @@ export default function ChatTab() {
       status: 'sending',
     };
     setDraft('');
+    setReplyingTo(null);
     setMessages((prev) => mergeMessages(prev ?? [], [local]));
     void deliver(local);
   };
@@ -247,6 +283,7 @@ export default function ChatTab() {
       const { reactions } = result as { reactions: LocalMessage['reactions'] };
       setMessages((prev) => prev?.map((m) => (m.id === message.id ? { ...m, reactions } : m)) ?? prev);
     } catch {
+      say('Couldn’t add that reaction. Try again.');
       void load();
     }
   };
@@ -295,6 +332,7 @@ export default function ChatTab() {
       setPoll(message.id, await request(`/polls/${poll.id}/vote`, { method: 'POST', body: { optionIds }, schema: Poll }));
     } catch {
       setPoll(message.id, poll);
+      say('Your vote didn’t go through. Try again.');
       void load();
     }
   };
@@ -304,6 +342,7 @@ export default function ChatTab() {
     try {
       setPoll(message.id, await request(`/polls/${message.poll.id}/close`, { method: 'POST', schema: Poll }));
     } catch {
+      say('Couldn’t end the voting. Try again.');
       void load();
     }
   };
@@ -370,10 +409,20 @@ export default function ChatTab() {
             accessibilityRole="button"
             accessibilityLabel={`${mine ? 'You' : m.senderName}: ${m.body}`}
             accessibilityHint={m.status === 'failed' ? 'Double tap to send again' : 'Long press for options'}
-            onLongPress={() => setActionsFor(m)}
+            onLongPress={() => openActions(m)}
             onPress={() => (m.status === 'failed' ? void deliver({ ...m, status: 'sending' }) : undefined)}
             style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs, m.status === 'sending' && { opacity: 0.6 }]}
           >
+            {m.replyTo ? (
+              <View style={[styles.quote, mine && styles.quoteMine]}>
+                <Text style={[styles.quoteName, mine && { color: '#FFFFFF' }]} numberOfLines={1}>
+                  {quotedName(m.replyTo.senderName)}
+                </Text>
+                <Text style={[styles.quoteBody, mine && { color: colors.onAccentMuted }]} numberOfLines={2}>
+                  {m.replyTo.deleted ? 'Message deleted' : m.replyTo.body}
+                </Text>
+              </View>
+            ) : null}
             <Text style={[styles.body, mine && { color: '#FFFFFF' }]}>{m.body}</Text>
           </Pressable>
           {m.reactions.length > 0 ? (
@@ -444,7 +493,10 @@ export default function ChatTab() {
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Feather name="message-square" size={28} color={colors.accent} />
-                <Body style={{ textAlign: 'center' }}>Say hi to the group.</Body>
+                <Body style={{ textAlign: 'center' }}>
+                  Say hi to the group. Later, hold any message to reply, react, or turn it into a plan item or
+                  an expense.
+                </Body>
               </View>
             }
           />
@@ -458,17 +510,65 @@ export default function ChatTab() {
               : ' '}
         </Text>
 
+        {flash ? (
+          <View style={styles.flash} accessibilityLiveRegion="polite">
+            <Text style={styles.flashText}>{flash}</Text>
+          </View>
+        ) : null}
+
+        {canPost && showHoldTip && (messages?.length ?? 0) > 0 && !replyingTo ? (
+          <View style={styles.tip}>
+            <Feather name="info" size={14} color={colors.accentInk} />
+            <Text style={styles.tipText}>Hold any message to reply, react, or add it to the plan or expenses.</Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hide tip"
+              onPress={() => {
+                setShowHoldTip(false);
+                void secureStorage.set(HOLD_TIP_KEY, '1');
+              }}
+              style={styles.tipClose}
+            >
+              <Feather name="x" size={14} color={colors.accentInk} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {canPost && replyingTo ? (
+          <View style={styles.replyBar} accessibilityLiveRegion="polite">
+            <View style={styles.replyAccent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.replyLabel} numberOfLines={1}>
+                Replying to {replyingTo.senderId === me ? 'yourself' : (replyingTo.senderName ?? 'Tagalong')}
+              </Text>
+              <Text style={styles.replyText} numberOfLines={1}>
+                {replyingTo.body}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel reply"
+              onPress={() => setReplyingTo(null)}
+              style={styles.replyClose}
+            >
+              <Feather name="x" size={18} color={colors.muted} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {canPost ? (
           <View style={styles.composer}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Ask the group a question"
+              accessibilityLabel="Start a poll"
               onPress={() => setAskingPoll(true)}
               style={styles.pollButton}
             >
-              <Feather name="bar-chart-2" size={20} color={colors.accent} />
+              <Feather name="bar-chart-2" size={18} color={colors.accent} />
+              <Text style={styles.pollText}>Poll</Text>
             </Pressable>
             <TextInput
+              ref={inputRef}
               accessibilityLabel="Message"
               value={draft}
               onChangeText={onChangeDraft}
@@ -501,6 +601,12 @@ export default function ChatTab() {
         message={actionsFor}
         canReact={!!actionsFor && !actionsFor.status}
         canAddToPlan={canPost && actionsFor?.kind === 'text'}
+        canReply={canPost && !!actionsFor && actionsFor.kind !== 'system' && !actionsFor.status}
+        onReply={() => {
+          setReplyingTo(actionsFor);
+          setActionsFor(null);
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
         onReact={(emoji) => actionsFor && void react(actionsFor, emoji)}
         onAddToPlan={() => {
           const body = actionsFor?.body ?? '';
@@ -521,6 +627,7 @@ export default function ChatTab() {
         }}
         onCopy={() => {
           void Clipboard.setStringAsync(actionsFor?.body ?? '');
+          say('Copied');
           setActionsFor(null);
         }}
         onClose={() => setActionsFor(null)}
@@ -530,6 +637,15 @@ export default function ChatTab() {
 }
 
 const styles = StyleSheet.create({
+  quote: { borderLeftWidth: 3, borderLeftColor: colors.accent, backgroundColor: 'rgba(14,107,92,0.08)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 6 },
+  quoteMine: { borderLeftColor: '#FFFFFF', backgroundColor: 'rgba(255,255,255,0.16)' },
+  quoteName: { fontFamily: fonts.bold, fontSize: 12, color: colors.accent },
+  quoteBody: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.md, paddingLeft: space.sm, paddingVertical: 6, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  replyAccent: { width: 3, alignSelf: 'stretch', borderRadius: 2, backgroundColor: colors.accent },
+  replyLabel: { fontFamily: fonts.bold, fontSize: 12, color: colors.accent },
+  replyText: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
+  replyClose: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface, gap: 2 },
   title: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
@@ -543,7 +659,13 @@ const styles = StyleSheet.create({
   rowMine: { justifyContent: 'flex-end' },
   bubbleCol: { maxWidth: '78%', gap: 3 },
   pollCol: { maxWidth: '86%', gap: 3 },
-  pollButton: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  pollButton: { flexDirection: 'row', gap: 4, height: 44, paddingHorizontal: 10, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
+  pollText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
+  flash: { alignSelf: 'center', marginBottom: space.xs, paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.ink },
+  flashText: { fontFamily: fonts.bold, fontSize: 13, color: '#FFFFFF' },
+  tip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.md, marginBottom: space.xs, paddingLeft: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
+  tipText: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.accentInk, paddingVertical: 8 },
+  tipClose: { width: 40, height: 36, alignItems: 'center', justifyContent: 'center' },
   sender: { fontFamily: fonts.bold, fontSize: 12, color: colors.muted, marginLeft: 4 },
   bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   bubbleMine: { backgroundColor: colors.accent, borderBottomRightRadius: 6 },

@@ -25,6 +25,7 @@ import { ApiError, request } from '@/lib/api';
 import { CATEGORY_META, decodeDraft, exportCsv, nameOf, type ExpenseDraft } from '@/lib/money';
 import { planDays, shortDate } from '@/lib/plan';
 import { useTripRealtime } from '@/lib/realtime';
+import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
@@ -68,6 +69,11 @@ export default function MoneyTab() {
   const [error, setError] = useState<string>();
   const [sheet, setSheet] = useState<{ expense?: Expense; draft?: ExpenseDraft | null } | null>(null);
   const [paying, setPaying] = useState<PendingPayment | null>(null);
+  const [toast, setToast] = useState<string>();
+  const say = (text: string) => {
+    setToast(text);
+    setTimeout(() => setToast(undefined), 3500);
+  };
 
   const tripId = trip?.id;
   const me = trip?.myUserId ?? '';
@@ -189,7 +195,10 @@ export default function MoneyTab() {
     const target = sheet?.expense;
     if (!target) return;
     setExpenses((list) => list.filter((e) => e.id !== target.id));
-    await request(`/expenses/${target.id}`, { method: 'DELETE' }).catch(() => void load());
+    await request(`/expenses/${target.id}`, { method: 'DELETE' }).catch(() => {
+      say('Couldn’t delete that expense. Try again.');
+      void load();
+    });
   };
 
   const recordPayment = async (payment: Transfer & { method: SettlementMethod; note: string | null }) => {
@@ -247,14 +256,23 @@ export default function MoneyTab() {
         style: 'destructive',
         onPress: async () => {
           setSettlements((list) => list.filter((x) => x.id !== s.id));
-          await request(`/settlements/${s.id}`, { method: 'DELETE' }).catch(() => void load());
+          await request(`/settlements/${s.id}`, { method: 'DELETE' }).catch(() => {
+            say('Couldn’t undo that payment. Try again.');
+            void load();
+          });
         },
       },
     ]);
   };
 
   const headline =
-    myNet > 0 ? `You’re owed ${money(myNet)}` : myNet < 0 ? `You owe ${money(-myNet)}` : 'You’re all square';
+    (data?.expenses.length ?? 0) === 0
+      ? 'No expenses yet'
+      : myNet > 0
+        ? `You’re owed ${money(myNet)}`
+        : myNet < 0
+          ? `You owe ${money(-myNet)}`
+          : 'You’re settled up';
   const sheetPeople = sheet?.expense
     ? [
         ...people,
@@ -273,9 +291,10 @@ export default function MoneyTab() {
             accessibilityRole="button"
             accessibilityLabel="Export expenses as a spreadsheet"
             onPress={() => void exportCsv(trip.name, data.expenses, people, base)}
-            style={styles.iconButton}
+            style={styles.exportButton}
           >
-            <Feather name="download" size={20} color={colors.ink} />
+            <Feather name="download" size={16} color={colors.ink} />
+            <Text style={styles.exportText}>Export CSV</Text>
           </Pressable>
         ) : null}
       </View>
@@ -295,7 +314,9 @@ export default function MoneyTab() {
             <Text style={styles.heroLabel}>Your balance</Text>
             <Text style={styles.heroAmount}>{headline}</Text>
             <Text style={styles.heroSub}>
-              Trip spend {money(total)} · Your share {money(myShare)}
+              {(data?.expenses.length ?? 0) === 0
+                ? 'Add what you pay for the group, and Tagalong works out who owes whom.'
+                : `Trip spend ${money(total)} · Your share ${money(myShare)}`}
             </Text>
           </View>
 
@@ -322,7 +343,7 @@ export default function MoneyTab() {
                       ) : null}
                       {canSettle(t) ? (
                         <Button
-                          label="Mark paid"
+                          label="Mark as paid"
                           variant={
                             (t.fromUser === me || t.toUser === me) && !(upiTrip && t.fromUser === me && upiOf(t.toUser))
                               ? 'primary'
@@ -353,10 +374,11 @@ export default function MoneyTab() {
           ) : data.expenses.length > 0 ? (
             <View style={styles.square}>
               <Feather name="check-circle" size={18} color={colors.accent} />
-              <Body style={{ flex: 1 }}>Everyone’s square. Nothing to settle.</Body>
+              <Body style={{ flex: 1 }}>Everyone’s settled up. Nothing to pay.</Body>
             </View>
           ) : null}
 
+          {data.expenses.length > 0 ? (
           <View style={{ gap: space.sm }}>
             <Label>Balances</Label>
             <View style={styles.card}>
@@ -374,13 +396,14 @@ export default function MoneyTab() {
                         ? `${p.userId === me ? 'get' : 'gets'} back ${money(net)}`
                         : net < 0
                           ? `${p.userId === me ? 'owe' : 'owes'} ${money(-net)}`
-                          : 'square'}
+                          : 'settled up'}
                     </Text>
                   </View>
                 );
               })}
             </View>
           </View>
+          ) : null}
 
           <View style={{ gap: space.sm }}>
             <Label>Expenses</Label>
@@ -390,7 +413,11 @@ export default function MoneyTab() {
                 <Body style={{ textAlign: 'center' }}>
                   Log what you pay for the group: dinners, taxis, tickets. Tagalong keeps track of who owes whom.
                 </Body>
-                {canEdit ? <Button label="Add the first expense" variant="outline" onPress={() => setSheet({})} /> : null}
+                {canEdit ? (
+                  <Button label="Add the first expense" variant="outline" onPress={() => setSheet({})} />
+                ) : (
+                  <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
+                )}
               </View>
             ) : (
               rows.map((row) => {
@@ -404,18 +431,22 @@ export default function MoneyTab() {
                 if (row.kind === 'settlement') {
                   const s = row.settlement;
                   return (
-                    <Pressable
-                      key={row.key}
-                      accessibilityRole="button"
-                      accessibilityHint={canSettle(s) ? 'Double tap to undo' : undefined}
-                      onPress={() => undoPayment(s)}
-                      style={styles.paymentRow}
-                    >
+                    <View key={row.key} style={styles.paymentRow}>
                       <Feather name="repeat" size={16} color={colors.accent} />
                       <Text style={styles.paymentText}>
                         {name(s.fromUser)} paid {s.toUser === me ? 'you' : name(s.toUser)} {money(s.amountMinor)}
                       </Text>
-                    </Pressable>
+                      {canSettle(s) ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Undo: ${name(s.fromUser)} paid ${name(s.toUser)} ${money(s.amountMinor)}`}
+                          onPress={() => undoPayment(s)}
+                          style={styles.undo}
+                        >
+                          <Text style={styles.undoText}>Undo</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   );
                 }
                 const e = row.expense;
@@ -462,8 +493,15 @@ export default function MoneyTab() {
 
       {canEdit && data && rows.length > 0 ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Add expense" onPress={() => setSheet({})} style={styles.fab}>
-          <Feather name="plus" size={26} color="#FFFFFF" />
+          <Feather name="plus" size={20} color="#FFFFFF" />
+          <Text style={styles.fabText}>Add expense</Text>
         </Pressable>
+      ) : null}
+
+      {toast ? (
+        <View style={styles.toast} accessibilityLiveRegion="polite">
+          <Body style={{ color: '#FFFFFF' }}>{toast}</Body>
+        </View>
       ) : null}
 
       <ExpenseSheet
@@ -493,7 +531,6 @@ export default function MoneyTab() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.xl, paddingTop: space.md },
-  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   body: { padding: space.xl, paddingTop: space.md, paddingBottom: 120, gap: space.xl },
   hero: { backgroundColor: colors.accent, borderRadius: radius.xl, padding: space.xl, gap: 4 },
   heroLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.onAccentMuted },
@@ -520,5 +557,11 @@ const styles = StyleSheet.create({
   paymentText: { flex: 1, fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 32, paddingHorizontal: space.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
-  fab: { position: 'absolute', right: space.xl, bottom: space.xl, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
+  exportButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
+  exportText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
+  undo: { minHeight: 36, paddingHorizontal: 10, justifyContent: 'center' },
+  undoText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
+  toast: { position: 'absolute', left: space.xl, right: space.xl, bottom: 90, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
 });

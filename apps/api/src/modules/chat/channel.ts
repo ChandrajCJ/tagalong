@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { channels, messages, users, type Db, type Tx } from '@tagalong/db';
 import { newId, type ChatMessage, type Poll } from '@tagalong/shared';
 
@@ -11,6 +11,7 @@ export const toMessage = (
   poll: Poll | null = null,
   /** Set when the message belongs to a plan item's thread, not the main chat. */
   itemId: string | null = null,
+  replyTo: ChatMessage['replyTo'] = null,
 ): ChatMessage => ({
   id: row.id,
   tripId: row.tripId,
@@ -19,12 +20,38 @@ export const toMessage = (
   kind: row.kind as ChatMessage['kind'],
   body: row.body,
   replyToId: row.replyToId,
+  replyTo,
   payload: (row.payload as Record<string, unknown> | null) ?? null,
   createdAt: row.createdAt.toISOString(),
   reactions,
   poll,
   itemId,
 });
+
+/** How much of the original a reply shows: enough to recognise it. */
+const QUOTE_LENGTH = 140;
+
+/** Previews of the messages these replies answer, by id. */
+export const quotesFor = async (db: Db | Tx, replyToIds: (string | null)[]) => {
+  const ids = [...new Set(replyToIds.filter((id): id is string => !!id))];
+  const quotes = new Map<string, NonNullable<ChatMessage['replyTo']>>();
+  if (ids.length === 0) return quotes;
+  const rows = await db
+    .select({ id: messages.id, body: messages.body, deletedAt: messages.deletedAt, senderName: users.displayName })
+    .from(messages)
+    .leftJoin(users, eq(users.id, messages.senderId))
+    .where(inArray(messages.id, ids));
+  for (const r of rows) {
+    const deleted = r.deletedAt !== null;
+    quotes.set(r.id, {
+      id: r.id,
+      senderName: r.senderName,
+      body: deleted ? '' : r.body.length > QUOTE_LENGTH ? `${r.body.slice(0, QUOTE_LENGTH - 1)}…` : r.body,
+      deleted,
+    });
+  }
+  return quotes;
+};
 
 /** The trip's main chat channel, created on first use. */
 export const mainChannelId = async (db: Db | Tx, tripId: string): Promise<string> => {

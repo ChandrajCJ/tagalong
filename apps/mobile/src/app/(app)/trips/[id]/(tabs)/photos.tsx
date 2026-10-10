@@ -15,6 +15,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   SectionList,
   StyleSheet,
@@ -27,8 +29,9 @@ import { PhotoMap } from '@/components/photo-map';
 import { PhotoViewer } from '@/components/photo-viewer';
 import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
-import { groupByDay, uploadBatch, type UploadProgress } from '@/lib/photos';
+import { groupByDay, savePhotos, uploadBatch, type UploadProgress } from '@/lib/photos';
 import { useTripRealtime } from '@/lib/realtime';
+import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -53,6 +56,10 @@ export default function PhotosTab() {
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [lastFailed, setLastFailed] = useState<UploadProgress['failed']>([]);
   const [mode, setMode] = useState<Mode>('days');
+  // Select mode: tap photos to pick them, then download or delete them together.
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; why?: boolean } | null>(null);
   // What the viewer pages through: the whole album, one place, or the favourites.
   const [viewing, setViewing] = useState<{ photos: Photo[]; startId: string } | null>(null);
   const loadedAt = useRef(0);
@@ -169,16 +176,41 @@ export default function PhotosTab() {
       applyFavourite({ photoId: photo.id, userId: trip!.myUserId, added: on, count: saved.favourites });
     } catch {
       applyFavourite({ photoId: photo.id, userId: trip!.myUserId, added: !on, count: photo.favourites });
+      setNotice({ text: 'Your heart didn’t save. Try again.' });
     }
   };
 
   const send = async (picked: { id?: string; asset: ImagePicker.ImagePickerAsset }[]) => {
     if (!tripId || picked.length === 0) return;
     setLastFailed([]);
-    const result = await uploadBatch(tripId, picked, setProgress, upsert);
+    setNotice(null);
+    const uploaded: Photo[] = [];
+    const result = await uploadBatch(tripId, picked, setProgress, (photo) => {
+      uploaded.push(photo);
+      upsert(photo);
+    });
     setProgress(null);
     setLastFailed(result.failed);
+    // Say so now, rather than leaving people to wonder why the map is empty.
+    const unplaced = uploaded.filter((p) => p.latitude === null).length;
+    if (unplaced > 0) {
+      setNotice({
+        text:
+          unplaced === uploaded.length
+            ? `${unplaced === 1 ? 'This photo' : 'These photos'} came without a location, so ${unplaced === 1 ? 'it won’t' : 'they won’t'} show on the map.`
+            : `${unplaced} of ${uploaded.length} photos came without a location, so they won’t show on the map.`,
+        why: true,
+      });
+    }
   };
+
+  const explainLocation = () =>
+    Alert.alert(
+      'Why no location?',
+      Platform.OS === 'android'
+        ? 'A photo has a place only if location was on in the camera when it was taken. Android also hides it from apps unless you allow access to photo locations: if Tagalong asks, choose Allow. You can change it in Settings → Apps → Tagalong → Permissions.'
+        : 'A photo has a place only if location was on for the camera when it was taken (Settings → Privacy → Location Services → Camera). Screenshots and photos saved from chats usually have none.',
+    );
 
   const pick = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -206,7 +238,58 @@ export default function PhotosTab() {
 
   const remove = async (photo: Photo) => {
     setPhotos((prev) => prev?.filter((p) => p.id !== photo.id) ?? prev);
-    await request(`/photos/${photo.id}`, { method: 'DELETE' }).catch(() => void load());
+    await request(`/photos/${photo.id}`, { method: 'DELETE' }).catch(() => {
+      setNotice({ text: 'Couldn’t delete a photo. Try again.' });
+      void load();
+    });
+  };
+
+  const toggle = (photo: Photo) =>
+    setSelected((prev) => {
+      const next = new Set(prev ?? []);
+      if (next.has(photo.id)) next.delete(photo.id);
+      else next.add(photo.id);
+      return next;
+    });
+  const picked = flat.filter((p) => selected?.has(p.id));
+  const deletable = picked.filter(canDelete);
+
+  const downloadSelected = async () => {
+    if (picked.length === 0) return;
+    setBusy(`Saving 0 of ${picked.length}…`);
+    const { saved, failed } = await savePhotos(picked, (done) => setBusy(`Saving ${done} of ${picked.length}…`));
+    setBusy(null);
+    setSelected(null);
+    setNotice({
+      text:
+        failed === 0
+          ? `Saved ${saved} ${saved === 1 ? 'photo' : 'photos'} to ${Platform.OS === 'web' ? 'your downloads' : 'your gallery'}.`
+          : saved === 0
+            ? 'Couldn’t save the photos. Check that Tagalong may save to your gallery.'
+            : `Saved ${saved}; ${failed} didn’t save.`,
+    });
+  };
+
+  const deleteSelected = () => {
+    if (deletable.length === 0) return;
+    const others = picked.length - deletable.length;
+    Alert.alert(
+      `Delete ${deletable.length} ${deletable.length === 1 ? 'photo' : 'photos'}?`,
+      `${others > 0 ? `You can only delete photos you added, so ${others} will stay. ` : ''}They'll be gone for everyone on the trip.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy('Deleting…');
+            await Promise.all(deletable.map(remove));
+            setBusy(null);
+            setSelected(null);
+          },
+        },
+      ],
+    );
   };
 
   if (!trip) return null;
@@ -216,9 +299,14 @@ export default function PhotosTab() {
       {row.map((photo) => (
         <Pressable
           key={photo.id}
-          accessibilityRole="imagebutton"
+          accessibilityRole={selected ? 'checkbox' : 'imagebutton'}
+          aria-checked={selected ? selected.has(photo.id) : undefined}
           accessibilityLabel={`Photo by ${photo.uploaderName ?? 'someone'}`}
-          onPress={() => setViewing({ photos: mode === 'favourites' ? favourites : flat, startId: photo.id })}
+          accessibilityHint={selected ? undefined : 'Hold to select several'}
+          onPress={() =>
+            selected ? toggle(photo) : setViewing({ photos: mode === 'favourites' ? favourites : flat, startId: photo.id })
+          }
+          onLongPress={() => (selected ? undefined : setSelected(new Set([photo.id])))}
           style={{ width: size, height: size }}
         >
           <Image
@@ -234,6 +322,11 @@ export default function PhotosTab() {
             transition={120}
             style={styles.tile}
           />
+          {selected ? (
+            <View style={[styles.check, selected.has(photo.id) && styles.checkOn]}>
+              {selected.has(photo.id) ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+            </View>
+          ) : null}
         </Pressable>
       ))}
     </View>
@@ -247,10 +340,19 @@ export default function PhotosTab() {
           <Body style={{ fontSize: 13 }}>
             {flat.length === 0
               ? "Everyone's photos, in one place."
-              : `${flat.length} ${flat.length === 1 ? 'photo' : 'photos'} from the group`}
+              : `${flat.length} ${flat.length === 1 ? 'photo' : 'photos'} from the group · tap to open, hold to select`}
           </Body>
         </View>
-        {canAdd && flat.length > 0 ? (
+        {flat.length > 0 && mode !== 'map' ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setSelected(selected ? null : new Set())}
+            style={styles.selectButton}
+          >
+            <Text style={styles.selectText}>{selected ? 'Cancel' : 'Select'}</Text>
+          </Pressable>
+        ) : null}
+        {canAdd && flat.length > 0 && !selected ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Add photos"
@@ -303,6 +405,19 @@ export default function PhotosTab() {
         </View>
       ) : null}
 
+      {notice && !progress ? (
+        <View style={styles.banner} accessibilityLiveRegion="polite">
+          <Feather name="info" size={18} color={colors.accentInk} />
+          <Body style={{ flex: 1, color: colors.accentInk }}>{notice.text}</Body>
+          {notice.why ? (
+            <Button label="Why?" variant="ghost" onPress={explainLocation} style={{ minHeight: 36, paddingHorizontal: space.sm }} />
+          ) : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setNotice(null)} style={styles.dismiss}>
+            <Feather name="x" size={16} color={colors.accentInk} />
+          </Pressable>
+        </View>
+      ) : null}
+
       {lastFailed.length > 0 && !progress ? (
         <View style={[styles.banner, styles.bannerError]} accessibilityLiveRegion="polite">
           <Feather name="alert-circle" size={18} color={colors.coralInk} />
@@ -334,17 +449,24 @@ export default function PhotosTab() {
           </View>
           <Text style={styles.emptyTitle}>No photos yet</Text>
           <Body style={{ textAlign: 'center' }}>
-            Add yours and everyone&apos;s land here, sorted by day. Nobody has to send them round.
+            Add yours and everyone&apos;s land here, sorted by day and on a map. Nobody has to send them round.
           </Body>
-          {canAdd ? <Button label="Add photos" onPress={pick} /> : null}
+          {canAdd ? (
+            <Button label="Add photos" onPress={pick} />
+          ) : (
+            <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
+          )}
         </View>
       ) : mode === 'map' ? (
         places.length === 0 ? (
           <View style={styles.center}>
             <Feather name="map" size={28} color={colors.accent} />
+            <Text style={styles.emptyTitle}>Nothing on the map yet</Text>
             <Body style={{ textAlign: 'center' }}>
-              No photos have a location yet. Phones add one when location is on for the camera.
+              Photos appear here when they say where they were taken. None of the {flat.length}{' '}
+              {flat.length === 1 ? 'photo' : 'photos'} in this album do yet.
             </Body>
+            <Button label="Why not?" variant="outline" onPress={explainLocation} />
           </View>
         ) : (
           <View style={{ flex: 1 }}>
@@ -389,6 +511,35 @@ export default function PhotosTab() {
         />
       )}
 
+      {selected ? (
+        <View style={styles.selectBar}>
+          <Text style={styles.selectCount}>
+            {busy ?? (picked.length === 0 ? 'Tap photos to select them' : `${picked.length} selected`)}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Button
+              label="Download"
+              variant="outline"
+              disabled={picked.length === 0 || !!busy}
+              onPress={() => void downloadSelected()}
+              icon={<Feather name="download" size={16} color={colors.ink} />}
+              style={{ flex: 1, minHeight: 44 }}
+            />
+            <Button
+              label={deletable.length > 0 && deletable.length < picked.length ? `Delete ${deletable.length}` : 'Delete'}
+              variant="outline"
+              disabled={deletable.length === 0 || !!busy}
+              onPress={deleteSelected}
+              icon={<Feather name="trash-2" size={16} color={colors.ink} />}
+              style={{ flex: 1, minHeight: 44 }}
+            />
+          </View>
+          {picked.length > 0 && deletable.length === 0 ? (
+            <Body style={{ fontSize: 12, textAlign: 'center' }}>You can delete only the photos you added.</Body>
+          ) : null}
+        </View>
+      ) : null}
+
       <PhotoViewer
         photos={viewing?.photos ?? []}
         startId={viewing?.startId ?? null}
@@ -425,5 +576,12 @@ const styles = StyleSheet.create({
   tile: { flex: 1, borderRadius: 4, backgroundColor: colors.line },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  selectButton: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
+  selectText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
+  check: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
+  checkOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  selectBar: { gap: space.sm, padding: space.md, paddingHorizontal: space.xl, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
+  selectCount: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink, textAlign: 'center' },
+  dismiss: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
 });

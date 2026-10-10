@@ -27,7 +27,7 @@ import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
-import { itemChannelId, mainChannelId, toMessage } from './channel';
+import { itemChannelId, mainChannelId, quotesFor, toMessage } from './channel';
 
 type SendMessage = z.output<typeof SendMessageInput>;
 type CreatePoll = z.output<typeof CreatePollInput>;
@@ -186,6 +186,7 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
     const ids = page.map((r) => r.message.id);
     const grouped = await reactionsFor(ids, userId);
     const polled = await pollsFor(ids, userId);
+    const quotes = await quotesFor(db, page.map((r) => r.message.replyToId));
     const last = page.at(-1);
     return {
       messages: page.map((r) =>
@@ -195,6 +196,7 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
           grouped.get(r.message.id),
           polled.get(r.message.id),
           itemId,
+          r.message.replyToId ? (quotes.get(r.message.replyToId) ?? null) : null,
         ),
       ),
       nextCursor: rows.length > limit && last ? encodeCursor(last.message) : null,
@@ -216,6 +218,15 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
   ) => {
     const id = input.id ?? newId();
     const now = new Date();
+
+    // A reply answers a message in the same conversation, never one elsewhere.
+    if (input.replyToId) {
+      const [original] = await db
+        .select({ channelId: messages.channelId })
+        .from(messages)
+        .where(and(eq(messages.id, input.replyToId), isNull(messages.deletedAt)));
+      if (original?.channelId !== channelId) throw badRequest('That message isn’t in this chat');
+    }
 
     const result = await db.transaction(async (tx) => {
       const [inserted] = await tx
@@ -253,7 +264,15 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       .select({ name: users.displayName })
       .from(users)
       .where(eq(users.id, userId));
-    const message = toMessage(result.row, sender?.name ?? null, [], null, itemId);
+    const quotes = await quotesFor(db, [result.row.replyToId]);
+    const message = toMessage(
+      result.row,
+      sender?.name ?? null,
+      [],
+      null,
+      itemId,
+      result.row.replyToId ? (quotes.get(result.row.replyToId) ?? null) : null,
+    );
     if (!result.created) return { message, created: false };
 
     // You've obviously read your own message.

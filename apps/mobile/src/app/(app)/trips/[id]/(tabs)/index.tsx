@@ -53,9 +53,12 @@ export default function TripOverview() {
             <RoundButton icon="chevron-left" label="Back to your trips" onPress={() => router.replace('/trips')} />
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               {canInvite ? (
-                <RoundButton icon="user-plus" label="Invite people" onPress={() => router.push(`${base}/invite`)} />
+                <RoundButton icon="edit-2" label="Edit" onPress={() => router.push(`${base}/edit`)} />
               ) : null}
-              <RoundButton icon="users" label="Members" onPress={() => router.push(`${base}/members`)} />
+              {canInvite ? (
+                <RoundButton icon="user-plus" label="Invite" onPress={() => router.push(`${base}/invite`)} />
+              ) : null}
+              <RoundButton icon="users" label="People" onPress={() => router.push(`${base}/members`)} />
             </View>
           </View>
           <View style={{ gap: 6 }}>
@@ -64,7 +67,7 @@ export default function TripOverview() {
             </Text>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${trip.memberCount} travelers. See members`}
+              accessibilityLabel={`${trip.memberCount} travelers. See who's coming`}
               onPress={() => router.push(`${base}/members`)}
               style={styles.row}
             >
@@ -88,11 +91,19 @@ export default function TripOverview() {
         <View style={styles.card}>
           <Text style={styles.countdown}>{countdown ?? 'No dates yet'}</Text>
           <Body>{trip.destination}</Body>
+          {!trip.startDate && canInvite ? (
+            <Button
+              label="Add dates"
+              variant="outline"
+              onPress={() => router.push(`${base}/edit`)}
+              style={{ marginTop: space.sm, alignSelf: 'flex-start', minHeight: 40 }}
+            />
+          ) : null}
         </View>
 
         <NextUpCard tripId={trip.id} />
 
-        <Label style={{ marginTop: space.sm }}>Get ready</Label>
+        <Label style={{ marginTop: space.sm }}>What you can do here</Label>
         <View style={styles.list}>
           {trip.memberCount === 1 && canInvite ? (
             <ActionRow
@@ -106,16 +117,37 @@ export default function TripOverview() {
           <ActionRow
             icon="calendar"
             tint="accent"
-            title="Start the day-by-day plan"
-            subtitle="Add places, times and who's doing what"
+            title="Plan the days"
+            subtitle="What you're doing each day, with times, places and directions"
             onPress={() => router.push(`${base}/plan`)}
+          />
+          <ActionRow
+            icon="zap"
+            tint="accent"
+            title="Suggest and vote on ideas"
+            subtitle="Throw out places to go; the favourites move into the plan"
+            onPress={() => router.push(`${base}/ideas`)}
           />
           <ActionRow
             icon="message-square"
             tint="accent"
             title="Talk it over"
-            subtitle="Chat with everyone on the trip"
+            subtitle="Group chat, polls, and replies to any message"
             onPress={() => router.push(`${base}/chat`)}
+          />
+          <ActionRow
+            icon="image"
+            tint="accent"
+            title="Share photos"
+            subtitle="Everyone's photos in one album, by day and on a map"
+            onPress={() => router.push(`${base}/photos`)}
+          />
+          <ActionRow
+            icon="credit-card"
+            tint="accent"
+            title="Split costs"
+            subtitle="Log what you pay; Tagalong works out who owes whom"
+            onPress={() => router.push(`${base}/money`)}
           />
           <ActionRow
             icon="folder"
@@ -201,10 +233,18 @@ function NextUpCard({ tripId }: { tripId: string }) {
   );
 }
 
+/** A white button on the cover. Text shows beside the icon, except for Back. */
 function RoundButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  const iconOnly = icon === 'chevron-left';
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={styles.round}>
-      <Feather name={icon} size={20} color={colors.ink} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={[styles.round, !iconOnly && styles.roundLabelled]}
+    >
+      <Feather name={icon} size={iconOnly ? 20 : 16} color={colors.ink} />
+      {iconOnly ? null : <Text style={styles.roundText}>{label}</Text>}
     </Pressable>
   );
 }
@@ -244,6 +284,8 @@ const styles = StyleSheet.create({
   coverInner: { flex: 1, paddingHorizontal: space.xl, paddingBottom: space.lg, justifyContent: 'space-between' },
   coverTop: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space.sm },
   round: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  roundLabelled: { width: 'auto', flexDirection: 'row', gap: 6, paddingHorizontal: 12 },
+  roundText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   title: { fontFamily: fonts.display, fontSize: 30, color: colors.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   coverMeta: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },

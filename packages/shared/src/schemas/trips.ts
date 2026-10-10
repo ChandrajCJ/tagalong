@@ -22,6 +22,23 @@ export const CreateTripInput = z
   });
 export type CreateTripInput = z.input<typeof CreateTripInput>;
 
+/** `version` is the one you last saw; a mismatch means someone changed it since. */
+export const UpdateTripInput = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    destination: z.string().trim().min(1).max(200).optional(),
+    startDate: isoDate.nullable().optional(),
+    endDate: isoDate.nullable().optional(),
+    baseCurrency: z.string().length(3).toUpperCase().optional(),
+    coverColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    version: z.number().int().min(1),
+  })
+  .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {
+    message: 'End date must be on or after the start date',
+    path: ['endDate'],
+  });
+export type UpdateTripInput = z.input<typeof UpdateTripInput>;
+
 export const TripMember = z.object({
   userId: z.string().uuid(),
   displayName: z.string(),

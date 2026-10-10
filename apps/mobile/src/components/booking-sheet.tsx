@@ -21,7 +21,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BOOKING_META, DETAIL_FIELDS } from '@/lib/bookings';
+import { BOOKING_META, DETAIL_FIELDS, PROVIDER_FIELD } from '@/lib/bookings';
 import type { DateRange } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
 import { DateRangeField } from './date-range-picker';
@@ -92,12 +92,17 @@ export function BookingSheet(props: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [showMore, setShowMore] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setForm(fromBooking(booking, defaultType));
+      const initial = fromBooking(booking, defaultType);
+      setForm(initial);
       setErrors({});
       setNotice(undefined);
+      // Open "More details" only when there's something in it already.
+      const extras = DETAIL_FIELDS[initial.type].filter((f) => f.more).some((f) => initial.details[f.key]);
+      setShowMore(!!booking && (extras || !!booking.endsAt || booking.costMinor != null || !!booking.documentId));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, booking?.id]);
@@ -138,6 +143,7 @@ export function BookingSheet(props: Props) {
         ? toInstant(end ?? start, form.endTime, form.timezone)
         : null;
     if (startsAt && endsAt && endsAt < startsAt) next.endTime = 'Ends before it starts';
+    if (next.endTime) setShowMore(true);
     if (Object.values(next).some(Boolean)) return setErrors(next);
 
     // Drop empty fields, and send numbers as numbers.
@@ -228,11 +234,13 @@ export function BookingSheet(props: Props) {
               </View>
             </View>
 
+            <Body style={{ fontSize: 13 }}>Only add what you have to hand; everything here is optional.</Body>
+
             <Field
-              label="Provider"
+              label={PROVIDER_FIELD[form.type].label}
               value={form.provider}
               onChangeText={(v) => set('provider', v)}
-              placeholder={form.type === 'flight' ? 'TAP Air Portugal' : form.type === 'stay' ? 'Casa do Alfama' : 'Who it’s with'}
+              placeholder={PROVIDER_FIELD[form.type].placeholder}
             />
             <Field
               label="Confirmation code"
@@ -243,33 +251,83 @@ export function BookingSheet(props: Props) {
               autoCorrect={false}
             />
 
+            {DETAIL_FIELDS[form.type]
+              .filter((f) => !f.more)
+              .map((f) => (
+                <Field
+                  key={`${form.type}-${f.key}`}
+                  label={f.label}
+                  value={form.details[f.key] ?? ''}
+                  onChangeText={(v) => set('details', { ...form.details, [f.key]: v })}
+                  placeholder={f.placeholder}
+                  keyboardType={f.numeric ? 'number-pad' : 'default'}
+                />
+              ))}
+
             <DateRangeField
-              label={meta.ends ? 'Dates' : 'Date'}
+              label={form.type === 'stay' || form.type === 'car' ? 'Dates' : 'Date'}
               value={form.dates}
-              onChange={(range) => set('dates', range)}
+              onChange={(range) => {
+                set('dates', range);
+                // An end day needs an end time, which lives under "More details".
+                if (range.end) setShowMore(true);
+              }}
               error={errors.dates}
             />
+            {meta.ends && (form.type === 'stay' || form.type === 'car') ? (
+              <Body style={{ fontSize: 12, marginTop: -space.sm }}>
+                Tap the {meta.starts.toLowerCase()} day, then the {meta.ends.toLowerCase()} day.
+              </Body>
+            ) : null}
             <View style={styles.row}>
               <TimeField label={meta.starts} value={form.startTime} onChange={(v) => set('startTime', v)} />
-              {meta.ends ? (
+              {meta.ends && showMore ? (
                 <TimeField label={meta.ends} value={form.endTime} placeholder="Not set" onChange={(v) => set('endTime', v)} />
               ) : null}
             </View>
             {errors.startTime || errors.endTime ? (
               <Text style={styles.fieldError}>{errors.startTime || errors.endTime}</Text>
             ) : null}
-            <Body style={{ fontSize: 12 }}>Times are in {form.timezone.replace(/_/g, ' ')}.</Body>
 
-            {DETAIL_FIELDS[form.type].map((f) => (
-              <Field
-                key={`${form.type}-${f.key}`}
-                label={f.label}
-                value={form.details[f.key] ?? ''}
-                onChangeText={(v) => set('details', { ...form.details, [f.key]: v })}
-                placeholder={f.placeholder}
-                keyboardType={f.numeric ? 'number-pad' : 'default'}
-              />
-            ))}
+            <Pressable
+              accessibilityRole="button"
+              aria-expanded={showMore}
+              onPress={() => setShowMore((v) => !v)}
+              style={styles.moreToggle}
+            >
+              <Feather name={showMore ? 'chevron-up' : 'chevron-down'} size={18} color={colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.moreTitle}>{showMore ? 'Fewer details' : 'More details'}</Text>
+                {!showMore ? (
+                  <Text style={styles.moreHint} numberOfLines={1}>
+                    {[
+                      meta.ends ? `${meta.ends.toLowerCase()} time` : null,
+                      ...DETAIL_FIELDS[form.type].filter((f) => f.more).map((f) => f.label.toLowerCase()),
+                      'cost',
+                      'confirmation file',
+                    ]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+
+            {showMore ? (
+            <>
+            <Body style={{ fontSize: 12 }}>Times are in {form.timezone.replace(/_/g, ' ')}.</Body>
+            {DETAIL_FIELDS[form.type]
+              .filter((f) => f.more)
+              .map((f) => (
+                <Field
+                  key={`${form.type}-${f.key}`}
+                  label={f.label}
+                  value={form.details[f.key] ?? ''}
+                  onChangeText={(v) => set('details', { ...form.details, [f.key]: v })}
+                  placeholder={f.placeholder}
+                  keyboardType={f.numeric ? 'number-pad' : 'default'}
+                />
+              ))}
 
             <Field
               label={`Total cost (${currency}, optional)`}
@@ -283,7 +341,9 @@ export function BookingSheet(props: Props) {
             <View style={{ gap: space.sm }}>
               <Label>Confirmation file</Label>
               {documents.length === 0 ? (
-                <Body style={{ fontSize: 13 }}>Add the PDF or a screenshot in the Docs tab, then attach it here.</Body>
+                <Body style={{ fontSize: 13 }}>
+                  Add the PDF or a screenshot under Overview → Tickets & files, then attach it here.
+                </Body>
               ) : (
                 <View style={{ gap: space.xs }}>
                   {[null, ...documents].map((doc) => {
@@ -310,6 +370,8 @@ export function BookingSheet(props: Props) {
                 </View>
               )}
             </View>
+            </>
+            ) : null}
 
             {booking && onDelete ? <Button label="Remove booking" variant="ghost" onPress={confirmDelete} /> : null}
           </ScrollView>
@@ -336,6 +398,9 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   row: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
+  moreToggle: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 52, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  moreTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.accent },
+  moreHint: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   fieldError: { fontFamily: fonts.medium, fontSize: 13, color: colors.danger, marginTop: -space.sm },
   docRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   docRowOn: { borderColor: colors.accent },

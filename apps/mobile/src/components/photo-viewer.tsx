@@ -18,6 +18,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { savePhotos } from '@/lib/photos';
 import { fonts, space } from '@/theme';
 
 interface Props {
@@ -51,6 +52,7 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
   const { width, height } = useWindowDimensions();
   const startIndex = Math.max(0, photos.findIndex((p) => p.id === startId));
   const [index, setIndex] = useState(startIndex);
+  const [saveLabel, setSaveLabel] = useState('Save');
   const list = useRef<FlatList<Photo>>(null);
 
   useEffect(() => {
@@ -153,6 +155,22 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
               <Text style={styles.actionText}>
                 {current.favourites > 0 ? current.favourites : 'Heart'}
               </Text>
+            </Pressable>
+          ) : null}
+          {current ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save photo to your phone"
+              onPress={async () => {
+                setSaveLabel('Saving…');
+                const { saved } = await savePhotos([current]);
+                setSaveLabel(saved ? 'Saved' : 'Couldn’t save');
+                setTimeout(() => setSaveLabel('Save'), 2000);
+              }}
+              style={styles.action}
+            >
+              <Feather name={saveLabel === 'Saved' ? 'check' : 'download'} size={20} color="#FFFFFF" />
+              <Text style={styles.actionText}>{saveLabel}</Text>
             </Pressable>
           ) : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Share photo" onPress={share} style={styles.action}>

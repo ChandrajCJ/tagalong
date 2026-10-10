@@ -40,6 +40,17 @@ export const ChatMessage = z.object({
   kind: z.enum(['text', 'system', 'poll']),
   body: z.string(),
   replyToId: z.string().uuid().nullable(),
+  /** A short preview of the message this answers, shown above the reply. */
+  replyTo: z
+    .object({
+      id: z.string().uuid(),
+      senderName: z.string().nullable(),
+      body: z.string(),
+      /** The original was deleted; the reply still says what it answered. */
+      deleted: z.boolean(),
+    })
+    .nullable()
+    .default(null),
   /** For system messages: what happened, e.g. { event: 'member_joined', userId }. */
   payload: z.record(z.unknown()).nullable(),
   createdAt: z.string(),

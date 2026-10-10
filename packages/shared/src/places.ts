@@ -117,3 +117,21 @@ export const regionAround = (places: { latitude: number; longitude: number }[]):
 /** A link that opens this spot in the phone's own maps app (or the browser). */
 export const mapsLink = (latitude: number, longitude: number) =>
   `https://www.google.com/maps/search/?api=1&query=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+
+/**
+ * What to search the map for: the place, plus the trip's destination when
+ * the name doesn't already say where (so "Time Out Market" finds the one in
+ * Lisbon, not the one in New York).
+ */
+export const placeQuery = (place: string, destination?: string | null) => {
+  const name = place.trim();
+  const city = destination?.split(',')[0]?.trim();
+  if (!city || name.toLowerCase().includes(city.toLowerCase())) return name;
+  return `${name}, ${destination!.trim()}`;
+};
+
+/** Links that open turn-by-turn directions with the destination already chosen. */
+export const directionsLinks = (query: string) => ({
+  google: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`,
+  apple: `https://maps.apple.com/?daddr=${encodeURIComponent(query)}`,
+});

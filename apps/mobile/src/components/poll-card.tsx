@@ -55,12 +55,12 @@ export function PollCard({ poll, memberCount, canClose, onPick, onClose }: Props
 
       <View style={styles.footer}>
         <Text style={styles.meta}>
-          {closed ? 'Closed · ' : poll.multi ? 'Pick as many as you like · ' : ''}
+          {closed ? 'Voting ended · ' : poll.multi ? 'Pick as many as you like · ' : ''}
           {poll.voterCount} of {memberCount} voted
         </Text>
         {canClose && !closed ? (
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeText}>Close poll</Text>
+            <Text style={styles.closeText}>End voting</Text>
           </Pressable>
         ) : null}
       </View>

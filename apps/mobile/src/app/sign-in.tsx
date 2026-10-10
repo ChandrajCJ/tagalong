@@ -91,7 +91,8 @@ export default function SignIn() {
           <View style={styles.section}>
             <Title>Check your email</Title>
             <Body>
-              Enter the code we sent to {email}. In development, it's printed in the API log.
+              Enter the 6-digit code we sent to {email}. It can take a minute; check spam if it&apos;s not
+              there.{__DEV__ ? ' (In development, it’s printed in the API log.)' : ''}
             </Body>
             <Field
               label="Code"

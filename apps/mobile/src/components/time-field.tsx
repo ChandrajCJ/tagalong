@@ -44,7 +44,7 @@ interface Props {
 }
 
 /** Pick a time by tapping rather than typing (replaces the old text field). */
-export function TimeField({ label, value, placeholder = 'Any time', editable = true, onChange }: Props) {
+export function TimeField({ label, value, placeholder = 'No set time', editable = true, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => parse(value));
   const hourList = useRef<ScrollView>(null);

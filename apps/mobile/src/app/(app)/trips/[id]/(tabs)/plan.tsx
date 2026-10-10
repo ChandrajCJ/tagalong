@@ -26,7 +26,9 @@ import {
   weekdayOf,
   type DayKey,
 } from '@/lib/plan';
+import { openDirections } from '@/lib/directions';
 import { useTripRealtime } from '@/lib/realtime';
+import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -214,7 +216,7 @@ export default function PlanTab() {
   const dayIndex = days.indexOf(current);
   const heading =
     current === ANYTIME
-      ? 'Anytime'
+      ? 'No day yet'
       : `${dayIndex >= 0 ? `Day ${dayIndex + 1} · ` : ''}${shortDate(current)}`;
 
   const renderItem = ({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => {
@@ -232,28 +234,42 @@ export default function PlanTab() {
       <ScaleDecorator>
         <View style={styles.itemRow}>
           <Text style={styles.time}>{item.startTime ?? ''}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${item.title}${item.startTime ? ` at ${item.startTime}` : ''}`}
-            accessibilityHint={canEdit ? 'Double tap for details. Hold to drag.' : 'Double tap for details.'}
-            onPress={() => router.push(`/trips/${trip.id}/items/${item.id}`)}
-            onLongPress={canEdit ? drag : undefined}
-            delayLongPress={250}
-            disabled={isActive}
-            style={[styles.card, editor && styles.cardEditing, isActive && styles.cardDragging]}
-          >
-            {editor ? (
-              <Text style={styles.editingTag}>{editor.name} is editing</Text>
+          {/* The card and its directions link are siblings: a button can't hold another button. */}
+          <View style={[styles.card, editor && styles.cardEditing, isActive && styles.cardDragging]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title}${item.startTime ? ` at ${item.startTime}` : ''}`}
+              accessibilityHint={canEdit ? 'Double tap for details. Hold to drag.' : 'Double tap for details.'}
+              onPress={() => router.push(`/trips/${trip.id}/items/${item.id}`)}
+              onLongPress={canEdit ? drag : undefined}
+              delayLongPress={250}
+              disabled={isActive}
+              style={{ gap: 4 }}
+            >
+              {editor ? (
+                <Text style={styles.editingTag}>{editor.name} is editing</Text>
+              ) : null}
+              <View style={styles.cardTop}>
+                <Feather name={ITEM_TYPE_META[item.type].icon} size={16} color={colors.accent} />
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                {canEdit ? <Feather name="move" size={15} color="#B9B2A6" /> : null}
+              </View>
+              {meta.length > 0 ? <Body style={{ fontSize: 13 }}>{meta.join(' · ')}</Body> : null}
+            </Pressable>
+            {item.placeName ? (
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`Directions to ${item.placeName}`}
+                onPress={() => openDirections(item.placeName!, trip.destination)}
+                style={styles.directions}
+              >
+                <Feather name="navigation" size={13} color={colors.accent} />
+                <Text style={styles.directionsText}>Directions</Text>
+              </Pressable>
             ) : null}
-            <View style={styles.cardTop}>
-              <Feather name={ITEM_TYPE_META[item.type].icon} size={16} color={colors.accent} />
-              <Text style={styles.cardTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              {canEdit ? <Feather name="menu" size={16} color="#B9B2A6" /> : null}
-            </View>
-            {meta.length > 0 ? <Body style={{ fontSize: 13 }}>{meta.join(' · ')}</Body> : null}
-          </Pressable>
+          </View>
         </View>
       </ScaleDecorator>
     );
@@ -271,12 +287,12 @@ export default function PlanTab() {
                 key={key}
                 accessibilityRole="tab"
                 aria-selected={on}
-                accessibilityLabel={key === ANYTIME ? 'Anytime' : shortDate(key)}
+                accessibilityLabel={key === ANYTIME ? 'No day yet' : shortDate(key)}
                 onPress={() => setSelected(key)}
                 style={[styles.pill, on && styles.pillOn]}
               >
                 {key === ANYTIME ? (
-                  <Feather name="inbox" size={18} color={on ? '#FFFFFF' : colors.ink} />
+                  <Text style={[styles.pillNoDay, on && { color: '#FFFFFF' }]}>No{'\n'}day</Text>
                 ) : (
                   <>
                     <Text style={[styles.pillDay, on && { color: '#E4DED4' }]}>{weekdayOf(key)}</Text>
@@ -291,9 +307,12 @@ export default function PlanTab() {
         {current === ANYTIME ? (
           <Body style={{ fontSize: 13 }}>
             {days.length === 0
-              ? 'Add dates to the trip to plan day by day. Until then, everything lives here.'
-              : 'Ideas that aren\'t on a day yet.'}
+              ? 'This trip has no dates yet, so everything lives here. Add dates from the Overview (Edit) to plan day by day.'
+              : 'Plan items that don\'t have a day yet.'}
           </Body>
+        ) : null}
+        {canEdit && dayItems.length > 0 ? (
+          <Body style={{ fontSize: 12 }}>Tap an item for details. Hold and drag to change the order.</Body>
         ) : null}
       </View>
 
@@ -324,9 +343,13 @@ export default function PlanTab() {
             <View style={styles.empty}>
               <Feather name="calendar" size={28} color={colors.accent} />
               <Body style={{ textAlign: 'center' }}>
-                Nothing planned for {current === ANYTIME ? 'now' : 'this day'} yet.
+                {current === ANYTIME ? 'Nothing here yet.' : 'Nothing planned for this day yet.'}
               </Body>
-              {canEdit ? <Button label="Add the first thing" variant="outline" onPress={() => openSheet()} /> : null}
+              {canEdit ? (
+                <Button label="Add the first thing" variant="outline" onPress={() => openSheet()} />
+              ) : (
+                <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
+              )}
             </View>
           }
         />
@@ -334,7 +357,8 @@ export default function PlanTab() {
 
       {canEdit && items && items.length > 0 ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Add to plan" onPress={() => openSheet()} style={styles.fab}>
-          <Feather name="plus" size={26} color="#FFFFFF" />
+          <Feather name="plus" size={20} color="#FFFFFF" />
+          <Text style={styles.fabText}>Add to plan</Text>
         </Pressable>
       ) : null}
 
@@ -365,6 +389,8 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', gap: space.md, marginBottom: space.sm },
   time: { width: 46, paddingTop: 14, fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   card: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: 14, gap: 4 },
+  directions: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', minHeight: 32, marginTop: 4, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
+  directionsText: { fontFamily: fonts.bold, fontSize: 12, color: colors.accentInk },
   cardEditing: { borderWidth: 2, borderColor: colors.coral, padding: 13 },
   cardDragging: { borderColor: colors.accent, transform: [{ scale: 1.02 }] },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
@@ -372,6 +398,8 @@ const styles = StyleSheet.create({
   editingTag: { position: 'absolute', top: -10, right: 12, fontFamily: fonts.bold, fontSize: 11, color: '#FFFFFF', backgroundColor: colors.coral, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
-  fab: { position: 'absolute', right: space.xl, bottom: space.xl, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
+  pillNoDay: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: 'center', color: colors.ink },
   toast: { marginHorizontal: space.xl, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
 });

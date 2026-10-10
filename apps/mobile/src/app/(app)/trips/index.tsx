@@ -8,6 +8,7 @@ import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { formatDateRange, tripCountdown } from '@/lib/format';
 import { registerForPush } from '@/lib/push';
+import { youAre } from '@/lib/roles';
 import { colors, fonts, radius, space } from '@/theme';
 
 const TripList = z.object({ trips: z.array(TripSummary) });
@@ -115,7 +116,7 @@ function TripCard({ trip }: { trip: TripSummary }) {
             {formatDateRange(trip.startDate, trip.endDate)} · {trip.destination}
           </Body>
           <Text style={styles.meta}>
-            {people} · you're {trip.myRole === 'owner' ? 'the organizer' : `an ${trip.myRole}`}
+            {people} · {youAre(trip.myRole)}
           </Text>
         </View>
       </Pressable>

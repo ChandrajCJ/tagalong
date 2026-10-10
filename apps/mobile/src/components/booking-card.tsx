@@ -3,7 +3,8 @@ import type { Booking } from '@tagalong/shared';
 import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BOOKING_META, DETAIL_FIELDS, formatInZone, routeOf, titleOf } from '@/lib/bookings';
+import { addressOf, BOOKING_META, DETAIL_FIELDS, formatInZone, routeOf, titleOf } from '@/lib/bookings';
+import { openDirections } from '@/lib/directions';
 import { formatCost } from '@/lib/plan';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -13,10 +14,12 @@ const IN_HEADLINE = new Set(['from', 'to', 'flightNumber', 'trainNumber']);
 interface Props {
   booking: Booking;
   onPress?: () => void;
+  /** The trip's destination, so directions find the right town. */
+  destination?: string | null;
 }
 
 /** A booking as a boarding-pass style card (design: Booking.dc.html). */
-export function BookingCard({ booking, onPress }: Props) {
+export function BookingCard({ booking, onPress, destination }: Props) {
   const [copied, setCopied] = useState(false);
   const meta = BOOKING_META[booking.type];
   const route = routeOf(booking);
@@ -59,6 +62,7 @@ export function BookingCard({ booking, onPress }: Props) {
           <Text style={styles.title} numberOfLines={1}>
             {titleOf(booking)}
           </Text>
+          {onPress ? <Feather name="edit-2" size={14} color={colors.muted} accessibilityElementsHidden /> : null}
         </View>
 
         {route ? (
@@ -129,6 +133,17 @@ export function BookingCard({ booking, onPress }: Props) {
           </View>
         ) : null}
       </View>
+      {addressOf(booking) ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Directions to ${addressOf(booking)}`}
+          onPress={() => openDirections(addressOf(booking)!, destination)}
+          style={styles.directions}
+        >
+          <Feather name="navigation" size={14} color={colors.accentInk} />
+          <Text style={styles.directionsText}>Directions</Text>
+        </Pressable>
+      ) : null}
       {copied ? (
         <Text style={styles.copied} accessibilityLiveRegion="polite">
           Copied
@@ -139,6 +154,8 @@ export function BookingCard({ booking, onPress }: Props) {
 }
 
 const styles = StyleSheet.create({
+  directions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderTopWidth: 1, borderTopColor: colors.line },
+  directionsText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

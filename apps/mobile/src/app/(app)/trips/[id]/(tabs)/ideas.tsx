@@ -27,6 +27,7 @@ import { Avatar, Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { ITEM_TYPE_META, planDays } from '@/lib/plan';
 import { useTripRealtime } from '@/lib/realtime';
+import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
@@ -239,7 +240,7 @@ export default function IdeasTab() {
     upsertLocal({ ...idea, promotedItemId: null });
     try {
       upsertLocal(await request(`/ideas/${idea.id}/unpromote`, { method: 'POST', schema: Idea }));
-      showToast(`“${idea.title}” is back on the board`);
+      showToast(`“${idea.title}” is back in Ideas`);
       void load();
     } catch (e) {
       upsertLocal(idea);
@@ -369,7 +370,7 @@ export default function IdeasTab() {
                   style={[styles.removeFromPlan, confirmingRemoval === idea.id && styles.removeConfirm]}
                 >
                   <Text style={[styles.removeText, confirmingRemoval === idea.id && { color: '#FFFFFF' }]}>
-                    {confirmingRemoval === idea.id ? 'Remove from plan?' : 'Remove'}
+                    {confirmingRemoval === idea.id ? 'Tap again to take it out' : 'Take out of plan'}
                   </Text>
                 </Pressable>
               ) : null}
@@ -424,7 +425,8 @@ export default function IdeasTab() {
             <View style={styles.empty}>
               <Feather name="zap" size={28} color={colors.accent} />
               <Body style={{ textAlign: 'center' }}>
-                No ideas yet. Drop the first one and see what everyone thinks.
+                No ideas yet. Suggest a place to eat, see or do, and everyone votes. Move the favourites
+                into the plan with one tap.
               </Body>
               {canEdit ? (
                 <Button
@@ -432,7 +434,9 @@ export default function IdeasTab() {
                   variant="outline"
                   onPress={() => setSheet({ open: true })}
                 />
-              ) : null}
+              ) : (
+                <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
+              )}
             </View>
           }
         />
@@ -445,7 +449,8 @@ export default function IdeasTab() {
           onPress={() => setSheet({ open: true })}
           style={styles.fab}
         >
-          <Feather name="plus" size={26} color="#FFFFFF" />
+          <Feather name="plus" size={20} color="#FFFFFF" />
+          <Text style={styles.fabText}>Add idea</Text>
         </Pressable>
       ) : null}
 
@@ -499,6 +504,7 @@ const styles = StyleSheet.create({
   inPlanText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
-  fab: { position: 'absolute', right: space.xl, bottom: space.xl, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
+  fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
   toast: { marginHorizontal: space.xl, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
 });

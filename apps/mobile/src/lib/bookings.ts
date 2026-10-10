@@ -41,43 +41,61 @@ export interface DetailField {
   label: string;
   placeholder: string;
   numeric?: boolean;
+  /** Tucked under "More details": nice to have, not worth asking everyone for. */
+  more?: boolean;
 }
+
+/** What "who it's with" means for each kind of booking. */
+export const PROVIDER_FIELD: Record<BookingType, { label: string; placeholder: string }> = {
+  flight: { label: 'Airline', placeholder: 'IndiGo' },
+  stay: { label: 'Hotel or place', placeholder: 'Casa do Alfama' },
+  train: { label: 'Train company', placeholder: 'Indian Railways' },
+  ticket: { label: 'Event', placeholder: 'Fado night' },
+  car: { label: 'Rental company', placeholder: 'Zoomcar' },
+  restaurant: { label: 'Restaurant', placeholder: 'Time Out Market' },
+};
+
+/** Where a booking happens, for directions: a stay's or table's address, a car's pick-up. */
+export const addressOf = (b: Booking): string | null => {
+  const raw = b.details.address ?? b.details.pickup ?? b.details.venue;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+};
 
 /** The extra fields each type asks for. Mirrors BOOKING_DETAILS in @tagalong/shared. */
 export const DETAIL_FIELDS: Record<BookingType, DetailField[]> = {
   flight: [
-    { key: 'flightNumber', label: 'Flight', placeholder: 'TP1234' },
-    { key: 'from', label: 'From', placeholder: 'LHR' },
-    { key: 'to', label: 'To', placeholder: 'LIS' },
-    { key: 'terminal', label: 'Terminal', placeholder: '2' },
-    { key: 'gate', label: 'Gate', placeholder: 'B12' },
-    { key: 'seats', label: 'Seats', placeholder: '14A, 14B' },
+    { key: 'flightNumber', label: 'Flight number', placeholder: '6E 2134' },
+    { key: 'from', label: 'From', placeholder: 'LHR', more: true },
+    { key: 'to', label: 'To', placeholder: 'LIS', more: true },
+    { key: 'terminal', label: 'Terminal', placeholder: '2', more: true },
+    { key: 'gate', label: 'Gate', placeholder: 'B12', more: true },
+    { key: 'seats', label: 'Seats', placeholder: '14A, 14B', more: true },
   ],
   stay: [
     { key: 'address', label: 'Address', placeholder: 'Rua dos Remédios 12' },
-    { key: 'room', label: 'Room', placeholder: 'Double with balcony' },
-    { key: 'phone', label: 'Phone', placeholder: '+351 21 000 0000' },
+    { key: 'room', label: 'Room', placeholder: 'Double with balcony', more: true },
+    { key: 'phone', label: 'Phone', placeholder: '+351 21 000 0000', more: true },
   ],
   train: [
-    { key: 'trainNumber', label: 'Train', placeholder: 'AP 133' },
-    { key: 'from', label: 'From', placeholder: 'Lisboa Oriente' },
-    { key: 'to', label: 'To', placeholder: 'Porto Campanhã' },
-    { key: 'coach', label: 'Coach', placeholder: '4' },
-    { key: 'seats', label: 'Seats', placeholder: '61, 62' },
+    { key: 'trainNumber', label: 'Train number', placeholder: '12951' },
+    { key: 'from', label: 'From', placeholder: 'Lisboa Oriente', more: true },
+    { key: 'to', label: 'To', placeholder: 'Porto Campanhã', more: true },
+    { key: 'coach', label: 'Coach', placeholder: '4', more: true },
+    { key: 'seats', label: 'Seats', placeholder: '61, 62', more: true },
   ],
   ticket: [
     { key: 'venue', label: 'Venue', placeholder: 'Gulbenkian Museum' },
-    { key: 'seats', label: 'Seats', placeholder: 'Row F, 10–12' },
-    { key: 'entrance', label: 'Entrance', placeholder: 'Main gate' },
+    { key: 'seats', label: 'Seats', placeholder: 'Row F, 10–12', more: true },
+    { key: 'entrance', label: 'Entrance', placeholder: 'Main gate', more: true },
   ],
   car: [
     { key: 'pickup', label: 'Pick-up at', placeholder: 'Lisbon Airport' },
-    { key: 'dropoff', label: 'Drop-off at', placeholder: 'Faro Airport' },
+    { key: 'dropoff', label: 'Drop-off at', placeholder: 'Faro Airport', more: true },
   ],
   restaurant: [
     { key: 'address', label: 'Address', placeholder: 'Av. Almirante Reis 1' },
-    { key: 'partySize', label: 'Party size', placeholder: '6', numeric: true },
-    { key: 'phone', label: 'Phone', placeholder: '+351 21 000 0000' },
+    { key: 'partySize', label: 'Party size', placeholder: '6', numeric: true, more: true },
+    { key: 'phone', label: 'Phone', placeholder: '+351 21 000 0000', more: true },
   ],
 };
 

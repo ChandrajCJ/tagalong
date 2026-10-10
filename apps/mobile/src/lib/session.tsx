@@ -1,5 +1,6 @@
 import { AuthTokens } from '@tagalong/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { connectTokenStore, request } from './api';
 import { secureStorage } from './storage';
 
@@ -21,6 +22,15 @@ const SessionContext = createContext<SessionValue | null>(null);
 
 const persist = (key: string, value: string | null) => secureStorage.set(key, value);
 
+const parseTokens = (raw: string | null): AuthTokens | null => {
+  try {
+    const result = raw ? AuthTokens.safeParse(JSON.parse(raw)) : null;
+    return result?.success ? result.data : null;
+  } catch {
+    return null;
+  }
+};
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [pendingInvite, setPendingInviteState] = useState<string | null>(null);
@@ -37,21 +47,32 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     void persist(INVITE_KEY, token);
   }, []);
 
+  // In a browser, several tabs share one saved session: follow the others'
+  // sign-ins, refreshes and sign-outs instead of fighting over the tokens.
   useEffect(() => {
-    connectTokenStore({ get: () => tokens.current, set: save });
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== KEY) return;
+      const next = parseTokens(e.newValue);
+      tokens.current = next;
+      setStatus(next ? 'signedIn' : 'signedOut');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  useEffect(() => {
+    connectTokenStore({
+      get: () => tokens.current,
+      set: save,
+      peekSaved: async () => parseTokens(await secureStorage.get(KEY)),
+    });
     Promise.all([
       secureStorage.get(KEY),
       secureStorage.get(INVITE_KEY),
     ]).then(([raw, invite]) => {
-      let parsed: AuthTokens | null;
-      try {
-        const result = raw ? AuthTokens.safeParse(JSON.parse(raw)) : null;
-        parsed = result?.success ? result.data : null;
-      } catch {
-        parsed = null;
-      }
       setPendingInviteState(invite);
-      save(parsed);
+      save(parseTokens(raw));
     });
   }, [save]);
 

@@ -8,14 +8,15 @@ import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
+import { ROLE_HELP } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { colors, fonts, radius, space } from '@/theme';
 
 type Role = NonNullable<CreateInviteInput['role']>;
 
 const ROLES: { role: Role; title: string; can: string }[] = [
-  { role: 'editor', title: 'Editors', can: 'Can plan, chat, vote and add photos.' },
-  { role: 'viewer', title: 'Viewers', can: 'Can see everything, vote and heart photos, but not change the plan.' },
+  { role: 'editor', title: 'Editors', can: ROLE_HELP.editor },
+  { role: 'viewer', title: 'Viewers', can: ROLE_HELP.viewer },
 ];
 
 /**
@@ -98,7 +99,9 @@ export default function InviteScreen() {
         text: 'Turn off',
         style: 'destructive',
         onPress: async () => {
-          await request(`/trips/${trip.id}/invites/${invite.id}`, { method: 'DELETE' }).catch(() => undefined);
+          await request(`/trips/${trip.id}/invites/${invite.id}`, { method: 'DELETE' }).catch(() =>
+            setError('Couldn’t turn that link off. Try again.'),
+          );
           await loadActive();
         },
       },
@@ -186,7 +189,7 @@ export default function InviteScreen() {
         })}
 
         <Body style={{ fontSize: 13 }}>
-          Changed your mind about someone? An owner can switch anyone between editor and viewer
+          Changed your mind about someone? The owner can switch anyone between editor and viewer
           in Members, any time.
         </Body>
 

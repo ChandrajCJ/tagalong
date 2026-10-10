@@ -1,6 +1,7 @@
 import { Trip } from '@tagalong/shared';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ApiError, request } from './api';
+import { useTripRealtime } from './realtime';
 
 interface TripValue {
   trip: Trip | undefined;
@@ -27,6 +28,11 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Someone renamed the trip or changed its dates: every screen follows.
+  useTripRealtime(tripId, (message) => {
+    if (message.kind === 'event' && message.event.type === 'trip.updated') void reload();
+  });
 
   return <TripContext.Provider value={{ trip, error, reload }}>{children}</TripContext.Provider>;
 }

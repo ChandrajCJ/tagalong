@@ -23,6 +23,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActionMenu } from '@/components/action-menu';
+import { TextPrompt } from '@/components/text-prompt';
 import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import {
@@ -35,6 +37,7 @@ import {
   type PickedFile,
 } from '@/lib/documents';
 import { useTripRealtime } from '@/lib/realtime';
+import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -59,6 +62,9 @@ export default function DocsTab() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string>();
   const [toast, setToast] = useState<string>();
+  const [menuFor, setMenuFor] = useState<TripDocument | null>(null);
+  const [renaming, setRenaming] = useState<TripDocument | null>(null);
+  const [recategorising, setRecategorising] = useState<TripDocument | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const tripId = trip?.id;
@@ -197,6 +203,42 @@ export default function DocsTab() {
       },
     ]);
 
+  /** Saves a new name, keeping the file's extension if it was left off. */
+  const rename = async (doc: TripDocument, typed: string): Promise<string | null> => {
+    const ext = doc.name.match(/\.[a-z0-9]{1,5}$/i)?.[0] ?? '';
+    const name = ext && !typed.toLowerCase().endsWith(ext.toLowerCase()) ? `${typed}${ext}` : typed;
+    try {
+      const saved = await request(`/documents/${doc.id}`, {
+        method: 'PATCH',
+        body: { name, version: doc.version },
+        schema: TripDocument,
+      });
+      setDocs((prev) => prev?.map((d) => (d.id === saved.id ? saved : d)) ?? prev);
+      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        void load();
+        return 'Someone changed this file just now. Try again.';
+      }
+      return e instanceof ApiError ? e.message : 'Could not rename it';
+    }
+  };
+
+  const setKind = async (doc: TripDocument, kind: DocumentKind) => {
+    try {
+      const saved = await request(`/documents/${doc.id}`, {
+        method: 'PATCH',
+        body: { kind, version: doc.version },
+        schema: TripDocument,
+      });
+      setDocs((prev) => prev?.map((d) => (d.id === saved.id ? saved : d)) ?? prev);
+      showToast(`Moved to ${DOCUMENT_KIND_META[kind].label}`);
+    } catch (e) {
+      showToast(e instanceof ApiError ? e.message : 'Could not move it');
+      void load();
+    }
+  };
+
   const shown = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (docs ?? []).filter(
@@ -217,7 +259,7 @@ export default function DocsTab() {
       accessibilityLabel={`${doc.name}, ${typeLabel(doc.contentType)}, ${fileSize(doc.sizeBytes)}`}
       accessibilityHint="Double tap to open"
       onPress={() => open(doc)}
-      onLongPress={canRemove(doc) ? () => confirmDelete(doc) : undefined}
+      onLongPress={() => setMenuFor(doc)}
       style={styles.card}
     >
       <View style={styles.thumb}>
@@ -231,7 +273,15 @@ export default function DocsTab() {
           {typeLabel(doc.contentType)} · {fileSize(doc.sizeBytes)} · {doc.uploaderName ?? 'Someone'}
         </Body>
       </View>
-      <Feather name="chevron-right" size={18} color={colors.lineStrong} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`More for ${doc.name}`}
+        onPress={() => setMenuFor(doc)}
+        hitSlop={8}
+        style={styles.more}
+      >
+        <Feather name="more-horizontal" size={20} color={colors.muted} />
+      </Pressable>
     </Pressable>
   );
 
@@ -347,35 +397,93 @@ export default function DocsTab() {
               <Body style={{ textAlign: 'center' }}>
                 {search || filter !== 'all'
                   ? 'Nothing matches that.'
-                  : 'No files yet. Add the boarding passes and tickets so nobody has to dig through their inbox.'}
+                  : 'No files yet. Add boarding passes, hotel bookings and tickets so nobody has to dig through their inbox.'}
               </Body>
+              {!canUpload && !search && filter === 'all' ? (
+                <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
+              ) : null}
             </View>
           }
         />
       )}
 
       {canUpload ? (
-        <View style={styles.addBar}>
-          <Button
-            label="Photo"
-            variant="outline"
-            onPress={pickPhoto}
-            style={{ flex: 1 }}
-            icon={<Feather name="image" size={18} color={colors.ink} />}
-          />
-          <Button
-            label="File"
-            onPress={pickFile}
-            style={{ flex: 1 }}
-            icon={<Feather name="upload" size={18} color="#FFFFFF" />}
-          />
+        <View style={styles.addBarWrap}>
+          <Body style={{ fontSize: 12, textAlign: 'center' }}>
+            Add a screenshot of a ticket, or a PDF from your email. You can rename it and change its category later.
+          </Body>
+          <View style={styles.addBar}>
+            <Button
+              label="Screenshot"
+              variant="outline"
+              onPress={pickPhoto}
+              style={{ flex: 1 }}
+              icon={<Feather name="image" size={18} color={colors.ink} />}
+            />
+            <Button
+              label="PDF or file"
+              onPress={pickFile}
+              style={{ flex: 1 }}
+              icon={<Feather name="upload" size={18} color="#FFFFFF" />}
+            />
+          </View>
         </View>
       ) : null}
+      <ActionMenu
+        visible={!!menuFor}
+        title={menuFor?.name}
+        onClose={() => setMenuFor(null)}
+        actions={
+          menuFor
+            ? [
+                { icon: 'external-link', label: 'Open', onPress: () => void open(menuFor) },
+                ...(canUpload
+                  ? [
+                      { icon: 'edit-3' as const, label: 'Rename', hint: 'So everyone can tell what it is', onPress: () => setRenaming(menuFor) },
+                      {
+                        icon: 'folder' as const,
+                        label: 'Change category',
+                        hint: `Now in ${DOCUMENT_KIND_META[menuFor.kind].label}`,
+                        onPress: () => setRecategorising(menuFor),
+                      },
+                    ]
+                  : []),
+                ...(canRemove(menuFor)
+                  ? [{ icon: 'trash-2' as const, label: 'Remove', destructive: true, onPress: () => confirmDelete(menuFor) }]
+                  : []),
+              ]
+            : []
+        }
+      />
+      <ActionMenu
+        visible={!!recategorising}
+        title={recategorising ? `Move “${recategorising.name}” to` : undefined}
+        onClose={() => setRecategorising(null)}
+        actions={
+          recategorising
+            ? DOCUMENT_KINDS.filter((k) => k !== recategorising.kind).map((k) => ({
+                icon: DOCUMENT_KIND_META[k].icon as React.ComponentProps<typeof Feather>['name'],
+                label: DOCUMENT_KIND_META[k].label,
+                onPress: () => void setKind(recategorising, k),
+              }))
+            : []
+        }
+      />
+      <TextPrompt
+        visible={!!renaming}
+        title="Rename file"
+        message="Pick a name the group will recognise, like “Goa flight tickets”."
+        label="Name"
+        initial={renaming?.name.replace(/\.[a-z0-9]{1,5}$/i, '') ?? ''}
+        onSave={(value) => (renaming ? rename(renaming, value) : Promise.resolve(null))}
+        onClose={() => setRenaming(null)}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  more: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -space.sm },
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, gap: space.sm },
   back: { width: 44, height: 44, marginLeft: -space.md, alignItems: 'center', justifyContent: 'center' },
@@ -392,6 +500,7 @@ const styles = StyleSheet.create({
   name: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
-  addBar: { flexDirection: 'row', gap: space.md, paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
+  addBarWrap: { gap: space.xs, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
+  addBar: { flexDirection: 'row', gap: space.md, paddingHorizontal: space.xl, paddingBottom: space.md },
   toast: { marginHorizontal: space.xl, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
 });

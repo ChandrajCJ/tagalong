@@ -204,7 +204,7 @@ export function ItemSheet(props: Props) {
               <TimeField
                 label="Ends"
                 value={form.endTime}
-                placeholder="Open end"
+                placeholder="No end time"
                 onChange={(v) => set('endTime', v)}
                 editable={canEdit}
               />
@@ -257,7 +257,7 @@ export function ItemSheet(props: Props) {
                       style={[styles.chip, on && styles.chipOn]}
                     >
                       <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>
-                        {d === ANYTIME ? 'Anytime' : shortDate(d)}
+                        {d === ANYTIME ? 'No day yet' : shortDate(d)}
                       </Text>
                     </Pressable>
                   );

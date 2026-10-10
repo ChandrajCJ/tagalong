@@ -1,54 +1,69 @@
-import { CreateTripInput, newId, Trip } from '@tagalong/shared';
+import { Trip, UpdateTripInput } from '@tagalong/shared';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateRangeField } from '@/components/date-range-picker';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
-import type { DateRange } from '@/lib/dates';
 import { ApiError, request } from '@/lib/api';
+import type { DateRange } from '@/lib/dates';
+import { useTrip } from '@/lib/trip-context';
 import { colors, coverColors, fonts, radius, space } from '@/theme';
 
-type Errors = Partial<Record<'name' | 'destination' | 'startDate' | 'endDate' | 'form', string>>;
+const CURRENCIES = ['EUR', 'GBP', 'USD', 'INR'];
 
-/** Create a trip (design: NewTrip.dc.html). */
-export default function NewTrip() {
-  // One id per form, so tapping "Create" twice can't make two trips.
-  const tripId = useRef(newId()).current;
-  const [destination, setDestination] = useState('');
+/** Change a trip's name, place, dates, cover or currency after creating it. */
+export default function EditTrip() {
+  const { trip, reload } = useTrip();
   const [name, setName] = useState('');
+  const [destination, setDestination] = useState('');
   const [dates, setDates] = useState<DateRange>({ start: null, end: null });
   const [currency, setCurrency] = useState('EUR');
   const [coverColor, setCoverColor] = useState<string>(coverColors[0]);
-  const [errors, setErrors] = useState<Errors>({});
+  const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
-  const create = async () => {
-    const parsed = CreateTripInput.safeParse({
-      id: tripId,
+  const fill = (t: Trip) => {
+    setName(t.name);
+    setDestination(t.destination);
+    setDates({ start: t.startDate, end: t.endDate });
+    setCurrency(t.baseCurrency);
+    setCoverColor(t.coverColor);
+  };
+
+  useEffect(() => {
+    if (trip) fill(trip);
+    // Fill once when the screen opens, not on every live update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.id]);
+
+  if (!trip) return null;
+
+  const save = async () => {
+    const parsed = UpdateTripInput.safeParse({
+      version: trip.version,
       name: name.trim() || destination.split(',')[0]?.trim(),
-      destination,
-      startDate: dates.start ?? undefined,
-      endDate: dates.end ?? undefined,
+      destination: destination.trim(),
+      startDate: dates.start,
+      endDate: dates.end,
       baseCurrency: currency,
       coverColor,
     });
-    if (!parsed.success) {
-      const next: Errors = {};
-      for (const issue of parsed.error.issues) {
-        const key = (issue.path[0] as keyof Errors) ?? 'form';
-        next[key] ??= issue.message;
-      }
-      if (next.name && !destination) next.destination = 'Where are you going?';
-      return setErrors(next);
-    }
-
+    if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Check the details');
     setBusy(true);
+    setError(undefined);
     try {
-      const trip = await request('/trips', { method: 'POST', body: parsed.data, schema: Trip });
-      router.replace(`/trips/${trip.id}`);
+      await request(`/trips/${trip.id}`, { method: 'PATCH', body: parsed.data, schema: Trip });
+      await reload();
+      router.back();
     } catch (e) {
-      setErrors({ form: e instanceof ApiError ? e.message : 'Could not create the trip' });
+      if (e instanceof ApiError && e.status === 409) {
+        const latest = Trip.safeParse(e.data.current);
+        if (latest.success) fill(latest.data);
+        await reload();
+      }
+      setError(e instanceof ApiError ? e.message : 'Could not save the trip');
+    } finally {
       setBusy(false);
     }
   };
@@ -57,42 +72,18 @@ export default function NewTrip() {
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            onPress={() => router.back()}
-            style={styles.close}
-          >
+          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.close}>
             <Body style={{ fontFamily: fonts.bold, color: colors.ink }}>Cancel</Body>
           </Pressable>
-          <Title>Where are you going?</Title>
+          <Title>Edit trip</Title>
 
-          <Field
-            label="Destination"
-            value={destination}
-            onChangeText={setDestination}
-            placeholder="Lisbon, Portugal"
-            error={errors.destination}
-            autoFocus
-          />
+          <Field label="Trip name" value={name} onChangeText={setName} placeholder="Goa with the crew" />
+          <Field label="Destination" value={destination} onChangeText={setDestination} placeholder="Goa, India" />
           <View style={{ gap: space.xs }}>
-            <DateRangeField
-              label="Dates (optional)"
-              value={dates}
-              onChange={setDates}
-              error={errors.startDate ?? errors.endDate}
-            />
-            <Body style={{ fontSize: 12 }}>Gives the plan a page per day. Not sure yet? Add them later.</Body>
-          </View>
-          <View style={{ gap: space.xs }}>
-            <Field
-              label="Trip name (optional)"
-              value={name}
-              onChangeText={setName}
-              placeholder="Lisbon with the crew"
-              error={errors.name}
-            />
-            <Body style={{ fontSize: 12 }}>Leave it blank to use the destination.</Body>
+            <DateRangeField label="Dates" value={dates} onChange={setDates} />
+            <Body style={{ fontSize: 12 }}>
+              Each day gets its own page in the Plan. Plan items already on a day keep their date.
+            </Body>
           </View>
 
           <View style={{ gap: space.sm }}>
@@ -114,7 +105,7 @@ export default function NewTrip() {
           <View style={{ gap: space.sm }}>
             <Label>Trip currency</Label>
             <View style={styles.row}>
-              {['EUR', 'GBP', 'USD', 'INR'].map((c) => (
+              {[...new Set([...CURRENCIES, trip.baseCurrency])].map((c) => (
                 <Pressable
                   key={c}
                   accessibilityRole="radio"
@@ -122,21 +113,19 @@ export default function NewTrip() {
                   onPress={() => setCurrency(c)}
                   style={[styles.pill, c === currency && styles.pillOn]}
                 >
-                  <Body style={{ fontFamily: fonts.bold, color: c === currency ? '#FFFFFF' : colors.ink }}>
-                    {c}
-                  </Body>
+                  <Body style={{ fontFamily: fonts.bold, color: c === currency ? '#FFFFFF' : colors.ink }}>{c}</Body>
                 </Pressable>
               ))}
             </View>
             <Body style={{ fontSize: 12 }}>
-              Expenses are totalled and split in this currency. You can change it until the first expense.
+              Expenses are totalled and split in this currency, so it can only change before the first expense.
             </Body>
           </View>
 
-          {errors.form ? <Body style={{ color: colors.coralInk }}>{errors.form}</Body> : null}
+          {error ? <Body style={{ color: colors.coralInk }}>{error}</Body> : null}
         </ScrollView>
         <View style={styles.footer}>
-          <Button label="Create trip" onPress={create} loading={busy} />
+          <Button label="Save changes" onPress={save} loading={busy} />
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -147,7 +136,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   body: { padding: space.xl, gap: space.lg },
   close: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  row: { flexDirection: 'row', gap: space.md },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
   swatch: { width: 52, height: 52, borderRadius: radius.md },
   swatchOn: { borderWidth: 3, borderColor: colors.ink },
   pill: { minHeight: 44, paddingHorizontal: space.lg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface, justifyContent: 'center' },

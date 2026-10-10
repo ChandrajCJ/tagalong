@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inWindow, photoWindow } from './photo-window';
-import { clusterPlaces, mapsLink, metresBetween, regionAround } from './places';
+import { clusterPlaces, directionsLinks, mapsLink, metresBetween, placeQuery, regionAround } from './places';
 
 const at = (id: string, latitude: number, longitude: number, takenAt: string | null = null) => ({
   id,
@@ -147,5 +147,20 @@ describe('inWindow', () => {
 
   it('never matches an undated photo', () => {
     expect(inWindow(null, sintra)).toBe(false);
+  });
+});
+
+describe('directions', () => {
+  it('adds the destination when the place name doesn’t say where', () => {
+    expect(placeQuery('Time Out Market', 'Lisbon, Portugal')).toBe('Time Out Market, Lisbon, Portugal');
+    expect(placeQuery('Belém Tower, Lisbon', 'Lisbon, Portugal')).toBe('Belém Tower, Lisbon');
+    expect(placeQuery('  Pena Palace ', null)).toBe('Pena Palace');
+  });
+
+  it('opens Google Maps and Apple Maps with the destination filled in', () => {
+    expect(directionsLinks('Time Out Market, Lisbon')).toEqual({
+      google: 'https://www.google.com/maps/dir/?api=1&destination=Time%20Out%20Market%2C%20Lisbon',
+      apple: 'https://maps.apple.com/?daddr=Time%20Out%20Market%2C%20Lisbon',
+    });
   });
 });

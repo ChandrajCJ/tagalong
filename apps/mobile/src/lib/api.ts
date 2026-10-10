@@ -51,6 +51,8 @@ export class ApiError extends Error {
 interface TokenStore {
   get(): AuthTokens | null;
   set(tokens: AuthTokens | null): void;
+  /** What's saved on the device right now, which another browser tab may have just refreshed. */
+  peekSaved?(): Promise<AuthTokens | null>;
 }
 
 let store: TokenStore = { get: () => null, set: () => {} };
@@ -70,8 +72,19 @@ const refreshTokens = async (): Promise<boolean> => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ refreshToken: current.refreshToken }),
   }).catch(() => null);
-  if (!res?.ok) {
-    store.set(null);
+  // No connection: keep the session and try again later, rather than signing out.
+  if (!res) return false;
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      // Each refresh replaces the token. If another tab got there first, its new
+      // tokens are already saved: use those instead of signing out.
+      const saved = await store.peekSaved?.();
+      if (saved && saved.refreshToken !== current.refreshToken) {
+        store.set(saved);
+        return true;
+      }
+      store.set(null);
+    }
     return false;
   }
   store.set(AuthTokens.parse(await res.json()));

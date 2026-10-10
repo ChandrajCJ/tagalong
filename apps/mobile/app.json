@@ -37,7 +37,15 @@
       ],
       "expo-secure-store",
       "expo-sharing",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Tagalong uses your photos so you can add them to the trip album.",
+          "savePhotosPermission": "Tagalong saves trip photos to your gallery when you download them.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
