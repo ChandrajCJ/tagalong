@@ -1,5 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import {
+  guessAmount,
   ChatMessage,
   hasRole,
   MessagePage,
@@ -37,6 +38,7 @@ import {
   type ChatRow,
   type LocalMessage,
 } from '@/lib/chat';
+import { encodeDraft, type ExpenseDraft } from '@/lib/money';
 import { realtime, useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
@@ -504,6 +506,18 @@ export default function ChatTab() {
           const body = actionsFor?.body ?? '';
           setActionsFor(null);
           router.push({ pathname: '/trips/[id]/plan', params: { id: trip.id, draft: body.slice(0, 200) } });
+        }}
+        onAddExpense={() => {
+          const message = actionsFor;
+          setActionsFor(null);
+          if (!message) return;
+          const amountMinor = guessAmount(message.body, trip.baseCurrency);
+          const draft: ExpenseDraft = {
+            description: message.body.slice(0, 120),
+            ...(amountMinor ? { amountMinor } : {}),
+            sourceMessageId: message.id,
+          };
+          router.push({ pathname: '/trips/[id]/money', params: { id: trip.id, expense: encodeDraft(draft) } });
         }}
         onCopy={() => {
           void Clipboard.setStringAsync(actionsFor?.body ?? '');

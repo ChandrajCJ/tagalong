@@ -5,3 +5,4 @@ export * from './itinerary';
 export * from './chat';
 export * from './documents';
 export * from './media';
+export * from './expenses';

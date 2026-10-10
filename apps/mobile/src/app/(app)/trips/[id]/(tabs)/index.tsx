@@ -116,6 +116,13 @@ export default function TripOverview() {
             title="Talk it over"
             subtitle="Chat with everyone on the trip"
             onPress={() => router.push(`${base}/chat`)}
+          />
+          <ActionRow
+            icon="folder"
+            tint="accent"
+            title="Tickets & files"
+            subtitle="Boarding passes, bookings and confirmations"
+            onPress={() => router.push(`${base}/docs`)}
             last
           />
         </View>

@@ -238,7 +238,16 @@ export default function DocsTab() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <Title>Docs</Title>
+        {/* Reached from the Overview rather than the tab bar, so it needs its own way back. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to the overview"
+          onPress={() => router.navigate(`/trips/${trip.id}`)}
+          style={styles.back}
+        >
+          <Feather name="chevron-left" size={24} color={colors.ink} />
+        </Pressable>
+        <Title>Tickets & files</Title>
         <Body style={{ fontSize: 13 }}>Tickets, bookings and anything worth keeping.</Body>
 
         <View style={styles.searchBox}>
@@ -369,6 +378,7 @@ export default function DocsTab() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, gap: space.sm },
+  back: { width: 44, height: 44, marginLeft: -space.md, alignItems: 'center', justifyContent: 'center' },
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 44, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },

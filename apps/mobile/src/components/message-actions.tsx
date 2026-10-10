@@ -10,12 +10,22 @@ interface Props {
   canAddToPlan: boolean;
   onReact: (emoji: string) => void;
   onAddToPlan: () => void;
+  onAddExpense: () => void;
   onCopy: () => void;
   onClose: () => void;
 }
 
-/** Long-press menu for a message: react, add it to the plan, or copy it. */
-export function MessageActions({ message, canReact, canAddToPlan, onReact, onAddToPlan, onCopy, onClose }: Props) {
+/** Long-press menu for a message: react, add it to the plan or the money, or copy it. */
+export function MessageActions({
+  message,
+  canReact,
+  canAddToPlan,
+  onReact,
+  onAddToPlan,
+  onAddExpense,
+  onCopy,
+  onClose,
+}: Props) {
   return (
     <Modal visible={!!message} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable accessibilityLabel="Close" style={styles.backdrop} onPress={onClose}>
@@ -46,7 +56,10 @@ export function MessageActions({ message, canReact, canAddToPlan, onReact, onAdd
             </View>
           ) : null}
           {canAddToPlan ? (
-            <Action icon="calendar" label="Add to plan" onPress={onAddToPlan} />
+            <>
+              <Action icon="calendar" label="Add to plan" onPress={onAddToPlan} />
+              <Action icon="credit-card" label="Add as expense" onPress={onAddExpense} />
+            </>
           ) : null}
           <Action icon="copy" label="Copy text" onPress={onCopy} />
         </Pressable>

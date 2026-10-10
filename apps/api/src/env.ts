@@ -18,6 +18,8 @@ const EnvSchema = z.object({
   S3_SECRET_KEY: z.string().default('tagalong-secret'),
   /** How long an upload or download link stays valid. */
   S3_URL_TTL_SEC: z.coerce.number().int().default(10 * 60),
+  /** Daily exchange rates (see lib/fx.ts). */
+  FX_API_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().default(15 * 60),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().default(30),
 });

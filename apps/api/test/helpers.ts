@@ -6,6 +6,7 @@ import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 import { buildApp } from '../src/app';
 import { loadEnv } from '../src/env';
+import type { Rates } from '../src/lib/fx';
 import type { Jobs } from '../src/lib/jobs';
 import type { Mailer } from '../src/lib/mailer';
 import type { Storage } from '../src/lib/storage';
@@ -76,6 +77,8 @@ export const useTestApp = () => {
     /** The fake storage's contents, so tests can play the worker's part. */
     storage: Storage;
     signIn: (email: string) => Promise<AuthTokens>;
+    /** Exchange rates the fake rates service answers with, as "USD:EUR" → rate. */
+    fx: Map<string, number>;
   };
   let cleanup: () => Promise<void>;
   let truncate: () => Promise<unknown>;
@@ -98,7 +101,15 @@ export const useTestApp = () => {
       async close() {},
     };
     const { storage, putObject } = fakeStorage();
-    const app = await buildApp({ env, db, redis, mailer, jobs, storage });
+    // Never the real rates service: tests mustn't depend on the network or today's rates.
+    const fx = new Map<string, number>();
+    const rates: Rates = {
+      async quote(from, to) {
+        const rate = from === to ? 1 : fx.get(`${from}:${to}`);
+        return rate ? { from, to, rate, date: '2026-06-12' } : null;
+      },
+    };
+    const app = await buildApp({ env, db, redis, mailer, jobs, storage, rates });
 
     ctx.app = app;
     ctx.db = db;
@@ -108,6 +119,7 @@ export const useTestApp = () => {
     ctx.putObject = putObject;
     ctx.thumbnails = thumbnails;
     ctx.storage = storage;
+    ctx.fx = fx;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
       const res = await app.inject({
@@ -133,6 +145,7 @@ export const useTestApp = () => {
     ctx.codes.clear();
     ctx.notified.length = 0;
     ctx.thumbnails.length = 0;
+    ctx.fx.clear();
     await truncate();
   });
 

@@ -32,6 +32,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookingCard } from '@/components/booking-card';
+import { titleOf } from '@/lib/bookings';
+import { categoryFor, encodeDraft, type ExpenseDraft } from '@/lib/money';
 import {
   BookingSheet,
   type BookingFields,
@@ -338,6 +340,8 @@ export default function ItemDetail() {
     .join(' · ');
   // Oldest first, reading down, like any conversation.
   const thread = [...messages].reverse();
+  const addExpense = (draft: ExpenseDraft) =>
+    router.push({ pathname: '/trips/[id]/money', params: { id: trip.id, expense: encodeDraft(draft) } });
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -381,7 +385,27 @@ export default function ItemDetail() {
             {item.costEstimateMinor != null && item.costCurrency ? (
               <View style={styles.metaRow}>
                 <Feather name="credit-card" size={14} color={colors.muted} />
-                <Body>About {formatCost(item.costEstimateMinor, item.costCurrency)} each</Body>
+                <Body style={{ flex: 1 }}>About {formatCost(item.costEstimateMinor, item.costCurrency)} each</Body>
+                {canEdit ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Add as an expense"
+                    onPress={() =>
+                      addExpense({
+                        description: item.title,
+                        // The plan's cost is per person, so the bill is that for everyone.
+                        amountMinor: item.costEstimateMinor! * trip.members.length,
+                        currency: item.costCurrency!,
+                        spentOn: item.date ?? undefined,
+                        category: categoryFor(item.type),
+                        itemId: item.id,
+                      })
+                    }
+                    style={styles.expenseLink}
+                  >
+                    <Text style={styles.expenseLinkText}>Add as expense</Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : null}
             {item.notes ? <Body style={styles.notes}>{item.notes}</Body> : null}
@@ -399,6 +423,28 @@ export default function ItemDetail() {
                       canEdit ? () => setBookingSheet({ open: true, booking: b }) : undefined
                     }
                   />
+                  {canEdit && b.costMinor != null && b.costCurrency ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() =>
+                        addExpense({
+                          description: titleOf(b),
+                          amountMinor: b.costMinor!,
+                          currency: b.costCurrency!,
+                          spentOn: item.date ?? undefined,
+                          category: categoryFor(b.type),
+                          itemId: item.id,
+                          bookingId: b.id,
+                        })
+                      }
+                      style={styles.docRow}
+                    >
+                      <Feather name="credit-card" size={16} color={colors.accent} />
+                      <Text style={styles.docName} numberOfLines={1}>
+                        Add {formatCost(b.costMinor, b.costCurrency)} as an expense
+                      </Text>
+                    </Pressable>
+                  ) : null}
                   {doc ? (
                     <Pressable
                       accessibilityRole="button"
@@ -567,6 +613,8 @@ export default function ItemDetail() {
 }
 
 const styles = StyleSheet.create({
+  expenseLink: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.sm },
+  expenseLinkText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   screen: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   topBar: {
