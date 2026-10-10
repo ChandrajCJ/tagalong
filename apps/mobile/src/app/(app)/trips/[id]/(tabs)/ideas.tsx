@@ -46,6 +46,7 @@ export default function IdeasTab() {
   const [sheet, setSheet] = useState<{ open: boolean; idea?: Idea }>({ open: false });
   const [promoting, setPromoting] = useState<Idea>();
   const [busy, setBusy] = useState(false);
+  const [confirmingRemoval, setConfirmingRemoval] = useState<string | null>(null);
   const [toast, setToast] = useState<string>();
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -232,6 +233,20 @@ export default function IdeasTab() {
     }
   };
 
+  const unpromote = async (idea: Idea) => {
+    setConfirmingRemoval(null);
+    // Back on the board straight away; the server's copy follows.
+    upsertLocal({ ...idea, promotedItemId: null });
+    try {
+      upsertLocal(await request(`/ideas/${idea.id}/unpromote`, { method: 'POST', schema: Idea }));
+      showToast(`“${idea.title}” is back on the board`);
+      void load();
+    } catch (e) {
+      upsertLocal(idea);
+      showToast(e instanceof ApiError ? e.message : 'Could not take that out of the plan');
+    }
+  };
+
   const promote = async (date: string | null) => {
     const idea = promoting;
     if (!idea) return;
@@ -329,9 +344,35 @@ export default function IdeasTab() {
           ) : null}
 
           {idea.promotedItemId ? (
-            <View style={styles.inPlan}>
-              <Feather name="check" size={13} color={colors.accentInk} />
-              <Text style={styles.inPlanText}>In the plan</Text>
+            <View style={styles.inPlanRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${idea.title} is in the plan. Open it`}
+                onPress={() => router.push(`/trips/${trip.id}/items/${idea.promotedItemId}`)}
+                style={styles.inPlan}
+              >
+                <Feather name="check" size={13} color={colors.accentInk} />
+                <Text style={styles.inPlanText}>In the plan</Text>
+              </Pressable>
+              {canEdit ? (
+                // Two taps: removing deletes the plan item, so not on a slip of the thumb.
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    confirmingRemoval === idea.id
+                      ? `Confirm: remove ${idea.title} from the plan`
+                      : `Remove ${idea.title} from the plan`
+                  }
+                  onPress={() =>
+                    confirmingRemoval === idea.id ? void unpromote(idea) : setConfirmingRemoval(idea.id)
+                  }
+                  style={[styles.removeFromPlan, confirmingRemoval === idea.id && styles.removeConfirm]}
+                >
+                  <Text style={[styles.removeText, confirmingRemoval === idea.id && { color: '#FFFFFF' }]}>
+                    {confirmingRemoval === idea.id ? 'Remove from plan?' : 'Remove'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : canEdit ? (
             <Pressable
@@ -450,7 +491,11 @@ const styles = StyleSheet.create({
   iconButton: { minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
   promote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto', minHeight: 36, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
   promoteText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
-  inPlan: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', paddingHorizontal: 10, minHeight: 36, justifyContent: 'center' },
+  inPlanRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
+  removeFromPlan: { minHeight: 36, paddingHorizontal: 10, borderRadius: radius.pill, justifyContent: 'center' },
+  removeConfirm: { backgroundColor: colors.coral },
+  removeText: { fontFamily: fonts.bold, fontSize: 13, color: colors.coralInk },
+  inPlan: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, minHeight: 36, justifyContent: 'center' },
   inPlanText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },

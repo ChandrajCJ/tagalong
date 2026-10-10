@@ -70,7 +70,7 @@ describe('realtime gateway', () => {
     client.ws.close();
   });
 
-  it("delivers a member's change to the others, but not back to its sender", async () => {
+  it("delivers a member's change to everyone, its sender's phone included, marked as theirs", async () => {
     const owner = await t.signIn('owner@example.com');
     const tripId = await createTrip(t.app, owner.accessToken);
     const sam = await joinTrip(t, tripId, owner.accessToken, 'sam@example.com');
@@ -96,8 +96,12 @@ describe('realtime gateway', () => {
     );
     expect(received).toMatchObject({ event: { type: 'item.upserted', payload: { title: 'Sunset boat tour' } } });
 
-    await new Promise((r) => setTimeout(r, 150));
-    expect(ownerClient.messages.some((m) => m.kind === 'event' && m.event.entityId === itemId)).toBe(false);
+    // The sender's phone gets it too: its other screens need it (the Plan tab
+    // didn't hear about an idea moved into the plan from the Ideas tab).
+    const own = await waitFor(() =>
+      ownerClient.messages.find((m) => m.kind === 'event' && m.event.entityId === itemId),
+    );
+    expect(own).toMatchObject({ event: { originClientId: 'owner-phone-0001' } });
 
     ownerClient.ws.close();
     samClient.ws.close();

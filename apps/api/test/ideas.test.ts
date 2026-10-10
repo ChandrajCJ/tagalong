@@ -254,3 +254,68 @@ describe('promoting an idea', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe('taking an idea back out of the plan', () => {
+  const promote = (ideaId: string, token: string) =>
+    ctx.app.inject({
+      method: 'POST',
+      url: `/ideas/${ideaId}/promote`,
+      headers: bearer(token),
+      payload: { date: '2027-06-13' },
+    });
+  const planTitles = async (tripId: string, token: string) =>
+    (
+      await ctx.app.inject({ method: 'GET', url: `/trips/${tripId}/items`, headers: bearer(token) })
+    )
+      .json<{ items: ItineraryItem[] }>()
+      .items.map((i) => i.title);
+
+  it('removes the plan item and puts the idea back on the board, votes intact', async () => {
+    const { owner, editor, tripId } = await setup();
+    const idea = await addIdea(tripId, owner.accessToken);
+    await ctx.app.inject({
+      method: 'PUT',
+      url: `/ideas/${idea.id}/vote`,
+      headers: bearer(editor.accessToken),
+      payload: { value: 'up' },
+    });
+    await promote(idea.id, owner.accessToken);
+    expect(await planTitles(tripId, owner.accessToken)).toEqual(['Sintra day trip']);
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: `/ideas/${idea.id}/unpromote`,
+      headers: bearer(owner.accessToken),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<Idea>()).toMatchObject({ promotedItemId: null, ups: 1 });
+    expect(await planTitles(tripId, owner.accessToken)).toEqual([]);
+
+    // And it can go back in again.
+    expect((await promote(idea.id, owner.accessToken)).statusCode).toBe(200);
+    expect(await planTitles(tripId, owner.accessToken)).toEqual(['Sintra day trip']);
+  });
+
+  it("frees the idea when its plan item is deleted from the plan directly", async () => {
+    const { owner, tripId } = await setup();
+    const idea = await addIdea(tripId, owner.accessToken);
+    const { item } = (await promote(idea.id, owner.accessToken)).json<{ item: ItineraryItem }>();
+
+    await ctx.app.inject({ method: 'DELETE', url: `/items/${item.id}`, headers: bearer(owner.accessToken) });
+
+    const [listed] = await listIdeas(tripId, owner.accessToken);
+    expect(listed?.promotedItemId).toBeNull();
+  });
+
+  it("doesn't let a viewer take an idea out of the plan", async () => {
+    const { owner, viewer, tripId } = await setup();
+    const idea = await addIdea(tripId, owner.accessToken);
+    await promote(idea.id, owner.accessToken);
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: `/ideas/${idea.id}/unpromote`,
+      headers: bearer(viewer.accessToken),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});

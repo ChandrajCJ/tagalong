@@ -66,10 +66,43 @@ export const createIdeasService = (db: Db, redis: Redis) => {
     return byIdea;
   };
 
+  /**
+   * The plan items these ideas became that still exist. Deleting the item from
+   * the plan should put its idea back on the board, not leave it saying
+   * "In the plan" about something that's gone.
+   */
+  const livePromotions = async (dbOrTx: Db | Tx, rows: Row[]) => {
+    const ids = rows.map((r) => r.promotedItemId).filter((id): id is string => id !== null);
+    if (ids.length === 0) return new Set<string>();
+    const live = await dbOrTx
+      .select({ id: items.id })
+      .from(items)
+      .where(and(inArray(items.id, ids), isNull(items.deletedAt)));
+    return new Set(live.map((i) => i.id));
+  };
+
+  /** Rows to app-shaped ideas, with votes, and promotions only to items that still exist. */
+  const shape = async (dbOrTx: Db | Tx, rows: Row[], userId: string) => {
+    const [voters, live] = await Promise.all([
+      votersFor(
+        dbOrTx,
+        rows.map((r) => r.id),
+      ),
+      livePromotions(dbOrTx, rows),
+    ]);
+    return rows.map((r) =>
+      toIdea(
+        { ...r, promotedItemId: r.promotedItemId && live.has(r.promotedItemId) ? r.promotedItemId : null },
+        voters.get(r.id) ?? [],
+        userId,
+      ),
+    );
+  };
+
   /** Reads one idea back in the shape the app expects, votes included. */
   const hydrate = async (dbOrTx: Db | Tx, row: Row, userId: string) => {
-    const voters = await votersFor(dbOrTx, [row.id]);
-    return toIdea(row, voters.get(row.id) ?? [], userId);
+    const [idea] = await shape(dbOrTx, [row], userId);
+    return idea!;
   };
 
   const loadLive = async (ideaId: string) => {
@@ -100,11 +133,7 @@ export const createIdeasService = (db: Db, redis: Redis) => {
         .from(ideas)
         .where(and(eq(ideas.tripId, tripId), isNull(ideas.deletedAt)))
         .orderBy(desc(ideas.createdAt));
-      const voters = await votersFor(
-        db,
-        rows.map((r) => r.id),
-      );
-      return rows.map((r) => toIdea(r, voters.get(r.id) ?? [], userId)).sort(byScore);
+      return (await shape(db, rows, userId)).sort(byScore);
     },
 
     /** Retrying with the same client-generated id returns the same idea. */
@@ -331,6 +360,51 @@ export const createIdeasService = (db: Db, redis: Redis) => {
       const idea = await hydrate(db, result.idea, userId);
       await announce(idea, userId, origin);
       return { idea, item: result.item };
+    },
+
+    /**
+     * Takes an idea back out of the plan: the plan item goes, and the idea
+     * returns to the board with its votes intact. Safe to call twice.
+     */
+    async unpromote(ideaId: string, userId: string, origin?: string) {
+      const current = await loadLive(ideaId);
+      await requireTripRole(db, current.tripId, userId, 'editor');
+      if (!current.promotedItemId) return hydrate(db, current, userId);
+      const itemId = current.promotedItemId;
+
+      const result = await db.transaction(async (tx) => {
+        const [removed] = await tx
+          .update(items)
+          .set({ deletedAt: new Date(), version: sql`${items.version} + 1` })
+          .where(and(eq(items.id, itemId), isNull(items.deletedAt)))
+          .returning({ version: items.version });
+        const [idea] = await tx
+          .update(ideas)
+          .set({ promotedItemId: null, version: sql`${ideas.version} + 1` })
+          .where(eq(ideas.id, ideaId))
+          .returning();
+        await tx.insert(changeLog).values([
+          ...(removed
+            ? [{ tripId: current.tripId, entity: 'item', entityId: itemId, op: 'delete', changedBy: userId }]
+            : []),
+          { tripId: current.tripId, entity: 'idea', entityId: ideaId, op: 'upsert', changedBy: userId },
+        ]);
+        return { removed, idea: idea! };
+      });
+
+      if (result.removed) {
+        await publishTripEvent(redis, {
+          type: 'item.deleted',
+          tripId: current.tripId,
+          entityId: itemId,
+          actorId: userId,
+          version: result.removed.version,
+          originClientId: origin,
+        });
+      }
+      const idea = await hydrate(db, result.idea, userId);
+      await announce(idea, userId, origin);
+      return idea;
     },
   };
 };

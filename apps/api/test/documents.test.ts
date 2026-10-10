@@ -79,6 +79,19 @@ describe('documents', () => {
     expect(done.json<{ error: string }>().error).toBe('upload_missing');
   });
 
+  it("won't accept something other than what the phone said it was sending", async () => {
+    const { owner, tripId } = await setup();
+    const { document, uploadUrl } = (await start(tripId, owner.accessToken)).json<DocumentUpload>();
+    ctx.putObject(uploadUrl, 14); // declared 120,000 bytes; 14 arrived
+    const done = await ctx.app.inject({
+      method: 'POST',
+      url: `/documents/${document.id}/complete`,
+      headers: bearer(owner.accessToken),
+    });
+    expect(done.statusCode).toBe(400);
+    expect(done.json<{ error: string }>().error).toBe('upload_incomplete');
+  });
+
   it('hides an unfinished upload from everyone but the person uploading it', async () => {
     const { owner, editor, tripId } = await setup();
     await start(tripId, owner.accessToken);

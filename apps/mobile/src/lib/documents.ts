@@ -7,7 +7,8 @@ import {
   newId,
   type DocumentKind,
 } from '@tagalong/shared';
-import { ApiError, request } from './api';
+import { request } from './api';
+import { localFileSize, putFile } from './upload';
 
 export type Allowed = (typeof ALLOWED_CONTENT_TYPES)[number];
 
@@ -70,19 +71,14 @@ export const uploadDocument = async (
       id,
       name: file.name,
       contentType: file.contentType,
-      sizeBytes: file.sizeBytes,
+      // Measured, not taken from the picker: the server checks it matches what arrives.
+      sizeBytes: await localFileSize(file.uri),
       kind,
     },
     schema: DocumentUpload,
   });
 
-  const body = await fetch(file.uri).then((r) => r.blob());
-  const sent = await fetch(uploadUrl, {
-    method: 'PUT',
-    body,
-    headers: { 'content-type': file.contentType },
-  });
-  if (!sent.ok) throw new ApiError(sent.status, 'upload_failed', "The file didn't upload. Try again.");
+  await putFile(uploadUrl, file.uri, file.contentType);
 
   return request(`/documents/${document.id}/complete`, { method: 'POST', schema: TripDocument });
 };

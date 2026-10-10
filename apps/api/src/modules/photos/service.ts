@@ -271,6 +271,14 @@ export const createPhotosService = (
 
       const size = await storage.sizeOf(photo.storageKey);
       if (size === null) throw badRequest('The photo didn’t arrive. Try again.', 'upload_missing');
+      /*
+       * What arrived must be what the phone said it was sending. Once, a phone
+       * that couldn't read its own file uploaded the 14-byte error text "File
+       * not found" in place of a photo, and it was accepted.
+       */
+      if (photo.sizeBytes !== null && size !== photo.sizeBytes) {
+        throw badRequest('The photo only partly arrived. Try again.', 'upload_incomplete');
+      }
 
       const ready = await db.transaction(async (tx) => {
         const [row] = await tx

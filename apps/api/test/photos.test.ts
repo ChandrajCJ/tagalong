@@ -42,10 +42,12 @@ const start = (tripId: string, token: string, body: Record<string, unknown> = {}
 
 /** The whole upload: link, bytes, confirm. Returns the confirmed photo. */
 const upload = async (tripId: string, token: string, body: Record<string, unknown> = {}) => {
-  const started = await start(tripId, token, body);
+  const bytes = await jpeg();
+  // Declare the real size: the server checks what arrives matches it.
+  const started = await start(tripId, token, { sizeBytes: bytes.length, ...body });
   expect(started.statusCode).toBe(201);
   const { photo, uploadUrl } = started.json<PhotoUpload>();
-  ctx.putObject(uploadUrl, 0, await jpeg());
+  ctx.putObject(uploadUrl, 0, bytes);
   const done = await ctx.app.inject({
     method: 'POST',
     url: `/photos/${photo.id}/complete`,
@@ -101,6 +103,23 @@ describe('photo uploads', () => {
     });
     expect(done.statusCode).toBe(400);
     expect(ctx.thumbnails).toHaveLength(0);
+  });
+
+  it("won't accept something other than what the phone said it was sending", async () => {
+    const { owner, tripId } = await setup();
+    const { photo, uploadUrl } = (await start(tripId, owner.accessToken, { sizeBytes: 412_337 })).json<PhotoUpload>();
+    // What a real Android phone once sent: the text of an error, in place of the photo.
+    ctx.putObject(uploadUrl, 0, Buffer.from('File not found'));
+
+    const done = await ctx.app.inject({
+      method: 'POST',
+      url: `/photos/${photo.id}/complete`,
+      headers: bearer(owner.accessToken),
+    });
+    expect(done.statusCode).toBe(400);
+    expect(done.json<{ error: string }>().error).toBe('upload_incomplete');
+    expect(ctx.thumbnails).toHaveLength(0);
+    expect(await album(tripId, (await ctx.signIn('owner@example.com')).accessToken)).toHaveLength(1);
   });
 
   it('refuses HEIC, which the server cannot read', async () => {
@@ -243,10 +262,11 @@ describe('thumbnails', () => {
 
   it('turns a sideways phone photo the right way up', async () => {
     const { owner, tripId } = await setup();
-    const started = await start(tripId, owner.accessToken);
-    const { photo, uploadUrl } = started.json<PhotoUpload>();
     // Stored landscape, tagged "rotate 90°": the way phones save a portrait shot.
-    ctx.putObject(uploadUrl, 0, await jpeg(1200, 900, 6));
+    const sideways = await jpeg(1200, 900, 6);
+    const started = await start(tripId, owner.accessToken, { sizeBytes: sideways.length });
+    const { photo, uploadUrl } = started.json<PhotoUpload>();
+    ctx.putObject(uploadUrl, 0, sideways);
     await ctx.app.inject({
       method: 'POST',
       url: `/photos/${photo.id}/complete`,

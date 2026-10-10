@@ -27,6 +27,7 @@ import { PollCard } from '@/components/poll-card';
 import { PollComposer, type PollDraft } from '@/components/poll-composer';
 import { Avatar, Body, Button } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
+import { CLIENT_ID } from '@/lib/client-id';
 import {
   applyReaction,
   buildRows,
@@ -128,6 +129,9 @@ export default function ChatTab() {
         });
       }
     } else if (event.type === 'reaction.changed') {
+      // A reaction is applied as +1/-1, so our own would count twice: we
+      // already applied it when the button was tapped.
+      if (event.originClientId === CLIENT_ID) return;
       const p = event.payload as { messageId: string; emoji: string; userId: string; added: boolean };
       setMessages(
         (prev) =>

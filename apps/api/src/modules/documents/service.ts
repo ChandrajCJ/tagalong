@@ -149,6 +149,10 @@ export const createDocumentsService = (
 
       const size = await storage.sizeOf(row.storageKey);
       if (size === null) throw badRequest('The upload didn’t arrive. Try again.', 'upload_missing');
+      // What arrived must be what the phone said it was sending (see photos/service.ts).
+      if (row.sizeBytes !== null && size !== row.sizeBytes) {
+        throw badRequest('The file only partly arrived. Try again.', 'upload_incomplete');
+      }
 
       const ready = await db.transaction(async (tx) => {
         const [updated] = await tx

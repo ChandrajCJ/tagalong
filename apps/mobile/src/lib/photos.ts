@@ -1,9 +1,12 @@
 import { newId, parseExif, Photo, PhotoUpload, type PhotoFacts } from '@tagalong/shared';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { ApiError, request } from './api';
+import * as MediaLibrary from 'expo-media-library/legacy';
+import { Platform } from 'react-native';
+import { request } from './api';
 import { MONTH_NAMES, parseIso } from './dates';
 import { weekdayOf } from './plan';
+import { localFileSize, putFile } from './upload';
 
 /** Sharp on any phone screen, and roughly five times less data than the original. */
 const MAX_EDGE = 2560;
@@ -12,11 +15,48 @@ const PARALLEL = 3;
 
 /** A picked photo, converted and ready to send. */
 interface Prepared {
-  blob: Blob;
+  uri: string;
+  size: number;
   width: number;
   height: number;
   facts: PhotoFacts;
 }
+
+/** "2026-06-12T18:30:00" for an instant, on this phone's clock. */
+const localStamp = (ms: number) => {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+// Asked once per app session, however many photos are picked at once.
+let libraryPermission: Promise<boolean> | null = null;
+
+/**
+ * When and where, from the phone's photo library instead of the file.
+ * Android's photo picker strips the location from what it hands over, for
+ * privacy, so the EXIF has none; the library still knows it, given access.
+ * Best effort: any failure just means no location.
+ */
+const libraryFacts = async (assetId: string): Promise<Partial<PhotoFacts>> => {
+  if (Platform.OS === 'web') return {};
+  try {
+    libraryPermission ??= MediaLibrary.requestPermissionsAsync(false, ['photo']).then((p) => p.granted);
+    if (!(await libraryPermission)) return {};
+    const info = await MediaLibrary.getAssetInfoAsync(assetId);
+    // Run the coordinates through the EXIF reader, so "0,0" and nonsense are refused the same way.
+    const located = info.location
+      ? parseExif({ GPSLatitude: info.location.latitude, GPSLongitude: info.location.longitude })
+      : null;
+    return {
+      takenAt: info.creationTime ? localStamp(info.creationTime) : null,
+      latitude: located?.latitude ?? null,
+      longitude: located?.longitude ?? null,
+    };
+  } catch {
+    return {};
+  }
+};
 
 /**
  * Every photo leaves the phone as a JPEG no wider than MAX_EDGE. That's not
@@ -25,7 +65,15 @@ interface Prepared {
  */
 const prepare = async (asset: ImagePickerAsset): Promise<Prepared> => {
   // Read the EXIF before converting: re-encoding drops it.
-  const facts = parseExif(asset.exif as Record<string, unknown> | null | undefined);
+  const exif = parseExif(asset.exif as Record<string, unknown> | null | undefined);
+  const needsLibrary = exif.latitude === null || exif.takenAt === null;
+  const library = needsLibrary && asset.assetId ? await libraryFacts(asset.assetId) : {};
+  const facts: PhotoFacts = {
+    // The camera's own clock wins; the library's is the fallback.
+    takenAt: exif.takenAt ?? library.takenAt ?? null,
+    latitude: exif.latitude ?? library.latitude ?? null,
+    longitude: exif.latitude !== null ? exif.longitude : (library.longitude ?? null),
+  };
 
   const context = ImageManipulator.manipulate(asset.uri);
   const longest = Math.max(asset.width, asset.height);
@@ -34,32 +82,20 @@ const prepare = async (asset: ImagePickerAsset): Promise<Prepared> => {
   }
   const rendered = await context.renderAsync();
   const saved = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG });
-  const blob = await fetch(saved.uri).then((r) => r.blob());
-  return { blob, width: saved.width, height: saved.height, facts };
+  // The size of the file actually being sent; the server checks it matches.
+  const size = await localFileSize(saved.uri);
+  return { uri: saved.uri, size, width: saved.width, height: saved.height, facts };
 };
 
 /** Link, bytes, confirm: the same three steps as documents. */
 const sendOne = async (tripId: string, batchId: string, asset: ImagePickerAsset, id: string) => {
-  const { blob, width, height, facts } = await prepare(asset);
+  const { uri, size, width, height, facts } = await prepare(asset);
   const { uploadUrl } = await request(`/trips/${tripId}/photos`, {
     method: 'POST',
-    body: {
-      id,
-      batchId,
-      contentType: 'image/jpeg',
-      sizeBytes: blob.size,
-      width,
-      height,
-      ...facts,
-    },
+    body: { id, batchId, contentType: 'image/jpeg', sizeBytes: size, width, height, ...facts },
     schema: PhotoUpload,
   });
-  const sent = await fetch(uploadUrl, {
-    method: 'PUT',
-    body: blob,
-    headers: { 'content-type': 'image/jpeg' },
-  });
-  if (!sent.ok) throw new ApiError(sent.status, 'upload_failed', "That photo didn't upload");
+  await putFile(uploadUrl, uri, 'image/jpeg');
   return request(`/photos/${id}/complete`, { method: 'POST', schema: Photo });
 };
 

@@ -48,6 +48,11 @@ export const ideasRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
     return service.vote(ideaId, request.user.sub, null, originOf(request));
   });
 
+  app.post('/ideas/:ideaId/unpromote', async (request) => {
+    const { ideaId } = parse(IdeaParams, request.params);
+    return service.unpromote(ideaId, request.user.sub, originOf(request));
+  });
+
   app.post('/ideas/:ideaId/promote', async (request) => {
     const { ideaId } = parse(IdeaParams, request.params);
     const { date } = parse(PromoteIdeaInput, request.body ?? {});

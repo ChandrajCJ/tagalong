@@ -125,9 +125,15 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
     if (!parsed.success) return;
     const event = parsed.data;
     const room = [...(rooms.get(event.tripId) ?? [])];
-    for (const conn of room) {
-      if (conn.id !== event.originClientId) send(conn, { kind: 'event', event });
-    }
+    /*
+     * Everyone in the room gets the change, including the phone that made it.
+     * Skipping the sender looked tidy, but a phone holds several screens, each
+     * with its own copy: an idea moved into the plan from the Ideas screen
+     * never reached the Plan screen on the same phone. The event still says
+     * which phone made it (`originClientId`), so a screen that applies changes
+     * as increments, such as chat reactions, can ignore its own.
+     */
+    for (const conn of room) send(conn, { kind: 'event', event });
 
     // Someone left or was removed: stop sending them this trip.
     if (event.type === 'member.left') {
