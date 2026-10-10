@@ -16,6 +16,8 @@ export const PollOption = z.object({
   /** Who picked this one, so the poll can show faces. */
   voters: z.array(z.object({ userId: z.string().uuid(), displayName: z.string() })),
   mine: z.boolean(),
+  /** The plan item this option became, once someone added it to the plan. */
+  itemId: z.string().uuid().nullable().default(null),
 });
 export type PollOption = z.infer<typeof PollOption>;
 
@@ -103,6 +105,12 @@ export const CreatePollInput = z.object({
   multi: z.boolean().default(false),
 });
 export type CreatePollInput = z.input<typeof CreatePollInput>;
+
+/** Puts a poll option on the plan, on a day or with no day yet. */
+export const AddPollOptionToPlanInput = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').nullable(),
+});
+export type AddPollOptionToPlanInput = z.input<typeof AddPollOptionToPlanInput>;
 
 /** The options this person is picking now. An empty list clears their vote. */
 export const VotePollInput = z.object({

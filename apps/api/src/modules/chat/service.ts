@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
+  changeLog,
   channels,
   items,
   messages,
@@ -19,6 +20,7 @@ import {
   type ChatMessage,
   type MessagePage,
   type Poll,
+  type ItineraryItem,
   type ReadState,
 } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
@@ -27,7 +29,8 @@ import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
-import { itemChannelId, mainChannelId, quotesFor, toMessage } from './channel';
+import { endOfDay, toItem } from '../itinerary/service';
+import { itemChannelId, mainChannelId, postSystemMessage, quotesFor, toMessage } from './channel';
 
 type SendMessage = z.output<typeof SendMessageInput>;
 type CreatePoll = z.output<typeof CreatePollInput>;
@@ -114,6 +117,18 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       .from(pollVotes)
       .innerJoin(users, eq(users.id, pollVotes.userId))
       .where(inArray(pollVotes.pollId, pollIds));
+    // An option's plan item only counts while it still exists.
+    const linked = optionRows.map((o) => o.itemId).filter((x): x is string => !!x);
+    const liveItems = new Set(
+      linked.length === 0
+        ? []
+        : (
+            await db
+              .select({ id: items.id })
+              .from(items)
+              .where(and(inArray(items.id, linked), isNull(items.deletedAt)))
+          ).map((r) => r.id),
+    );
 
     for (const p of pollRows) {
       const votes = voteRows.filter((v) => v.pollId === p.id);
@@ -133,6 +148,7 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
               votes: mine.length,
               voters: mine.map((v) => ({ userId: v.userId, displayName: v.displayName })),
               mine: mine.some((v) => v.userId === userId),
+              itemId: o.itemId && liveItems.has(o.itemId) ? o.itemId : null,
             };
           }),
         voterCount: new Set(votes.map((v) => v.userId)).size,
@@ -512,6 +528,92 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
         originClientId: origin,
       });
       return result;
+    },
+
+    /**
+     * Turns a poll option into a plan item: the group voted, now it goes on a
+     * day. Once added, the option points at its item, so it can't be added
+     * twice; if that item is later deleted, the option can be added again.
+     */
+    async addOptionToPlan(
+      pollId: string,
+      optionId: string,
+      userId: string,
+      date: string | null,
+      origin?: string,
+    ): Promise<{ poll: Poll; item: ItineraryItem }> {
+      const [poll] = await db.select().from(polls).where(eq(polls.id, pollId));
+      if (!poll) throw notFound('Poll not found');
+      await requireTripRole(db, poll.tripId, userId, 'editor');
+      const [option] = await db
+        .select()
+        .from(pollOptions)
+        .where(and(eq(pollOptions.id, optionId), eq(pollOptions.pollId, pollId)));
+      if (!option) throw notFound('That option isn’t in this poll');
+
+      if (option.itemId) {
+        const [existing] = await db
+          .select()
+          .from(items)
+          .where(and(eq(items.id, option.itemId), isNull(items.deletedAt)));
+        if (existing) return { poll: await hydratePoll(poll.messageId, userId), item: toItem(existing) };
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const itemId = newId();
+        const [item] = await tx
+          .insert(items)
+          .values({
+            id: itemId,
+            tripId: poll.tripId,
+            date,
+            position: await endOfDay(tx, poll.tripId, date),
+            type: 'activity',
+            title: option.label,
+            notes: `Picked in the poll “${poll.question}”`,
+            createdBy: userId,
+          })
+          .returning();
+        await tx.update(pollOptions).set({ itemId }).where(eq(pollOptions.id, optionId));
+        await tx
+          .insert(changeLog)
+          .values({ tripId: poll.tripId, entity: 'item', entityId: itemId, op: 'upsert', changedBy: userId });
+        const card = await postSystemMessage(
+          tx,
+          poll.tripId,
+          userId,
+          (name) => `${name} added “${option.label}” to the plan, from the poll`,
+          { event: 'poll_option_planned', pollId, optionId, itemId },
+        );
+        return { item: toItem(item!), card };
+      });
+
+      const updated = await hydratePoll(poll.messageId, userId);
+      await publishTripEvent(redis, {
+        type: 'item.upserted',
+        tripId: poll.tripId,
+        entityId: result.item.id,
+        actorId: userId,
+        version: result.item.version,
+        payload: result.item,
+        originClientId: origin,
+      });
+      await publishTripEvent(redis, {
+        type: 'poll.voted',
+        tripId: poll.tripId,
+        entityId: poll.messageId,
+        actorId: userId,
+        payload: { messageId: poll.messageId, poll: updated },
+        originClientId: origin,
+      });
+      await publishTripEvent(redis, {
+        type: 'message.created',
+        tripId: poll.tripId,
+        entityId: result.card.id,
+        actorId: userId,
+        payload: result.card,
+      });
+      return { poll: updated, item: result.item };
     },
 
     async markRead(tripId: string, userId: string, messageId: string, origin?: string) {

@@ -6,8 +6,10 @@ import {
   MessagePage,
   newId,
   Poll,
+  type PollOption,
   type ReadState,
 } from '@tagalong/shared';
+import { z } from 'zod';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DayPicker } from '@/components/day-picker';
 import { MessageActions } from '@/components/message-actions';
 import { PollCard } from '@/components/poll-card';
 import { PollComposer, type PollDraft } from '@/components/poll-composer';
@@ -39,6 +42,7 @@ import {
   type LocalMessage,
 } from '@/lib/chat';
 import { encodeDraft, type ExpenseDraft } from '@/lib/money';
+import { planDays } from '@/lib/plan';
 import { realtime, useTripRealtime } from '@/lib/realtime';
 import { secureStorage } from '@/lib/storage';
 import { useTrip } from '@/lib/trip-context';
@@ -46,6 +50,9 @@ import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
 const TYPING_SHOWN_MS = 4000;
 const TYPING_SEND_EVERY_MS = 2500;
+
+/** What adding a poll option to the plan sends back. */
+const PollPlanned = z.object({ poll: Poll });
 
 /** Remembers that someone has seen how to reply and react. */
 const HOLD_TIP_KEY = 'tagalong.tip.holdMessage';
@@ -62,6 +69,9 @@ export default function ChatTab() {
   const [typing, setTyping] = useState<Record<string, { name: string; until: number }>>({});
   const [actionsFor, setActionsFor] = useState<LocalMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<LocalMessage | null>(null);
+  // A poll option on its way into the plan, waiting for "which day?".
+  const [planning, setPlanning] = useState<{ message: LocalMessage; option: PollOption } | null>(null);
+  const [planningBusy, setPlanningBusy] = useState(false);
   // A short message above the composer: "Copied", or what went wrong.
   const [flash, setFlash] = useState<string>();
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -347,6 +357,26 @@ export default function ChatTab() {
     }
   };
 
+  const addOptionToPlan = async (date: string | null) => {
+    if (!planning?.message.poll) return;
+    const { message, option } = planning;
+    setPlanningBusy(true);
+    try {
+      const result = await request(`/polls/${message.poll!.id}/options/${option.id}/plan`, {
+        method: 'POST',
+        body: { date },
+        schema: PollPlanned,
+      });
+      setPoll(message.id, result.poll);
+      say(`Added “${option.label}” to the plan`);
+      setPlanning(null);
+    } catch (e) {
+      say(e instanceof ApiError ? e.message : 'Couldn’t add it to the plan. Try again.');
+    } finally {
+      setPlanningBusy(false);
+    }
+  };
+
   const memberIndex = useMemo(
     () => new Map((trip?.members ?? []).map((m, i) => [m.userId, i])),
     [trip?.members],
@@ -382,6 +412,9 @@ export default function ChatTab() {
               canClose={m.senderId === me}
               onPick={(optionId) => void votePoll(m, optionId)}
               onClose={() => void closePoll(m)}
+              canAddToPlan={canPost}
+              onAddToPlan={(option) => setPlanning({ message: m, option })}
+              onOpenItem={(itemId) => router.push(`/trips/${trip.id}/items/${itemId}`)}
             />
             <Text style={styles.meta}>{timeOf(m.createdAt)}</Text>
           </View>
@@ -594,6 +627,16 @@ export default function ChatTab() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      <DayPicker
+        visible={!!planning}
+        title="Which day?"
+        subtitle={planning ? `Put “${planning.option.label}” on the plan` : undefined}
+        days={trip.startDate ? planDays(trip.startDate, trip.endDate, []) : []}
+        busy={planningBusy}
+        onPick={(date) => void addOptionToPlan(date)}
+        onClose={() => setPlanning(null)}
+      />
 
       <PollComposer visible={askingPoll} onAsk={askPoll} onClose={() => setAskingPoll(false)} />
 

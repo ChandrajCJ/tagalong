@@ -105,6 +105,8 @@ export const pollOptions = chatSchema.table(
       .references(() => polls.id, { onDelete: 'cascade' }),
     label: text('label').notNull(),
     position: integer('position').notNull(),
+    /** The plan item this option became, once someone added it to the plan. */
+    itemId: uuid('item_id').references(() => items.id, { onDelete: 'set null' }),
   },
   (t) => [index('poll_options_poll_idx').on(t.pollId, t.position)],
 );

@@ -1,0 +1,2 @@
+ALTER TABLE "chat"."poll_options" ADD COLUMN "item_id" uuid;--> statement-breakpoint
+ALTER TABLE "chat"."poll_options" ADD CONSTRAINT "poll_options_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "itinerary"."items"("id") ON DELETE set null ON UPDATE no action;

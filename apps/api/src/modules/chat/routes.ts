@@ -1,4 +1,5 @@
 import {
+  AddPollOptionToPlanInput,
   CreatePollInput,
   MarkReadInput,
   SendMessageInput,
@@ -15,6 +16,7 @@ import { createChatService } from './service';
 const TripParams = z.object({ id: z.string().uuid() });
 const MessageParams = z.object({ messageId: z.string().uuid() });
 const PollParams = z.object({ pollId: z.string().uuid() });
+const PollOptionParams = PollParams.extend({ optionId: z.string().uuid() });
 const ItemParams = z.object({ itemId: z.string().uuid() });
 const PageQuery = z.object({
   before: z.string().max(200).optional(),
@@ -83,6 +85,12 @@ export const chatRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
   app.post('/polls/:pollId/close', async (request) => {
     const { pollId } = parse(PollParams, request.params);
     return chat.closePoll(pollId, request.user.sub, originOf(request));
+  });
+
+  app.post('/polls/:pollId/options/:optionId/plan', async (request) => {
+    const { pollId, optionId } = parse(PollOptionParams, request.params);
+    const { date } = parse(AddPollOptionToPlanInput, request.body);
+    return chat.addOptionToPlan(pollId, optionId, request.user.sub, date, originOf(request));
   });
 
   app.post('/trips/:id/read', async (request) => {
