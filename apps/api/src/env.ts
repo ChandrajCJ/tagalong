@@ -18,6 +18,13 @@ const EnvSchema = z.object({
   S3_SECRET_KEY: z.string().default('tagalong-secret'),
   /** How long an upload or download link stays valid. */
   S3_URL_TTL_SEC: z.coerce.number().int().default(10 * 60),
+  /** Open map data (see lib/geo.ts). Public services ask apps to say who they are. */
+  GEO_USER_AGENT: z.string().default('Tagalong/1.0 (group trip planner; https://github.com/ChandrajCJ/tagalong)'),
+  PHOTON_URL: z.string().url().default('https://photon.komoot.io'),
+  OVERPASS_URLS: z
+    .string()
+    .default('https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter,https://overpass.kumi.systems/api/interpreter'),
+  WIKIPEDIA_API: z.string().url().default('https://en.wikipedia.org/w/api.php'),
   /** Daily exchange rates (see lib/fx.ts). */
   FX_API_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
   /** Sends sign-in codes, e.g. smtps://user:app-password@smtp.gmail.com:465. Logged instead when unset. */

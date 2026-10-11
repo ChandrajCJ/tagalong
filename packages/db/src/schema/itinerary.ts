@@ -4,6 +4,7 @@ import {
   char,
   check,
   date,
+  doublePrecision,
   index,
   pgSchema,
   primaryKey,
@@ -56,6 +57,10 @@ export const items = itinerarySchema.table(
     placeName: text('place_name'),
     costEstimateMinor: bigint('cost_estimate_minor', { mode: 'number' }),
     costCurrency: char('cost_currency', { length: 3 }),
+    /** Where it is, when known (e.g. it came from an idea found in Explore), for the trip map. */
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
+    placeRef: text('place_ref'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -87,6 +92,11 @@ export const ideas = itinerarySchema.table(
     note: text('note'),
     url: text('url'),
     type: text('type').notNull().default('activity'),
+    /** Set for ideas found in Explore: where it is and a photo of it. */
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
+    placeRef: text('place_ref'),
+    imageUrl: text('image_url'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),

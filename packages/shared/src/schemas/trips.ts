@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRIP_ROLES } from '../roles';
+import { TripLocation } from './places';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 
@@ -15,6 +16,8 @@ export const CreateTripInput = z
       .string()
       .regex(/^#[0-9A-Fa-f]{6}$/)
       .default('#D8A47F'),
+    /** The real place picked from the destination search, if any. */
+    location: TripLocation.optional(),
   })
   .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {
     message: 'End date must be on or after the start date',
@@ -31,6 +34,8 @@ export const UpdateTripInput = z
     endDate: isoDate.nullable().optional(),
     baseCurrency: z.string().length(3).toUpperCase().optional(),
     coverColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+    /** A newly picked place, or null to forget it (the destination became free text). */
+    location: TripLocation.nullable().optional(),
     version: z.number().int().min(1),
   })
   .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {
@@ -64,6 +69,10 @@ export const Trip = TripSummary.extend({
   /** The signed-in user's id, so screens can tell which member is "you". */
   myUserId: z.string().uuid(),
   baseCurrency: z.string().length(3),
+  /** Where it is, when a real place was picked; maps, weather and Explore need it. */
+  location: TripLocation.nullable(),
+  /** The destination's time zone, e.g. "Asia/Kolkata", once known. */
+  timezone: z.string().nullable(),
   members: z.array(TripMember),
   version: z.number().int(),
 });

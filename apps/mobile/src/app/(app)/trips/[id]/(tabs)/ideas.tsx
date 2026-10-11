@@ -9,6 +9,7 @@ import {
   PromoteResult,
   type VoteValue,
 } from '@tagalong/shared';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -174,6 +175,10 @@ export default function IdeasTab() {
     if (!existing) {
       const id = newId();
       const optimistic: Idea = {
+        latitude: null,
+        longitude: null,
+        placeRef: null,
+        imageUrl: null,
         ...fields,
         id,
         tripId: trip.id,
@@ -284,7 +289,11 @@ export default function IdeasTab() {
           style={styles.cardMain}
         >
           <View style={styles.cardTop}>
-            <Feather name={ITEM_TYPE_META[idea.type].icon} size={16} color={colors.accent} />
+            {idea.imageUrl ? (
+              <Image source={{ uri: idea.imageUrl }} style={styles.thumb} contentFit="cover" />
+            ) : (
+              <Feather name={ITEM_TYPE_META[idea.type].icon} size={16} color={colors.accent} />
+            )}
             <Text style={styles.cardTitle} numberOfLines={2}>
               {idea.title}
             </Text>
@@ -398,6 +407,16 @@ export default function IdeasTab() {
         <Body style={{ fontSize: 13 }}>
           Anything the group is considering. Everyone votes, even viewers.
         </Body>
+        {trip.location ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`/trips/${trip.id}/explore`)}
+            style={styles.findPlaces}
+          >
+            <Feather name="compass" size={14} color={colors.accentInk} />
+            <Text style={styles.findPlacesText}>Find places near {trip.destination.split(',')[0]}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {toast ? (
@@ -477,6 +496,9 @@ export default function IdeasTab() {
 }
 
 const styles = StyleSheet.create({
+  thumb: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.line },
+  findPlaces: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
+  findPlacesText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, gap: 4 },
   list: { padding: space.xl, paddingTop: space.md, paddingBottom: 120, gap: space.sm },

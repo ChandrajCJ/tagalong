@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach } from 'vitest';
 import { buildApp } from '../src/app';
 import { loadEnv } from '../src/env';
 import type { Rates } from '../src/lib/fx';
+import type { Geo } from '../src/lib/geo';
 import type { Jobs } from '../src/lib/jobs';
 import type { Mailer } from '../src/lib/mailer';
 import type { Storage } from '../src/lib/storage';
@@ -79,6 +80,8 @@ export const useTestApp = () => {
     signIn: (email: string) => Promise<AuthTokens>;
     /** Exchange rates the fake rates service answers with, as "USD:EUR" → rate. */
     fx: Map<string, number>;
+    /** The fake map-data service: set what it answers, and see what it was asked. */
+    geo: FakeGeo;
   };
   let cleanup: () => Promise<void>;
   let truncate: () => Promise<unknown>;
@@ -109,7 +112,8 @@ export const useTestApp = () => {
         return rate ? { from, to, rate, date: '2026-06-12' } : null;
       },
     };
-    const app = await buildApp({ env, db, redis, mailer, jobs, storage, rates });
+    const geo = fakeGeo();
+    const app = await buildApp({ env, db, redis, mailer, jobs, storage, rates, geo });
 
     ctx.app = app;
     ctx.db = db;
@@ -120,6 +124,7 @@ export const useTestApp = () => {
     ctx.thumbnails = thumbnails;
     ctx.storage = storage;
     ctx.fx = fx;
+    ctx.geo = geo;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
       const res = await app.inject({
@@ -146,6 +151,8 @@ export const useTestApp = () => {
     ctx.notified.length = 0;
     ctx.thumbnails.length = 0;
     ctx.fx.clear();
+    ctx.geo.reset();
+    await ctx.redis.eval("for _, k in ipairs(redis.call('keys', 'geo:*')) do redis.call('del', k) end", 0);
     await truncate();
   });
 
@@ -191,4 +198,57 @@ export const joinTrip = async (
   if (res.statusCode !== 200) throw new Error(`Join failed: ${res.body}`);
   const me = await ctx.app.inject({ method: 'GET', url: '/me', headers: bearer(tokens.accessToken) });
   return { ...tokens, userId: me.json<{ id: string }>().id };
+};
+
+/** Map data without the network: answers come from `answers`, and every call is counted. */
+export type FakeGeo = Geo & {
+  answers: {
+    search: Awaited<ReturnType<Geo['search']>>;
+    wiki: Awaited<ReturnType<Geo['wikipediaNearby']>> | null;
+    osm: Awaited<ReturnType<Geo['osmPlaces']>>;
+    weather: Awaited<ReturnType<Geo['weather']>>;
+    timezone: string | null;
+  };
+  calls: string[];
+  reset(): void;
+};
+
+export const fakeGeo = (): FakeGeo => {
+  const fresh = (): FakeGeo['answers'] => ({
+    search: [],
+    wiki: [],
+    osm: [],
+    weather: { timezone: 'Asia/Kolkata', days: [] },
+    timezone: 'Asia/Kolkata',
+  });
+  const geo: FakeGeo = {
+    answers: fresh(),
+    calls: [],
+    reset() {
+      geo.answers = fresh();
+      geo.calls.length = 0;
+    },
+    async search(query) {
+      geo.calls.push(`search:${query}`);
+      return geo.answers.search;
+    },
+    async wikipediaNearby() {
+      geo.calls.push('wiki');
+      if (geo.answers.wiki === null) throw new Error('Wikipedia is down');
+      return geo.answers.wiki;
+    },
+    async osmPlaces(_bounds, category) {
+      geo.calls.push(`osm:${category}`);
+      return geo.answers.osm;
+    },
+    async weather(_centre, kind, from, to) {
+      geo.calls.push(`weather:${kind}:${from}:${to}`);
+      return geo.answers.weather;
+    },
+    async timezoneAt() {
+      geo.calls.push('timezone');
+      return geo.answers.timezone;
+    },
+  };
+  return geo;
 };

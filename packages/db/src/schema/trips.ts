@@ -3,8 +3,10 @@ import {
   char,
   check,
   date,
+  doublePrecision,
   index,
   integer,
+  jsonb,
   pgSchema,
   primaryKey,
   text,
@@ -26,6 +28,13 @@ export const trips = tripsSchema.table('trips', {
   startDate: date('start_date', { mode: 'string' }),
   endDate: date('end_date', { mode: 'string' }),
   timezone: text('timezone'),
+  /** Set when someone picked a real place for the destination, so maps, weather and tips work. */
+  placeId: text('place_id'),
+  latitude: doublePrecision('latitude'),
+  longitude: doublePrecision('longitude'),
+  /** [west, south, east, north] of the destination, when the search gave an area. */
+  bounds: jsonb('bounds').$type<[number, number, number, number]>(),
+  countryCode: char('country_code', { length: 2 }),
   baseCurrency: char('base_currency', { length: 3 }).notNull().default('EUR'),
   coverColor: text('cover_color').notNull().default('#D8A47F'),
   createdBy: uuid('created_by')

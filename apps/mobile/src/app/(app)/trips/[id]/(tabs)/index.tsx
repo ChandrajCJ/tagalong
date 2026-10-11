@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Body, Button, Label } from '@/components/ui';
+import { WeatherStrip } from '@/components/weather-strip';
 import { request } from '@/lib/api';
 import { BOOKING_META, formatInZone, relativeFrom, routeOf, titleOf } from '@/lib/bookings';
 import { formatDateRange, tripCountdown } from '@/lib/format';
@@ -101,7 +102,44 @@ export default function TripOverview() {
           ) : null}
         </View>
 
+        <WeatherStrip
+          tripId={trip.id}
+          refreshKey={`${trip.version}:${trip.startDate}:${trip.endDate}:${trip.location?.placeId ?? ''}`}
+        />
+
         <NextUpCard tripId={trip.id} />
+
+        {trip.location ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`${base}/explore`)}
+            style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
+          >
+            <View style={styles.exploreIcon}>
+              <Feather name="compass" size={22} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exploreTitle}>Explore {trip.destination.split(',')[0]}</Text>
+              <Body style={{ fontSize: 13 }}>Sights, food, beaches and more nearby. Add favourites to Ideas.</Body>
+            </View>
+            <Feather name="chevron-right" size={18} color="#8C867B" />
+          </Pressable>
+        ) : canInvite ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`${base}/edit`)}
+            style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
+          >
+            <View style={[styles.exploreIcon, { backgroundColor: colors.coral }]}>
+              <Feather name="map-pin" size={22} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.exploreTitle}>Put {trip.destination.split(',')[0]} on the map</Text>
+              <Body style={{ fontSize: 13 }}>Pick the destination from the suggestions to get weather and places to go.</Body>
+            </View>
+            <Feather name="chevron-right" size={18} color="#8C867B" />
+          </Pressable>
+        ) : null}
 
         <Label style={{ marginTop: space.sm }}>What you can do here</Label>
         <View style={styles.list}>
@@ -284,6 +322,9 @@ const styles = StyleSheet.create({
   coverInner: { flex: 1, paddingHorizontal: space.xl, paddingBottom: space.lg, justifyContent: 'space-between' },
   coverTop: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space.sm },
   round: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  explore: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  exploreIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
+  exploreTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   roundLabelled: { width: 'auto', flexDirection: 'row', gap: 6, paddingHorizontal: 12 },
   roundText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   title: { fontFamily: fonts.display, fontSize: 30, color: colors.ink },

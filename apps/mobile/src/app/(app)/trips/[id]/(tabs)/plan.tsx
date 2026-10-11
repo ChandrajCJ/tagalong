@@ -155,6 +155,9 @@ export default function PlanTab() {
     const id = newId();
     const position = positionBetween(lastPositionOn(fields.date ?? ANYTIME), null);
     const optimistic: ItineraryItem = {
+      latitude: null,
+      longitude: null,
+      placeRef: null,
       ...fields,
       id,
       tripId: trip.id,

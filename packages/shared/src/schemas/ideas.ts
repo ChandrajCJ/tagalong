@@ -19,6 +19,11 @@ export const Idea = z.object({
   note: z.string().nullable(),
   url: z.string().nullable(),
   type: z.enum(ITEM_TYPES),
+  /** Set for ideas found in Explore: where it is, and a photo. */
+  latitude: z.number().nullable().default(null),
+  longitude: z.number().nullable().default(null),
+  placeRef: z.string().nullable().default(null),
+  imageUrl: z.string().nullable().default(null),
   createdBy: z.string().uuid(),
   /** Set once this idea became a plan item. */
   promotedItemId: z.string().uuid().nullable(),
@@ -40,6 +45,10 @@ const editableFields = {
   note: z.string().trim().max(4000).nullable().optional(),
   url: z.string().trim().url('That doesn’t look like a link').max(2000).nullable().optional(),
   type: z.enum(ITEM_TYPES).optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  placeRef: z.string().max(100).nullable().optional(),
+  imageUrl: z.string().url().max(2000).nullable().optional(),
 };
 
 export const CreateIdeaInput = z.object({

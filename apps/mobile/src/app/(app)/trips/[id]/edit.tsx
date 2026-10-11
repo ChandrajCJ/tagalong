@@ -1,9 +1,10 @@
-import { Trip, UpdateTripInput } from '@tagalong/shared';
+import { currencyForCountry, Trip, UpdateTripInput, type PlaceResult, type TripLocation } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateRangeField } from '@/components/date-range-picker';
+import { DestinationField } from '@/components/destination-field';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import type { DateRange } from '@/lib/dates';
@@ -20,6 +21,8 @@ export default function EditTrip() {
   const [dates, setDates] = useState<DateRange>({ start: null, end: null });
   const [currency, setCurrency] = useState('EUR');
   const [coverColor, setCoverColor] = useState<string>(coverColors[0]);
+  // undefined: unchanged; null: forget it (free text); a location: newly picked.
+  const [location, setLocation] = useState<TripLocation | null | undefined>(undefined);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
 
@@ -29,6 +32,7 @@ export default function EditTrip() {
     setDates({ start: t.startDate, end: t.endDate });
     setCurrency(t.baseCurrency);
     setCoverColor(t.coverColor);
+    setLocation(undefined);
   };
 
   useEffect(() => {
@@ -48,6 +52,7 @@ export default function EditTrip() {
       endDate: dates.end,
       baseCurrency: currency,
       coverColor,
+      location,
     });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Check the details');
     setBusy(true);
@@ -78,7 +83,26 @@ export default function EditTrip() {
           <Title>Edit trip</Title>
 
           <Field label="Trip name" value={name} onChangeText={setName} placeholder="Goa with the crew" />
-          <Field label="Destination" value={destination} onChangeText={setDestination} placeholder="Goa, India" />
+          <DestinationField
+            value={destination}
+            picked={location === undefined ? !!trip.location : location !== null}
+            onChangeText={(text) => {
+              setDestination(text);
+              setLocation(null);
+            }}
+            onPick={(place: PlaceResult) => {
+              setDestination(place.label);
+              setLocation({
+                placeId: place.id,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                bounds: place.bounds,
+                countryCode: place.countryCode,
+              });
+              const local = currencyForCountry(place.countryCode);
+              if (local) setCurrency(local);
+            }}
+          />
           <View style={{ gap: space.xs }}>
             <DateRangeField label="Dates" value={dates} onChange={setDates} />
             <Body style={{ fontSize: 12 }}>

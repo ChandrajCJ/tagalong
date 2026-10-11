@@ -5,6 +5,7 @@ import {
   newId,
   UpdateTripInput,
   type Trip,
+  type TripLocation,
   type TripRole,
   type TripSummary,
 } from '@tagalong/shared';
@@ -13,6 +14,7 @@ import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import type { Geo } from '../../lib/geo';
 
 type CreateTrip = z.output<typeof CreateTripInput>;
 type UpdateTrip = z.output<typeof UpdateTripInput>;
@@ -22,151 +24,185 @@ const activeMemberCount = sql<number>`(
   where m.trip_id = ${trips.id} and m.left_at is null
 )`;
 
-export const createTripsService = (db: Db, redis?: Redis) => ({
-  async listForUser(userId: string): Promise<TripSummary[]> {
-    const rows = await db
-      .select({
-        id: trips.id,
-        name: trips.name,
-        destination: trips.destination,
-        startDate: trips.startDate,
-        endDate: trips.endDate,
-        coverColor: trips.coverColor,
-        myRole: tripMembers.role,
-        memberCount: activeMemberCount,
-      })
-      .from(tripMembers)
-      .innerJoin(trips, eq(trips.id, tripMembers.tripId))
-      .where(and(eq(tripMembers.userId, userId), isNull(tripMembers.leftAt), isNull(trips.deletedAt)))
-      .orderBy(sql`${trips.startDate} asc nulls last`, desc(trips.createdAt));
-    return rows.map((r) => ({ ...r, myRole: r.myRole as TripRole }));
-  },
+export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
+  /** The columns for a picked place, with its time zone looked up (best effort). */
+  const locationColumns = async (location: TripLocation) => ({
+    placeId: location.placeId,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    bounds: location.bounds,
+    countryCode: location.countryCode,
+    timezone: (await geo?.timezoneAt(location).catch(() => null)) ?? null,
+  });
 
-  async get(tripId: string, userId: string): Promise<Trip> {
-    const myRole = await requireTripRole(db, tripId, userId, 'viewer');
-    const [trip] = await db
-      .select({
-        id: trips.id,
-        name: trips.name,
-        destination: trips.destination,
-        startDate: trips.startDate,
-        endDate: trips.endDate,
-        coverColor: trips.coverColor,
-        baseCurrency: trips.baseCurrency,
-        version: trips.version,
-        memberCount: activeMemberCount,
-      })
-      .from(trips)
-      .where(eq(trips.id, tripId));
-    if (!trip) throw new Error('Trip vanished after access check');
-
-    const members = await db
-      .select({ userId: users.id, displayName: users.displayName, role: tripMembers.role, upiId: users.upiId })
-      .from(tripMembers)
-      .innerJoin(users, eq(users.id, tripMembers.userId))
-      .where(and(eq(tripMembers.tripId, tripId), isNull(tripMembers.leftAt)))
-      .orderBy(asc(tripMembers.joinedAt));
-
-    return {
-      ...trip,
-      myRole,
-      myUserId: userId,
-      members: members.map((m) => ({ ...m, role: m.role as TripRole })),
-    };
-  },
-
-  /**
-   * Creates the trip, makes the creator its owner and logs the change, all in
-   * one transaction. Retrying with the same client-generated id is safe.
-   */
-  async create(input: CreateTrip, userId: string): Promise<{ trip: Trip; created: boolean }> {
-    const id = input.id ?? newId();
-    const created = await db.transaction(async (tx) => {
-      const inserted = await tx
-        .insert(trips)
-        .values({
-          id,
-          name: input.name,
-          destination: input.destination,
-          startDate: input.startDate ?? null,
-          endDate: input.endDate ?? null,
-          baseCurrency: input.baseCurrency,
-          coverColor: input.coverColor,
-          createdBy: userId,
+  return {
+    async listForUser(userId: string): Promise<TripSummary[]> {
+      const rows = await db
+        .select({
+          id: trips.id,
+          name: trips.name,
+          destination: trips.destination,
+          startDate: trips.startDate,
+          endDate: trips.endDate,
+          coverColor: trips.coverColor,
+          myRole: tripMembers.role,
+          memberCount: activeMemberCount,
         })
-        .onConflictDoNothing()
-        .returning({ id: trips.id });
+        .from(tripMembers)
+        .innerJoin(trips, eq(trips.id, tripMembers.tripId))
+        .where(and(eq(tripMembers.userId, userId), isNull(tripMembers.leftAt), isNull(trips.deletedAt)))
+        .orderBy(sql`${trips.startDate} asc nulls last`, desc(trips.createdAt));
+      return rows.map((r) => ({ ...r, myRole: r.myRole as TripRole }));
+    },
 
-      if (inserted.length === 0) {
-        const [existing] = await tx
-          .select({ createdBy: trips.createdBy })
-          .from(trips)
-          .where(eq(trips.id, id));
-        if (existing?.createdBy !== userId) throw conflict('A trip with that id already exists');
-        return false;
+    async get(tripId: string, userId: string): Promise<Trip> {
+      const myRole = await requireTripRole(db, tripId, userId, 'viewer');
+      const [trip] = await db
+        .select({
+          id: trips.id,
+          name: trips.name,
+          destination: trips.destination,
+          startDate: trips.startDate,
+          endDate: trips.endDate,
+          coverColor: trips.coverColor,
+          baseCurrency: trips.baseCurrency,
+          version: trips.version,
+          memberCount: activeMemberCount,
+          timezone: trips.timezone,
+          placeId: trips.placeId,
+          latitude: trips.latitude,
+          longitude: trips.longitude,
+          bounds: trips.bounds,
+          countryCode: trips.countryCode,
+        })
+        .from(trips)
+        .where(eq(trips.id, tripId));
+      if (!trip) throw new Error('Trip vanished after access check');
+      const { placeId, latitude, longitude, bounds, countryCode, ...rest } = trip;
+      const location =
+        placeId && latitude !== null && longitude !== null
+          ? { placeId, latitude, longitude, bounds: bounds ?? null, countryCode: countryCode?.trim() || null }
+          : null;
+
+      const members = await db
+        .select({ userId: users.id, displayName: users.displayName, role: tripMembers.role, upiId: users.upiId })
+        .from(tripMembers)
+        .innerJoin(users, eq(users.id, tripMembers.userId))
+        .where(and(eq(tripMembers.tripId, tripId), isNull(tripMembers.leftAt)))
+        .orderBy(asc(tripMembers.joinedAt));
+
+      return {
+        ...rest,
+        location,
+        myRole,
+        myUserId: userId,
+        members: members.map((m) => ({ ...m, role: m.role as TripRole })),
+      };
+    },
+
+    /**
+     * Creates the trip, makes the creator its owner and logs the change, all in
+     * one transaction. Retrying with the same client-generated id is safe.
+     */
+    async create(input: CreateTrip, userId: string): Promise<{ trip: Trip; created: boolean }> {
+      const id = input.id ?? newId();
+      const created = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(trips)
+          .values({
+            id,
+            name: input.name,
+            destination: input.destination,
+            startDate: input.startDate ?? null,
+            endDate: input.endDate ?? null,
+            baseCurrency: input.baseCurrency,
+            coverColor: input.coverColor,
+            ...(input.location ? await locationColumns(input.location) : {}),
+            createdBy: userId,
+          })
+          .onConflictDoNothing()
+          .returning({ id: trips.id });
+
+        if (inserted.length === 0) {
+          const [existing] = await tx
+            .select({ createdBy: trips.createdBy })
+            .from(trips)
+            .where(eq(trips.id, id));
+          if (existing?.createdBy !== userId) throw conflict('A trip with that id already exists');
+          return false;
+        }
+
+        await tx.insert(tripMembers).values({ tripId: id, userId, role: 'owner' });
+        await tx
+          .insert(changeLog)
+          .values({ tripId: id, entity: 'trip', entityId: id, op: 'upsert', changedBy: userId });
+        return true;
+      });
+
+      return { trip: await this.get(id, userId), created };
+    },
+
+    /**
+     * Changes the trip's name, place, dates or currency. Editors can, since a
+     * trip's dates are everyone's business. The currency is locked once there
+     * are expenses, because every expense is stored converted into it.
+     */
+    async update(tripId: string, userId: string, input: UpdateTrip, origin?: string): Promise<Trip> {
+      await requireTripRole(db, tripId, userId, 'editor');
+      const { version, ...fields } = input;
+      const [current] = await db
+        .select({ startDate: trips.startDate, endDate: trips.endDate, baseCurrency: trips.baseCurrency })
+        .from(trips)
+        .where(eq(trips.id, tripId));
+      const start = fields.startDate !== undefined ? fields.startDate : current!.startDate;
+      const end = fields.endDate !== undefined ? fields.endDate : current!.endDate;
+      if (start && end && end < start) throw badRequest('End date must be on or after the start date');
+      if (fields.baseCurrency && fields.baseCurrency !== current!.baseCurrency) {
+        const [spent] = await db
+          .select({ id: expenses.id })
+          .from(expenses)
+          .where(and(eq(expenses.tripId, tripId), isNull(expenses.deletedAt)))
+          .limit(1);
+        if (spent) throw badRequest('The currency can’t change once there are expenses', 'currency_locked');
       }
 
-      await tx.insert(tripMembers).values({ tripId: id, userId, role: 'owner' });
-      await tx
-        .insert(changeLog)
-        .values({ tripId: id, entity: 'trip', entityId: id, op: 'upsert', changedBy: userId });
-      return true;
-    });
+      const { location, ...plain } = fields;
+      const placeColumns =
+        location === undefined
+          ? {}
+          : location === null
+            ? { placeId: null, latitude: null, longitude: null, bounds: null, countryCode: null, timezone: null }
+            : await locationColumns(location);
 
-    return { trip: await this.get(id, userId), created };
-  },
-
-  /**
-   * Changes the trip's name, place, dates or currency. Editors can, since a
-   * trip's dates are everyone's business. The currency is locked once there
-   * are expenses, because every expense is stored converted into it.
-   */
-  async update(tripId: string, userId: string, input: UpdateTrip, origin?: string): Promise<Trip> {
-    await requireTripRole(db, tripId, userId, 'editor');
-    const { version, ...fields } = input;
-    const [current] = await db
-      .select({ startDate: trips.startDate, endDate: trips.endDate, baseCurrency: trips.baseCurrency })
-      .from(trips)
-      .where(eq(trips.id, tripId));
-    const start = fields.startDate !== undefined ? fields.startDate : current!.startDate;
-    const end = fields.endDate !== undefined ? fields.endDate : current!.endDate;
-    if (start && end && end < start) throw badRequest('End date must be on or after the start date');
-    if (fields.baseCurrency && fields.baseCurrency !== current!.baseCurrency) {
-      const [spent] = await db
-        .select({ id: expenses.id })
-        .from(expenses)
-        .where(and(eq(expenses.tripId, tripId), isNull(expenses.deletedAt)))
-        .limit(1);
-      if (spent) throw badRequest('The currency can’t change once there are expenses', 'currency_locked');
-    }
-
-    const updated = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(trips)
-        .set({
-          ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)),
-          version: sql`${trips.version} + 1`,
-        })
-        .where(and(eq(trips.id, tripId), eq(trips.version, version), isNull(trips.deletedAt)))
-        .returning({ id: trips.id });
-      if (!row) return false;
-      await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'upsert', changedBy: userId });
-      return true;
-    });
-    const trip = await this.get(tripId, userId);
-    if (!updated) {
-      throw conflict('Someone changed the trip while you were editing. Showing the latest version.', { current: trip });
-    }
-    if (redis) {
-      await publishTripEvent(redis, {
-        type: 'trip.updated',
-        tripId,
-        entityId: tripId,
-        actorId: userId,
-        version: trip.version,
-        originClientId: origin,
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(trips)
+          .set({
+            ...Object.fromEntries(Object.entries(plain).filter(([, v]) => v !== undefined)),
+            ...placeColumns,
+            version: sql`${trips.version} + 1`,
+          })
+          .where(and(eq(trips.id, tripId), eq(trips.version, version), isNull(trips.deletedAt)))
+          .returning({ id: trips.id });
+        if (!row) return false;
+        await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'upsert', changedBy: userId });
+        return true;
       });
-    }
-    return trip;
-  },
-});
+      const trip = await this.get(tripId, userId);
+      if (!updated) {
+        throw conflict('Someone changed the trip while you were editing. Showing the latest version.', { current: trip });
+      }
+      if (redis) {
+        await publishTripEvent(redis, {
+          type: 'trip.updated',
+          tripId,
+          entityId: tripId,
+          actorId: userId,
+          version: trip.version,
+          originClientId: origin,
+        });
+      }
+      return trip;
+    },
+  };
+};

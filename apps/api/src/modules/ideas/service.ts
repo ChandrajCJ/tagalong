@@ -27,6 +27,10 @@ const toIdea = (r: Row, voters: IdeaVoter[], userId: string): Idea => ({
   note: r.note,
   url: r.url,
   type: r.type as Idea['type'],
+  latitude: r.latitude,
+  longitude: r.longitude,
+  placeRef: r.placeRef,
+  imageUrl: r.imageUrl,
   createdBy: r.createdBy,
   promotedItemId: r.promotedItemId,
   version: r.version,
@@ -151,6 +155,10 @@ export const createIdeasService = (db: Db, redis: Redis) => {
             note: input.note ?? null,
             url: input.url ?? null,
             type: input.type,
+            latitude: input.latitude ?? null,
+            longitude: input.longitude ?? null,
+            placeRef: input.placeRef ?? null,
+            imageUrl: input.imageUrl ?? null,
             createdBy: userId,
           })
           .onConflictDoNothing()
@@ -302,6 +310,10 @@ export const createIdeasService = (db: Db, redis: Redis) => {
             type: current.type,
             title: current.title,
             notes: current.note,
+            // An idea found in Explore keeps its spot, so it lands on the trip map.
+            latitude: current.latitude,
+            longitude: current.longitude,
+            placeRef: current.placeRef,
             createdBy: userId,
           })
           .returning();

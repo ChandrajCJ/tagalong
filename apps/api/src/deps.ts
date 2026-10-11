@@ -2,6 +2,7 @@ import type { Db } from '@tagalong/db';
 import type { Redis } from 'ioredis';
 import type { Env } from './env';
 import type { Rates } from './lib/fx';
+import type { Geo } from './lib/geo';
 import type { Jobs } from './lib/jobs';
 import type { Mailer } from './lib/mailer';
 import type { Storage } from './lib/storage';
@@ -15,4 +16,5 @@ export interface Deps {
   jobs: Jobs;
   storage: Storage;
   rates: Rates;
+  geo: Geo;
 }

@@ -22,6 +22,10 @@ export const ItineraryItem = z.object({
   placeName: z.string().nullable(),
   costEstimateMinor: z.number().int().nullable(),
   costCurrency: z.string().length(3).nullable(),
+  /** Where it is, when known, for the trip map. */
+  latitude: z.number().nullable().default(null),
+  longitude: z.number().nullable().default(null),
+  placeRef: z.string().nullable().default(null),
   createdBy: z.string().uuid(),
   version: z.number().int(),
   updatedAt: z.string(),
@@ -41,6 +45,9 @@ const editableFields = {
   costEstimateMinor: z.number().int().min(0).max(100_000_000).nullable().optional(),
   costCurrency: z.string().length(3).toUpperCase().nullable().optional(),
   position: z.string().min(1).max(100).optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  placeRef: z.string().max(100).nullable().optional(),
 };
 
 export const CreateItemInput = z.object({

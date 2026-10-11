@@ -34,6 +34,9 @@ export const toItem = (r: Row): ItineraryItem => ({
   placeName: r.placeName,
   costEstimateMinor: r.costEstimateMinor,
   costCurrency: r.costCurrency,
+  latitude: r.latitude,
+  longitude: r.longitude,
+  placeRef: r.placeRef,
   createdBy: r.createdBy,
   version: r.version,
   updatedAt: r.updatedAt.toISOString(),
@@ -114,6 +117,9 @@ export const createItineraryService = (db: Db, redis: Redis) => {
             placeName: input.placeName ?? null,
             costEstimateMinor: input.costEstimateMinor ?? null,
             costCurrency: input.costCurrency ?? null,
+            latitude: input.latitude ?? null,
+            longitude: input.longitude ?? null,
+            placeRef: input.placeRef ?? null,
             createdBy: userId,
           })
           .onConflictDoNothing()

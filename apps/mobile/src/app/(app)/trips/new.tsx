@@ -1,9 +1,10 @@
-import { CreateTripInput, newId, Trip } from '@tagalong/shared';
+import { CreateTripInput, currencyForCountry, newId, Trip, type PlaceResult } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DateRangeField } from '@/components/date-range-picker';
+import { DestinationField } from '@/components/destination-field';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
 import type { DateRange } from '@/lib/dates';
 import { ApiError, request } from '@/lib/api';
@@ -19,6 +20,17 @@ export default function NewTrip() {
   const [name, setName] = useState('');
   const [dates, setDates] = useState<DateRange>({ start: null, end: null });
   const [currency, setCurrency] = useState('EUR');
+  // The real place behind the destination, once picked from the suggestions.
+  const [place, setPlace] = useState<PlaceResult | null>(null);
+  const [currencyTouched, setCurrencyTouched] = useState(false);
+
+  const pickPlace = (picked: PlaceResult) => {
+    setPlace(picked);
+    setDestination(picked.label);
+    // Most trips are kept in the local currency; it's still changeable.
+    const local = currencyForCountry(picked.countryCode);
+    if (local && !currencyTouched) setCurrency(local);
+  };
   const [coverColor, setCoverColor] = useState<string>(coverColors[0]);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
@@ -32,6 +44,15 @@ export default function NewTrip() {
       endDate: dates.end ?? undefined,
       baseCurrency: currency,
       coverColor,
+      location: place
+        ? {
+            placeId: place.id,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            bounds: place.bounds,
+            countryCode: place.countryCode,
+          }
+        : undefined,
     });
     if (!parsed.success) {
       const next: Errors = {};
@@ -67,11 +88,14 @@ export default function NewTrip() {
           </Pressable>
           <Title>Where are you going?</Title>
 
-          <Field
-            label="Destination"
+          <DestinationField
             value={destination}
-            onChangeText={setDestination}
-            placeholder="Lisbon, Portugal"
+            picked={!!place}
+            onChangeText={(text) => {
+              setDestination(text);
+              setPlace(null);
+            }}
+            onPick={pickPlace}
             error={errors.destination}
             autoFocus
           />
@@ -114,12 +138,15 @@ export default function NewTrip() {
           <View style={{ gap: space.sm }}>
             <Label>Trip currency</Label>
             <View style={styles.row}>
-              {['EUR', 'GBP', 'USD', 'INR'].map((c) => (
+              {[...new Set(['EUR', 'GBP', 'USD', 'INR', currency])].map((c) => (
                 <Pressable
                   key={c}
                   accessibilityRole="radio"
                   aria-checked={c === currency}
-                  onPress={() => setCurrency(c)}
+                  onPress={() => {
+                    setCurrency(c);
+                    setCurrencyTouched(true);
+                  }}
                   style={[styles.pill, c === currency && styles.pillOn]}
                 >
                   <Body style={{ fontFamily: fonts.bold, color: c === currency ? '#FFFFFF' : colors.ink }}>
