@@ -1,5 +1,7 @@
 # Tagalong
 
+**New here?** [docs/ABOUT.md](docs/ABOUT.md) explains the whole app: what it does, how people use it, how it's built, and what's next.
+
 A shared space where groups plan, travel, pay for and remember trips together.
 Mobile-first (Expo), with a TypeScript backend.
 
