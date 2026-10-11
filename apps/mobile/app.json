@@ -45,7 +45,8 @@
           "savePhotosPermission": "Tagalong saves trip photos to your gallery when you download them.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true,

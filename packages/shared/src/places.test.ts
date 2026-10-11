@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inWindow, photoWindow } from './photo-window';
-import { clusterPlaces, directionsLinks, mapsLink, metresBetween, placeQuery, regionAround } from './places';
+import { boundsAround, clusterPlaces, dayColor, directionsLinks, mapsLink, metresBetween, placeQuery, regionAround } from './places';
 
 const at = (id: string, latitude: number, longitude: number, takenAt: string | null = null) => ({
   id,
@@ -162,5 +162,22 @@ describe('directions', () => {
       google: 'https://www.google.com/maps/dir/?api=1&destination=Time%20Out%20Market%2C%20Lisbon',
       apple: 'https://maps.apple.com/?daddr=Time%20Out%20Market%2C%20Lisbon',
     });
+  });
+});
+
+describe('trip map helpers', () => {
+  it('gives each day its own colour, repeating after eight', () => {
+    expect(dayColor(0)).not.toBe(dayColor(1));
+    expect(dayColor(8)).toBe(dayColor(0));
+    expect(dayColor(-1)).toBe(dayColor(7));
+  });
+
+  it('frames every pin with a margin, and never zooms in too far on one', () => {
+    const [w, , , n] = boundsAround([PENA, BELEM])!;
+    expect(w).toBeLessThan(BELEM.longitude < PENA.longitude ? BELEM.longitude : PENA.longitude);
+    expect(n).toBeGreaterThan(PENA.latitude);
+    const one = boundsAround([PENA])!;
+    expect(one[2] - one[0]).toBeCloseTo(0.02, 5);
+    expect(boundsAround([])).toBeNull();
   });
 });

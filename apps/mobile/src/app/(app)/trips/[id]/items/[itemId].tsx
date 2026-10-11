@@ -398,7 +398,7 @@ export default function ItemDetail() {
                 <Pressable
                   accessibilityRole="link"
                   accessibilityLabel={`Directions to ${item.placeName}`}
-                  onPress={() => openDirections(item.placeName!, trip.destination)}
+                  onPress={() => openDirections(item.placeName!, trip.destination, item)}
                   style={styles.expenseLink}
                 >
                   <Text style={styles.expenseLinkText}>Directions</Text>

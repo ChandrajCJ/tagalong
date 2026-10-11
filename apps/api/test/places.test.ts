@@ -211,4 +211,21 @@ describe('ideas from Explore', () => {
     ).json<PromoteResult>();
     expect(promoted.item).toMatchObject({ latitude: 15.4925, longitude: 73.7732, placeRef: 'wiki:1' });
   });
+
+  it('are added once per trip, however many people tap Add', async () => {
+    const me = await ctx.signIn('priya@example.com');
+    const trip = await createTrip(me.accessToken);
+    const add = () =>
+      ctx.app.inject({
+        method: 'POST',
+        url: `/trips/${trip.id}/ideas`,
+        headers: bearer(me.accessToken),
+        payload: { title: 'Baga Beach', latitude: 15.556, longitude: 73.751, placeRef: 'wiki:2' },
+      });
+    const first = await add();
+    const second = await add();
+    expect(first.statusCode).toBe(201);
+    expect(second.statusCode).toBe(200);
+    expect(second.json<Idea>().id).toBe(first.json<Idea>().id);
+  });
 });

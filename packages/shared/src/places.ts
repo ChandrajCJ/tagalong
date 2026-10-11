@@ -135,3 +135,31 @@ export const directionsLinks = (query: string) => ({
   google: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`,
   apple: `https://maps.apple.com/?daddr=${encodeURIComponent(query)}`,
 });
+
+/** One colour per trip day on the map, repeating after eight days. */
+export const DAY_COLORS = ['#0E6B5C', '#B54A28', '#5B4E86', '#7A5F14', '#3F6E8C', '#8A3D5C', '#4F7A3A', '#9A5B13'] as const;
+export const dayColor = (dayIndex: number) => DAY_COLORS[((dayIndex % DAY_COLORS.length) + DAY_COLORS.length) % DAY_COLORS.length]!;
+
+/**
+ * [west, south, east, north] around some points, padded a little so pins
+ * aren't on the edge, and never narrower than `minSpan` degrees (a single
+ * pin shouldn't zoom to street level).
+ */
+export const boundsAround = (
+  points: { latitude: number; longitude: number }[],
+  minSpan = 0.02,
+): [number, number, number, number] | null => {
+  if (points.length === 0) return null;
+  const lats = points.map((p) => p.latitude);
+  const lngs = points.map((p) => p.longitude);
+  const [west, east] = [Math.min(...lngs), Math.max(...lngs)];
+  const [south, north] = [Math.min(...lats), Math.max(...lats)];
+  const padLng = Math.max((east - west) * 0.15, (minSpan - (east - west)) / 2, 0);
+  const padLat = Math.max((north - south) * 0.15, (minSpan - (north - south)) / 2, 0);
+  return [
+    Math.max(west - padLng, -180),
+    Math.max(south - padLat, -85),
+    Math.min(east + padLng, 180),
+    Math.min(north + padLat, 85),
+  ];
+};

@@ -21,3 +21,6 @@ apps/mobile/expo-env.d.ts
 deploy/.env
 deploy/seaweedfs.json
 deploy/backups/
+
+# copied from maplibre-gl on install
+apps/mobile/public/maplibre-gl-worker.js

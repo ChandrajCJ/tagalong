@@ -147,7 +147,7 @@ export default function ExploreScreen() {
           <Pressable
             accessibilityRole="link"
             accessibilityLabel={`Directions to ${place.name}`}
-            onPress={() => openDirections(place.name, trip.destination)}
+            onPress={() => openDirections(place.name, trip.destination, place)}
             style={styles.link}
           >
             <Feather name="navigation" size={14} color={colors.accent} />

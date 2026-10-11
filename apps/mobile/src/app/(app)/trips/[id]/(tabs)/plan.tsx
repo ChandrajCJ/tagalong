@@ -12,6 +12,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ItemSheet, type ItemFields, type SaveResult } from '@/components/item-sheet';
+import { PlanMapView } from '@/components/plan-map-view';
 import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import {
@@ -43,6 +44,8 @@ export default function PlanTab() {
   const [sheet, setSheet] = useState(false);
   const [editors, setEditors] = useState<Editors>({});
   const [toast, setToast] = useState<string>();
+  // The day-by-day list, or every stop on a map.
+  const [view, setView] = useState<'list' | 'map'>('list');
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const tripId = trip?.id;
@@ -261,11 +264,11 @@ export default function PlanTab() {
               </View>
               {meta.length > 0 ? <Body style={{ fontSize: 13 }}>{meta.join(' · ')}</Body> : null}
             </Pressable>
-            {item.placeName ? (
+            {item.placeName || item.latitude !== null ? (
               <Pressable
                 accessibilityRole="link"
-                accessibilityLabel={`Directions to ${item.placeName}`}
-                onPress={() => openDirections(item.placeName!, trip.destination)}
+                accessibilityLabel={`Directions to ${item.placeName ?? item.title}`}
+                onPress={() => openDirections(item.placeName ?? item.title, trip.destination, item)}
                 style={styles.directions}
               >
                 <Feather name="navigation" size={13} color={colors.accent} />
@@ -281,42 +284,64 @@ export default function PlanTab() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <View style={styles.header}>
-        <Title>Plan</Title>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
-          {dayKeys.map((key) => {
-            const on = key === current;
-            return (
+        <View style={styles.titleRow}>
+          <Title>Plan</Title>
+          <View style={styles.viewSwitch} accessibilityRole="tablist">
+            {(['list', 'map'] as const).map((v) => (
               <Pressable
-                key={key}
+                key={v}
                 accessibilityRole="tab"
-                aria-selected={on}
-                accessibilityLabel={key === ANYTIME ? 'No day yet' : shortDate(key)}
-                onPress={() => setSelected(key)}
-                style={[styles.pill, on && styles.pillOn]}
+                aria-selected={view === v}
+                onPress={() => setView(v)}
+                style={[styles.viewOption, view === v && styles.viewOptionOn]}
               >
-                {key === ANYTIME ? (
-                  <Text style={[styles.pillNoDay, on && { color: '#FFFFFF' }]}>No{'\n'}day</Text>
-                ) : (
-                  <>
-                    <Text style={[styles.pillDay, on && { color: '#E4DED4' }]}>{weekdayOf(key)}</Text>
-                    <Text style={[styles.pillNum, on && { color: '#FFFFFF' }]}>{dayOfMonth(key)}</Text>
-                  </>
-                )}
+                <Feather name={v === 'list' ? 'list' : 'map'} size={14} color={view === v ? colors.ink : colors.muted} />
+                <Text style={[styles.viewText, view === v && { color: colors.ink }]}>{v === 'list' ? 'List' : 'Map'}</Text>
               </Pressable>
-            );
-          })}
-        </ScrollView>
-        <Text style={styles.heading}>{heading}</Text>
-        {current === ANYTIME ? (
-          <Body style={{ fontSize: 13 }}>
-            {days.length === 0
-              ? 'This trip has no dates yet, so everything lives here. Add dates from the Overview (Edit) to plan day by day.'
-              : 'Plan items that don\'t have a day yet.'}
-          </Body>
-        ) : null}
-        {canEdit && dayItems.length > 0 ? (
-          <Body style={{ fontSize: 12 }}>Tap an item for details. Hold and drag to change the order.</Body>
-        ) : null}
+            ))}
+          </View>
+        </View>
+        {view === 'list' ? (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+              {dayKeys.map((key) => {
+                const on = key === current;
+                return (
+                  <Pressable
+                    key={key}
+                    accessibilityRole="tab"
+                    aria-selected={on}
+                    accessibilityLabel={key === ANYTIME ? 'No day yet' : shortDate(key)}
+                    onPress={() => setSelected(key)}
+                    style={[styles.pill, on && styles.pillOn]}
+                  >
+                    {key === ANYTIME ? (
+                      <Text style={[styles.pillNoDay, on && { color: '#FFFFFF' }]}>No{'\n'}day</Text>
+                    ) : (
+                      <>
+                        <Text style={[styles.pillDay, on && { color: '#E4DED4' }]}>{weekdayOf(key)}</Text>
+                        <Text style={[styles.pillNum, on && { color: '#FFFFFF' }]}>{dayOfMonth(key)}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.heading}>{heading}</Text>
+            {current === ANYTIME ? (
+              <Body style={{ fontSize: 13 }}>
+                {days.length === 0
+                  ? 'This trip has no dates yet, so everything lives here. Add dates from the Overview (Edit) to plan day by day.'
+                  : 'Plan items that don\'t have a day yet.'}
+              </Body>
+            ) : null}
+            {canEdit && dayItems.length > 0 ? (
+              <Body style={{ fontSize: 12 }}>Tap an item for details. Hold and drag to change the order.</Body>
+            ) : null}
+          </>
+        ) : (
+          <Body style={{ fontSize: 13 }}>Every stop with a location, coloured by day. Outlined pins are ideas.</Body>
+        )}
       </View>
 
       {toast ? (
@@ -325,45 +350,51 @@ export default function PlanTab() {
         </View>
       ) : null}
 
-      {error ? (
-        <View style={styles.center}>
-          <Body>{error}</Body>
-          <Button label="Try again" variant="outline" onPress={load} />
-        </View>
-      ) : !items ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.accent} />
-        </View>
+      {view === 'map' && items ? (
+        <PlanMapView trip={trip} items={items} days={days} />
       ) : (
-        <DraggableFlatList
-          data={dayItems}
-          keyExtractor={(i) => i.id}
-          renderItem={renderItem}
-          onDragEnd={onDragEnd}
-          containerStyle={{ flex: 1 }}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Feather name="calendar" size={28} color={colors.accent} />
-              <Body style={{ textAlign: 'center' }}>
-                {current === ANYTIME ? 'Nothing here yet.' : 'Nothing planned for this day yet.'}
-              </Body>
-              {canEdit ? (
-                <Button label="Add the first thing" variant="outline" onPress={() => openSheet()} />
-              ) : (
-                <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
-              )}
+        <>
+          {error ? (
+            <View style={styles.center}>
+              <Body>{error}</Body>
+              <Button label="Try again" variant="outline" onPress={load} />
             </View>
-          }
-        />
-      )}
+          ) : !items ? (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : (
+            <DraggableFlatList
+              data={dayItems}
+              keyExtractor={(i) => i.id}
+              renderItem={renderItem}
+              onDragEnd={onDragEnd}
+              containerStyle={{ flex: 1 }}
+              contentContainerStyle={styles.list}
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <Feather name="calendar" size={28} color={colors.accent} />
+                  <Body style={{ textAlign: 'center' }}>
+                    {current === ANYTIME ? 'Nothing here yet.' : 'Nothing planned for this day yet.'}
+                  </Body>
+                  {canEdit ? (
+                    <Button label="Add the first thing" variant="outline" onPress={() => openSheet()} />
+                  ) : (
+                    <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
+                  )}
+                </View>
+              }
+            />
+          )}
 
-      {canEdit && items && items.length > 0 ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Add to plan" onPress={() => openSheet()} style={styles.fab}>
-          <Feather name="plus" size={20} color="#FFFFFF" />
-          <Text style={styles.fabText}>Add to plan</Text>
-        </Pressable>
-      ) : null}
+          {canEdit && items && items.length > 0 ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Add to plan" onPress={() => openSheet()} style={styles.fab}>
+              <Feather name="plus" size={20} color="#FFFFFF" />
+              <Text style={styles.fabText}>Add to plan</Text>
+            </Pressable>
+          ) : null}
+        </>
+      )}
 
       <ItemSheet
         visible={sheet}
@@ -387,6 +418,11 @@ const styles = StyleSheet.create({
   pillOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   pillDay: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   pillNum: { fontFamily: fonts.bold, fontSize: 18, color: colors.ink },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  viewSwitch: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: '#ECE7DF' },
+  viewOption: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingHorizontal: 12, borderRadius: radius.pill },
+  viewOptionOn: { backgroundColor: colors.surface },
+  viewText: { fontFamily: fonts.bold, fontSize: 13, color: colors.muted },
   heading: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   list: { padding: space.xl, paddingTop: space.md, paddingBottom: 120, gap: space.sm },
   itemRow: { flexDirection: 'row', gap: space.md, marginBottom: space.sm },

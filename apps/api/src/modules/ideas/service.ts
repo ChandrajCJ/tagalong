@@ -145,6 +145,16 @@ export const createIdeasService = (db: Db, redis: Redis) => {
       await requireTripRole(db, tripId, userId, 'editor');
       const id = input.id ?? newId();
 
+      // A place from Explore is one idea per trip, however many people tap "Add".
+      if (input.placeRef) {
+        const [existing] = await db
+          .select()
+          .from(ideas)
+          .where(and(eq(ideas.tripId, tripId), eq(ideas.placeRef, input.placeRef), isNull(ideas.deletedAt)))
+          .limit(1);
+        if (existing) return { idea: await hydrate(db, existing, userId), created: false };
+      }
+
       const result = await db.transaction(async (tx) => {
         const [inserted] = await tx
           .insert(ideas)

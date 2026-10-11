@@ -5,8 +5,14 @@ import { Alert, Linking, Platform } from 'react-native';
  * Opens directions to a place, with the destination already chosen. On
  * Android the Google link opens the Maps app; iPhones ask which app to use.
  */
-export const openDirections = (place: string, destination?: string | null) => {
-  const links = directionsLinks(placeQuery(place, destination));
+export const openDirections = (
+  place: string,
+  destination?: string | null,
+  /** The exact spot, when known: better than searching for the name. */
+  at?: { latitude: number | null; longitude: number | null } | null,
+) => {
+  const exact = at?.latitude != null && at.longitude != null ? `${at.latitude},${at.longitude}` : null;
+  const links = directionsLinks(exact ?? placeQuery(place, destination));
   const go = (url: string) => void Linking.openURL(url).catch(() => undefined);
   if (Platform.OS !== 'ios') return go(links.google);
   Alert.alert('Get directions', place, [

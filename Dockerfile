@@ -26,6 +26,8 @@ USER node
 CMD ["pnpm", "--filter", "@tagalong/api", "start"]
 
 FROM base AS web-build
+# The app's install step copies the map worker into public/, so its script is needed first.
+COPY apps/mobile/scripts apps/mobile/scripts
 RUN pnpm install --frozen-lockfile --filter tagalong --filter "@tagalong/mobile..."
 COPY tsconfig.base.json ./
 COPY packages ./packages

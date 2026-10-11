@@ -7,6 +7,7 @@
     "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo/ui": "~57.0.22",
     "@expo/vector-icons": "^15.1.1",
+    "@maplibre/maplibre-react-native": "^11.5.0",
     "@tagalong/shared": "workspace:*",
     "expo": "~57.0.27",
     "expo-clipboard": "~57.0.2",
@@ -30,6 +31,7 @@
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
+    "maplibre-gl": "^6.13.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -54,7 +56,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "postinstall": "node scripts/copy-map-worker.mjs"
   },
   "private": true
 }
