@@ -1,4 +1,4 @@
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
 /**
  * A sort key that falls between `before` and `after` (null = the start or the
@@ -6,3 +6,7 @@ import { generateKeyBetween } from 'fractional-indexing';
  */
 export const positionBetween = (before: string | null, after: string | null): string =>
   generateKeyBetween(before, after);
+
+/** `n` keys in order, all between `before` and `after`. */
+export const positionsBetween = (before: string | null, after: string | null, n: number): string[] =>
+  generateNKeysBetween(before, after, n);

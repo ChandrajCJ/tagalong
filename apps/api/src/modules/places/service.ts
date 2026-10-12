@@ -6,6 +6,7 @@ import {
   weatherPlan,
   type Bounds,
   type PlaceResult,
+  type PlaceScope,
   type RecommendationCategory,
   type RecommendationList,
   type TripWeather,
@@ -36,6 +37,23 @@ export const searchArea = (centre: Point, bounds: Bounds | null): Bounds => {
   const [w, e] = clamp(bounds[0], bounds[2], centre.longitude);
   const [s, n] = clamp(bounds[1], bounds[3], centre.latitude);
   return [w!, s!, e!, n!];
+};
+
+/** How far past the destination a plan's places may be: day trips included. */
+const PLACE_MARGIN_KM = 30;
+
+/** Where plan places are looked for: the destination's area, widened by about 30 km on every side. */
+export const placeArea = (centre: Point, bounds: Bounds | null): Bounds => {
+  const [w, s, e, n] = bounds ?? [centre.longitude, centre.latitude, centre.longitude, centre.latitude];
+  const dLat = PLACE_MARGIN_KM / 111.32;
+  const dLng = dLat / Math.max(Math.cos((centre.latitude * Math.PI) / 180), 0.1);
+  const round = (x: number) => Math.round(x * 1000) / 1000;
+  return [
+    round(Math.max(w - dLng, -180)),
+    round(Math.max(s - dLat, -90)),
+    round(Math.min(e + dLng, 180)),
+    round(Math.min(n + dLat, 90)),
+  ];
 };
 
 /** A destination this wide is a region (a state, a country), not a town. */
@@ -88,13 +106,31 @@ export const createPlacesService = (db: Db, redis: Redis, geo: Geo) => {
   };
 
   return {
-    /** Destinations matching what someone typed. A few searches a second at most, per person. */
-    async search(query: string, userId: string, near?: Point): Promise<PlaceResult[]> {
+    /**
+     * Destinations matching what someone typed or, in place scope, spots in
+     * and around the trip's destination. A few searches a second at most, per person.
+     */
+    async search(
+      query: string,
+      userId: string,
+      { near, scope = 'destination', tripId }: { near?: Point; scope?: PlaceScope; tripId?: string } = {},
+    ): Promise<PlaceResult[]> {
+      if (tripId) await requireTripRole(db, tripId, userId, 'viewer');
       const count = await redis.incr(`geo:rate:${userId}`);
       if (count === 1) await redis.expire(`geo:rate:${userId}`, 60);
       if (count > 60) throw tooMany('Searching too fast. Wait a moment and try again.');
-      const key = `geo:search:${query.toLowerCase()}:${near ? `${near.latitude.toFixed(1)},${near.longitude.toFixed(1)}` : ''}`;
-      return cached(key, DAY, async () => ({ value: await geo.search(query, near), keep: true }));
+
+      let bbox: Bounds | undefined;
+      if (scope === 'place' && tripId) {
+        const trip = await locationOf(tripId);
+        if (trip.latitude !== null && trip.longitude !== null) {
+          near = { latitude: trip.latitude, longitude: trip.longitude };
+          bbox = placeArea(near, trip.bounds ?? null);
+        }
+      }
+      const spot = near ? `${near.latitude.toFixed(scope === 'place' ? 3 : 1)},${near.longitude.toFixed(scope === 'place' ? 3 : 1)}` : '';
+      const key = `geo:search:${scope}:${query.toLowerCase()}:${spot}`;
+      return cached(key, DAY, async () => ({ value: await geo.search(query, { near, scope, bbox }), keep: true }));
     },
 
     /** Places worth going to near the trip's destination, best known first. */

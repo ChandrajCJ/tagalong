@@ -25,6 +25,7 @@ import { BOOKING_META, DETAIL_FIELDS, PROVIDER_FIELD } from '@/lib/bookings';
 import type { DateRange } from '@/lib/dates';
 import { colors, fonts, radius, space } from '@/theme';
 import { DateRangeField } from './date-range-picker';
+import { PlaceField } from './place-field';
 import { TimeField } from './time-field';
 import { Body, Button, Field, Label } from './ui';
 
@@ -46,6 +47,8 @@ export type SaveResult = { ok: true } | { conflict: Booking } | { error: string 
 
 interface Props {
   visible: boolean;
+  /** The trip, so a stay's address can be found on the map nearby. */
+  tripId: string;
   booking?: Booking;
   /** The type to start with for a new booking, from the plan item's type. */
   defaultType: BookingType;
@@ -87,12 +90,14 @@ const fromBooking = (b: Booking | undefined, type: BookingType) => {
 };
 
 export function BookingSheet(props: Props) {
-  const { visible, booking, defaultType, currency, documents, onSave, onDelete, onClose } = props;
+  const { visible, tripId, booking, defaultType, currency, documents, onSave, onDelete, onClose } = props;
   const [form, setForm] = useState(() => fromBooking(booking, defaultType));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  // The stay's address was picked from the map's suggestions (until it's typed over).
+  const [addressPicked, setAddressPicked] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -100,6 +105,7 @@ export function BookingSheet(props: Props) {
       setForm(initial);
       setErrors({});
       setNotice(undefined);
+      setAddressPicked(false);
       // Open "More details" only when there's something in it already.
       const extras = DETAIL_FIELDS[initial.type].filter((f) => f.more).some((f) => initial.details[f.key]);
       setShowMore(!!booking && (extras || !!booking.endsAt || booking.costMinor != null || !!booking.documentId));
@@ -253,7 +259,27 @@ export function BookingSheet(props: Props) {
 
             {DETAIL_FIELDS[form.type]
               .filter((f) => !f.more)
-              .map((f) => (
+              .map((f) =>
+                form.type === 'stay' && f.key === 'address' ? (
+                  <PlaceField
+                    key="stay-address"
+                    label={f.label}
+                    value={form.details.address ?? ''}
+                    picked={addressPicked}
+                    tripId={tripId}
+                    onChangeText={(v) => {
+                      setAddressPicked(false);
+                      set('details', { ...form.details, address: v });
+                    }}
+                    onPick={(p) => {
+                      setAddressPicked(true);
+                      // The hotel's name with its street, so a taxi driver can find it too.
+                      set('details', { ...form.details, address: [p.name, p.address].filter(Boolean).join(', ') });
+                    }}
+                    placeholder="Start typing the hotel's name or street"
+                    pickedHint="Found on the map: the full address is filled in."
+                  />
+                ) : (
                 <Field
                   key={`${form.type}-${f.key}`}
                   label={f.label}
@@ -262,7 +288,8 @@ export function BookingSheet(props: Props) {
                   placeholder={f.placeholder}
                   keyboardType={f.numeric ? 'number-pad' : 'default'}
                 />
-              ))}
+                ),
+              )}
 
             <DateRangeField
               label={form.type === 'stay' || form.type === 'car' ? 'Dates' : 'Date'}

@@ -22,6 +22,7 @@ import {
   type DayKey,
 } from '@/lib/plan';
 import { colors, fonts, radius, space } from '@/theme';
+import { PlaceField } from './place-field';
 import { TimeField } from './time-field';
 import { Body, Button, Field, Label } from './ui';
 
@@ -33,6 +34,10 @@ export interface ItemFields {
   startTime: string | null;
   endTime: string | null;
   placeName: string | null;
+  /** Set when the place was picked from the suggestions, so it's on the map. */
+  latitude: number | null;
+  longitude: number | null;
+  placeRef: string | null;
   notes: string | null;
   costEstimateMinor: number | null;
   costCurrency: string | null;
@@ -42,6 +47,7 @@ export type SaveResult = { ok: true } | { conflict: ItineraryItem } | { error: s
 
 interface Props {
   visible: boolean;
+  tripId: string;
   /** The item being edited, or undefined to add a new one. */
   item?: ItineraryItem;
   /** Where a new item goes. */
@@ -63,12 +69,15 @@ const fromItem = (item: ItineraryItem | undefined, defaultDay: DayKey, draftTitl
   startTime: item?.startTime ?? '',
   endTime: item?.endTime ?? '',
   placeName: item?.placeName ?? '',
+  spot: item && item.latitude !== null && item.longitude !== null
+    ? { latitude: item.latitude, longitude: item.longitude, placeRef: item.placeRef }
+    : null,
   notes: item?.notes ?? '',
   cost: item?.costEstimateMinor != null ? String(item.costEstimateMinor / 100) : '',
 });
 
 export function ItemSheet(props: Props) {
-  const { visible, item, defaultDay, draftTitle, days, currency, canEdit, onSave, onDelete, onClose } =
+  const { visible, tripId, item, defaultDay, draftTitle, days, currency, canEdit, onSave, onDelete, onClose } =
     props;
   const [form, setForm] = useState(() => fromItem(item, defaultDay, draftTitle));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -108,6 +117,9 @@ export function ItemSheet(props: Props) {
       startTime: startTime || null,
       endTime: endTime || null,
       placeName: form.placeName.trim() || null,
+      latitude: form.spot?.latitude ?? null,
+      longitude: form.spot?.longitude ?? null,
+      placeRef: form.spot?.placeRef ?? null,
       notes: form.notes.trim() || null,
       costEstimateMinor: cost ? Math.round(Number(cost) * 100) : null,
       costCurrency: cost ? currency : null,
@@ -213,11 +225,23 @@ export function ItemSheet(props: Props) {
               <Text style={styles.fieldHint}>Ends the next day</Text>
             ) : null}
 
-            <Field
+            <PlaceField
               label="Where"
               value={form.placeName}
-              onChangeText={(v) => set('placeName', v)}
-              placeholder="Rua dos Remédios 12, Alfama"
+              picked={!!form.spot}
+              tripId={tripId}
+              onChangeText={(v) =>
+                // A different place: the old pin no longer fits it.
+                setForm((f) => ({ ...f, placeName: v, spot: null }))
+              }
+              onPick={(p) =>
+                setForm((f) => ({
+                  ...f,
+                  placeName: p.name,
+                  spot: { latitude: p.latitude, longitude: p.longitude, placeRef: p.placeRef },
+                }))
+              }
+              placeholder="Time Out Market"
               editable={canEdit}
             />
 

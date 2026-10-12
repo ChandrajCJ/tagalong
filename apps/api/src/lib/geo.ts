@@ -1,4 +1,4 @@
-import { classifyWikiPlace, type Bounds, type PlaceResult, type RecommendationCategory } from '@tagalong/shared';
+import { classifyWikiPlace, type Bounds, type PlaceResult, type PlaceScope, type RecommendationCategory } from '@tagalong/shared';
 
 /**
  * Open map data for destinations: OpenStreetMap search (Photon), places worth
@@ -7,7 +7,7 @@ import { classifyWikiPlace, type Bounds, type PlaceResult, type RecommendationCa
  * never depend on the network.
  */
 export interface Geo {
-  search(query: string, near?: { latitude: number; longitude: number }): Promise<PlaceResult[]>;
+  search(query: string, options?: SearchOptions): Promise<PlaceResult[]>;
   /** Geotagged Wikipedia articles near a point that sound like places to visit. */
   wikipediaNearby(centre: Point): Promise<GeoPlace[]>;
   /** Named OpenStreetMap places of a category in an area, or null if no server answered. */
@@ -19,6 +19,15 @@ export interface Geo {
 export interface Point {
   latitude: number;
   longitude: number;
+}
+
+export interface SearchOptions {
+  /** Prefer answers near here. */
+  near?: Point;
+  /** Towns and regions for a trip (the default), or any place for the plan. */
+  scope?: PlaceScope;
+  /** Only answers inside this area. */
+  bbox?: Bounds;
 }
 
 export interface GeoPlace extends Point {
@@ -115,14 +124,22 @@ export const openGeo = (config: GeoConfig): Geo => {
   };
 
   return {
-    async search(query, near) {
+    async search(query, { near, scope = 'destination', bbox } = {}) {
       const params = new URLSearchParams({ q: query, limit: '8', lang: 'en' });
-      // Cities, regions and countries only: a trip goes to a place, not a shop.
-      for (const layer of ['city', 'district', 'locality', 'county', 'state', 'country']) params.append('layer', layer);
+      if (scope === 'destination') {
+        // Cities, regions and countries only: a trip goes to a place, not a shop.
+        for (const layer of ['city', 'district', 'locality', 'county', 'state', 'country']) params.append('layer', layer);
+      }
       if (near) {
         params.set('lat', String(near.latitude));
         params.set('lon', String(near.longitude));
+        if (scope === 'place') {
+          // Nearby matters more than famous when looking for a café in town.
+          params.set('zoom', '12');
+          params.set('location_bias_scale', '0.1');
+        }
       }
+      if (bbox) params.set('bbox', bbox.join(','));
       type Feature = {
         geometry: { coordinates: [number, number] };
         properties: {
@@ -130,9 +147,15 @@ export const openGeo = (config: GeoConfig): Geo => {
           country?: string;
           countrycode?: string;
           state?: string;
+          city?: string;
+          district?: string;
+          locality?: string;
+          street?: string;
+          housenumber?: string;
           type?: string;
           osm_type?: string;
           osm_id?: number;
+          osm_value?: string;
           extent?: [number, number, number, number];
         };
       };
@@ -142,8 +165,25 @@ export const openGeo = (config: GeoConfig): Geo => {
         .filter((f) => f.properties.name)
         .map((f): PlaceResult => {
           const p = f.properties;
-          const parts = [p.name!, p.type !== 'state' && p.state !== p.name ? p.state : undefined, p.type !== 'country' ? p.country : undefined];
           const [w, n, e, s] = p.extent ?? [];
+          const unique = (parts: (string | undefined)[]) => [...new Set(parts.filter((x): x is string => !!x && x !== p.name))];
+          if (scope === 'place') {
+            // "Av. 24 de Julho, Cais do Sodré, Lisbon": enough to tell two branches apart.
+            const street = p.street ? (p.housenumber ? `${p.street} ${p.housenumber}` : p.street) : undefined;
+            const address = unique([street, p.district ?? p.locality, p.city]).join(', ') || null;
+            return {
+              id: `osm:${p.osm_type ?? '?'}:${p.osm_id ?? 0}`,
+              name: p.name!,
+              label: [p.name!, ...unique([p.city ?? p.state, p.country])].join(', '),
+              kind: p.osm_value ? pretty(p.osm_value) : p.type ? pretty(p.type) : null,
+              countryCode: p.countrycode?.toUpperCase() ?? null,
+              longitude: f.geometry.coordinates[0],
+              latitude: f.geometry.coordinates[1],
+              bounds: null,
+              address,
+            };
+          }
+          const parts = [p.name!, p.type !== 'state' && p.state !== p.name ? p.state : undefined, p.type !== 'country' ? p.country : undefined];
           return {
             id: `osm:${p.osm_type ?? '?'}:${p.osm_id ?? 0}`,
             name: p.name!,
@@ -153,10 +193,11 @@ export const openGeo = (config: GeoConfig): Geo => {
             longitude: f.geometry.coordinates[0],
             latitude: f.geometry.coordinates[1],
             bounds: p.extent ? [w!, s!, e!, n!] : null,
+            address: null,
           };
         })
         // A city and its county often share a name; show the place once.
-        .filter((r) => !seen.has(r.label) && seen.add(r.label) !== undefined);
+        .filter((r) => !seen.has(`${r.label}|${r.address}`) && seen.add(`${r.label}|${r.address}`) !== undefined);
     },
 
     async wikipediaNearby(centre) {

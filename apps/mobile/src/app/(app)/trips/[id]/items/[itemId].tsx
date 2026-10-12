@@ -3,6 +3,7 @@ import {
   Booking,
   BookingList,
   ChatMessage,
+  DayReordered,
   DocumentList,
   FavouriteResult,
   hasRole,
@@ -33,6 +34,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BookingCard } from '@/components/booking-card';
+import { FindOnMapSheet } from '@/components/find-on-map-sheet';
 import { titleOf } from '@/lib/bookings';
 import { openDirections } from '@/lib/directions';
 import { categoryFor, encodeDraft, type ExpenseDraft } from '@/lib/money';
@@ -88,6 +90,7 @@ export default function ItemDetail() {
   // Photos taken during this item, matched by time on the server.
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
 
   const tripId = trip?.id;
   const canEdit = !!trip && hasRole(trip.myRole, 'editor');
@@ -144,6 +147,10 @@ export default function ItemDetail() {
       void loadPhotos();
     } else if (event.type.startsWith('photo.')) {
       void loadPhotos();
+    } else if (event.type === 'day.reordered') {
+      const parsed = DayReordered.safeParse(event.payload);
+      const mine = parsed.success ? parsed.data.items.find((i) => i.id === itemId) : undefined;
+      if (mine) setItem((cur) => (cur && cur.version > mine.version ? cur : mine));
     } else if (event.type === 'item.deleted' && event.entityId === itemId) {
       router.back();
     } else if (event.type === 'booking.upserted') {
@@ -222,6 +229,36 @@ export default function ItemDetail() {
         return { conflict: latest.data };
       }
       return { error: e instanceof ApiError ? e.message : 'Could not save that' };
+    }
+  };
+
+  /** "Find on map": pins the item to the picked spot, keeping any place name it already had. */
+  const pinItem = async (place: { name: string; latitude: number; longitude: number; placeRef: string | null }) => {
+    try {
+      setItem(
+        await request(`/items/${item.id}`, {
+          method: 'PATCH',
+          body: {
+            version: item.version,
+            placeName: item.placeName ?? place.name,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            placeRef: place.placeRef,
+          },
+          schema: ItineraryItem,
+        }),
+      );
+    } catch (e) {
+      const latest = e instanceof ApiError && e.status === 409 && ItineraryItem.safeParse(e.data.current);
+      if (latest && latest.success) setItem(latest.data);
+      throw new Error(
+        latest && latest.success
+          ? 'Someone changed this item meanwhile. Pick the place again to pin the latest version.'
+          : e instanceof ApiError
+            ? e.message
+            : 'Could not save that',
+        { cause: e },
+      );
     }
   };
 
@@ -404,6 +441,13 @@ export default function ItemDetail() {
                   <Text style={styles.expenseLinkText}>Directions</Text>
                 </Pressable>
               </View>
+            ) : null}
+            {item.latitude === null && canEdit ? (
+              <Pressable accessibilityRole="button" onPress={() => setFinding(true)} style={styles.findRow}>
+                <Feather name="map" size={14} color={colors.accent} />
+                <Text style={styles.expenseLinkText}>Find on map</Text>
+                <Body style={{ flex: 1, fontSize: 12 }}>for the trip map and travel times</Body>
+              </Pressable>
             ) : null}
             {item.costEstimateMinor != null && item.costCurrency ? (
               <View style={styles.metaRow}>
@@ -620,8 +664,16 @@ export default function ItemDetail() {
         ) : null}
       </KeyboardAvoidingView>
 
+      <FindOnMapSheet
+        visible={finding}
+        tripId={trip.id}
+        query={item.placeName ?? item.title}
+        onPick={pinItem}
+        onClose={() => setFinding(false)}
+      />
       <ItemSheet
         visible={editing}
+        tripId={trip.id}
         item={item}
         defaultDay={dayKeyOf(item)}
         days={days}
@@ -644,6 +696,7 @@ export default function ItemDetail() {
       />
       <BookingSheet
         visible={bookingSheet.open}
+        tripId={trip.id}
         booking={bookingSheet.booking}
         defaultType={BOOKING_FOR_ITEM[item.type]}
         currency={trip.baseCurrency}
@@ -682,6 +735,7 @@ const styles = StyleSheet.create({
   typeText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   title: { fontFamily: fonts.display, fontSize: 28, color: colors.ink },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  findRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44 },
   notes: {
     padding: space.md,
     borderRadius: radius.md,

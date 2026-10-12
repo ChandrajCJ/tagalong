@@ -1,4 +1,4 @@
-import { RecommendationCategory } from '@tagalong/shared';
+import { PLACE_SCOPES, RecommendationCategory } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
@@ -10,6 +10,9 @@ const SearchQuery = z.object({
   q: z.string().trim().min(2, 'Type a little more').max(100),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lon: z.coerce.number().min(-180).max(180).optional(),
+  scope: z.enum(PLACE_SCOPES).default('destination'),
+  /** In place scope, the trip whose destination to search around. */
+  tripId: z.string().uuid().optional(),
 });
 const RecommendationQuery = z.object({ category: RecommendationCategory.default('sights') });
 
@@ -18,9 +21,9 @@ export const placesRoutes = async (app: FastifyInstance, { deps }: { deps: Deps 
   app.addHook('preHandler', app.authenticate);
 
   app.get('/places/search', async (request) => {
-    const { q, lat, lon } = parse(SearchQuery, request.query);
+    const { q, lat, lon, scope, tripId } = parse(SearchQuery, request.query);
     const near = lat !== undefined && lon !== undefined ? { latitude: lat, longitude: lon } : undefined;
-    return { results: await service.search(q, request.user.sub, near) };
+    return { results: await service.search(q, request.user.sub, { near, scope, tripId }) };
   });
 
   app.get('/trips/:id/recommendations', async (request) => {

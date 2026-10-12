@@ -40,12 +40,57 @@ describe('destination search', () => {
   it('answers from the map search, and remembers answers for a while', async () => {
     const me = await ctx.signIn('priya@example.com');
     ctx.geo.answers.search = [
-      { id: 'osm:R:1', name: 'Goa', label: 'Goa, India', kind: 'State', countryCode: 'IN', latitude: 15.3, longitude: 74.1, bounds: null },
+      { id: 'osm:R:1', name: 'Goa', label: 'Goa, India', kind: 'State', countryCode: 'IN', latitude: 15.3, longitude: 74.1, bounds: null, address: null },
     ];
     const ask = () => ctx.app.inject({ method: 'GET', url: '/places/search?q=goa', headers: bearer(me.accessToken) });
     expect((await ask()).json()).toEqual({ results: ctx.geo.answers.search });
     await ask();
     expect(ctx.geo.calls.filter((c) => c.startsWith('search'))).toHaveLength(1);
+    expect(ctx.geo.searches[0]).toMatchObject({ scope: 'destination', bbox: undefined });
+  });
+
+  it('looks for places in and around the trip’s destination for the plan', async () => {
+    const me = await ctx.signIn('priya@example.com');
+    const trip = await createTrip(me.accessToken);
+    ctx.geo.answers.search = [
+      {
+        id: 'osm:N:1',
+        name: 'Fort Aguada',
+        label: 'Fort Aguada, Goa, India',
+        kind: 'Fort',
+        countryCode: 'IN',
+        latitude: 15.4925,
+        longitude: 73.7732,
+        bounds: null,
+        address: 'Fort Aguada Road, Candolim',
+      },
+    ];
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: `/places/search?q=fort&scope=place&tripId=${trip.id}`,
+      headers: bearer(me.accessToken),
+    });
+    expect(res.json()).toEqual({ results: ctx.geo.answers.search });
+    const [asked] = ctx.geo.searches;
+    expect(asked).toMatchObject({ query: 'fort', scope: 'place', near: { latitude: GOA.latitude, longitude: GOA.longitude } });
+    // Goa's own area, widened by about 30 km on each side.
+    const [w, s, e, n] = asked!.bbox!;
+    expect(GOA.bounds[0] - w).toBeCloseTo(0.28, 1);
+    expect(GOA.bounds[1] - s).toBeCloseTo(0.27, 1);
+    expect(e - GOA.bounds[2]).toBeCloseTo(0.28, 1);
+    expect(n - GOA.bounds[3]).toBeCloseTo(0.27, 1);
+  });
+
+  it('searches places only on trips you are on', async () => {
+    const me = await ctx.signIn('priya@example.com');
+    const trip = await createTrip(me.accessToken);
+    const stranger = await ctx.signIn('stranger@example.com');
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: `/places/search?q=fort&scope=place&tripId=${trip.id}`,
+      headers: bearer(stranger.accessToken),
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('needs a sign-in and a couple of letters', async () => {

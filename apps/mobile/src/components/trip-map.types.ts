@@ -18,6 +18,13 @@ export interface TripMapProps {
   bounds: [number, number, number, number];
   selectedId?: string | null;
   onPressPin: (pin: MapPin) => void;
+  /** A route to draw under the pins: [longitude, latitude] pairs, in one colour. */
+  line?: MapLine | null;
+}
+
+export interface MapLine {
+  coordinates: [number, number][];
+  color: string;
 }
 
 /** Free, open map tiles and style (OpenFreeMap), no key needed. */

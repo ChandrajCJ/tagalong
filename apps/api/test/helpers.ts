@@ -10,6 +10,7 @@ import type { Rates } from '../src/lib/fx';
 import type { Geo } from '../src/lib/geo';
 import type { Jobs } from '../src/lib/jobs';
 import type { Mailer } from '../src/lib/mailer';
+import type { Routing } from '../src/lib/routing';
 import type { Storage } from '../src/lib/storage';
 import { loadTestEnv } from './load-env';
 
@@ -82,6 +83,8 @@ export const useTestApp = () => {
     fx: Map<string, number>;
     /** The fake map-data service: set what it answers, and see what it was asked. */
     geo: FakeGeo;
+    /** The fake router: straight lines at 1 m/s, or down when `routing.down` is set. */
+    routing: FakeRouting;
   };
   let cleanup: () => Promise<void>;
   let truncate: () => Promise<unknown>;
@@ -113,7 +116,8 @@ export const useTestApp = () => {
       },
     };
     const geo = fakeGeo();
-    const app = await buildApp({ env, db, redis, mailer, jobs, storage, rates, geo });
+    const routing = fakeRouting();
+    const app = await buildApp({ env, db, redis, mailer, jobs, storage, rates, geo, routing });
 
     ctx.app = app;
     ctx.db = db;
@@ -125,6 +129,7 @@ export const useTestApp = () => {
     ctx.storage = storage;
     ctx.fx = fx;
     ctx.geo = geo;
+    ctx.routing = routing;
     ctx.signIn = async (email) => {
       await app.inject({ method: 'POST', url: '/auth/email/request-code', payload: { email } });
       const res = await app.inject({
@@ -152,6 +157,7 @@ export const useTestApp = () => {
     ctx.thumbnails.length = 0;
     ctx.fx.clear();
     ctx.geo.reset();
+    ctx.routing.reset();
     await ctx.redis.eval("for _, k in ipairs(redis.call('keys', 'geo:*')) do redis.call('del', k) end", 0);
     await truncate();
   });
@@ -210,6 +216,8 @@ export type FakeGeo = Geo & {
     timezone: string | null;
   };
   calls: string[];
+  /** Every search, with how it was asked. */
+  searches: ({ query: string } & NonNullable<Parameters<Geo['search']>[1]>)[];
   reset(): void;
 };
 
@@ -224,12 +232,15 @@ export const fakeGeo = (): FakeGeo => {
   const geo: FakeGeo = {
     answers: fresh(),
     calls: [],
+    searches: [],
     reset() {
       geo.answers = fresh();
       geo.calls.length = 0;
+      geo.searches.length = 0;
     },
-    async search(query) {
+    async search(query, options) {
       geo.calls.push(`search:${query}`);
+      geo.searches.push({ query, ...options });
       return geo.answers.search;
     },
     async wikipediaNearby() {
@@ -251,4 +262,34 @@ export const fakeGeo = (): FakeGeo => {
     },
   };
   return geo;
+};
+
+/** A router without the network: each leg is a straight line, one metre per second. */
+export type FakeRouting = Routing & { calls: string[]; down: boolean; reset(): void };
+
+export const fakeRouting = (): FakeRouting => {
+  const straight = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) =>
+    Math.round(Math.hypot(a.latitude - b.latitude, a.longitude - b.longitude) * 111_000);
+  const routing: FakeRouting = {
+    calls: [],
+    down: false,
+    reset() {
+      routing.calls.length = 0;
+      routing.down = false;
+    },
+    async route(mode, points) {
+      routing.calls.push(`route:${mode}:${points.length}`);
+      if (routing.down) throw new Error('Routing is down');
+      return {
+        legs: points.slice(1).map((p, i) => ({ distanceM: straight(points[i]!, p), durationS: straight(points[i]!, p) })),
+        geometry: { type: 'LineString', coordinates: points.map((p) => [p.longitude, p.latitude]) },
+      };
+    },
+    async table(mode, points) {
+      routing.calls.push(`table:${mode}:${points.length}`);
+      if (routing.down) throw new Error('Routing is down');
+      return { durations: points.map((a) => points.map((b) => straight(a, b))) };
+    },
+  };
+  return routing;
 };

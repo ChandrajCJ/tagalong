@@ -97,46 +97,55 @@ This is the app from a traveller's point of view.
     an estimated cost and notes. Hold and drag to reorder. Everyone sees
     changes live, sees "Sam is editing" on an item someone has open, and gets
     a clear message instead of silently overwriting each other.
-13. Switch Plan to **Map** to see every stop with a location as pins coloured
-    by day, plus ideas still being considered. Tap a pin for directions.
-14. Tap a plan item for its details: **Directions** (Google Maps on Android,
+13. **Where** suggests real places around the destination as you type, with
+    the trip's own ideas first; picking one puts the item on the map (a small
+    pin on its row). Older items get **Find on map** on their own screen.
+14. Between two stops on the map, the list shows the travel time and
+    distance ("🚶 12 min · 900 m"), and the day shows its total, with a
+    Walk / Drive / Cycle switch remembered on each phone. **Shortest order**
+    suggests a quicker order for the day, keeping the first stop and anything
+    at a set time in place, and shows the time saved before anyone applies it.
+15. Switch Plan to **Map** to see every stop with a location as pins coloured
+    by day, plus ideas still being considered. Pick a day to see its route.
+    Tap a pin for directions.
+16. Tap a plan item for its details: **Directions** (Google Maps on Android,
     a choice of Apple or Google Maps on iPhone), its bookings, the photos
     taken during it, and a small discussion just about that item.
 
 ### Bookings, tickets and files
-15. On a plan item, **Add booking** records a flight, stay, train, ticket, car
+17. On a plan item, **Add booking** records a flight, stay, train, ticket, car
     or restaurant table. Only the essentials are asked (who it's with, the
     confirmation code, date and time, one key detail); the rest is under
     **More details**. The confirmation code copies with a tap, times show in
     the local time zone, and stays and restaurants get Directions.
-16. **Tickets & files** (from the Overview) keeps boarding passes, PDFs and
+18. **Tickets & files** (from the Overview) keeps boarding passes, PDFs and
     screenshots for everyone. Each file can be renamed and moved to the right
     category from its **⋯** menu.
 
 ### Talking: Chat
-17. A group chat with reactions, "Priya is typing…", "Seen by 3" and
+19. A group chat with reactions, "Priya is typing…", "Seen by 3" and
     replies. Hold any message to **reply**, react, **add it to the plan**,
     **add it as an expense**, or copy it.
-18. Activity cards appear automatically ("Sam joined", "Priya added a
+20. Activity cards appear automatically ("Sam joined", "Priya added a
     flight", "Alex added Dinner · ₹1,800", "Palolem added to the plan from
     the poll"), so the chat doubles as a record of what happened.
-19. In the installed app, push notifications arrive bundled ("Priya and Sam
+21. In the installed app, push notifications arrive bundled ("Priya and Sam
     sent 5 messages") and skip anyone who has the app open.
 
 ### Photos
-20. **Photos** is one album for the whole group. Add many at once; each keeps
+22. **Photos** is one album for the whole group. Add many at once; each keeps
     when (and, where the phone allows, where) it was taken. Browse by day, on
     a map, or by the group's favourites (hearts). **Select** several to
     download them to your phone or delete them; a photo shows on a plan item
     automatically if it was taken during it.
 
 ### Money
-21. **Money**: tap **Add expense**. Say what it was, the amount in any
+23. **Money**: tap **Add expense**. Say what it was, the amount in any
     currency (today's exchange rate fills in, and can be changed to match
     your bank), who paid, and how to split it: equally, by exact amounts, by
     percent, or by shares (a couple counts as 2). Everyone's share shows as
     you type, and the split always adds up to the cent.
-22. The top says "You're owed ₹900" or "You owe ₹450". **Settle up** suggests
+24. The top says "You're owed ₹900" or "You owe ₹450". **Settle up** suggests
     the fewest payments that square everyone. On a rupee trip, **Pay with
     UPI** opens Google Pay, PhonePe, Paytm or a bank app with the amount
     filled in; afterwards, confirm and it's recorded. Otherwise **Mark as
@@ -158,7 +167,9 @@ This is the app from a traveller's point of view.
 | **Files** | Photos, documents | SeaweedFS (S3-compatible) |
 
 ### Outside data (all free, no keys)
-- **Destination search:** Photon (OpenStreetMap).
+- **Destination and place search:** Photon (OpenStreetMap).
+- **Travel times and routes:** OSRM on the FOSSGIS servers (OpenStreetMap),
+  with a straight-line estimate when they don't answer.
 - **Things to do:** Wikipedia's nearby search and OpenStreetMap (Overpass).
 - **Weather and time zones:** Open-Meteo.
 - **Map tiles:** OpenFreeMap; maps drawn by MapLibre.
@@ -167,7 +178,7 @@ This is the app from a traveller's point of view.
 - **Push notifications:** Expo's push service.
 
 All outside data goes through the API, which caches it (rates for a day,
-places for a week, weather for hours), so the free services see very few
+places for a week, routes for a month, weather for hours), so the free services see very few
 requests.
 
 ### Principles it's built on
@@ -186,7 +197,7 @@ requests.
   open data, and the whole backend runs on one free server.
 
 ### How it's checked
-- 73 tests for the shared logic and 189 for the API, all run on every change.
+- 82 tests for the shared logic and 203 for the API, all run on every change.
 - New screens are tried in a browser with two people signed in at once, and
   then on a real phone.
 
@@ -207,6 +218,7 @@ requests.
 | Self-explaining app | A full pass over every screen; replies; directions; editable trips; poll results into the plan; select, download and delete photos; rename files |
 | Destinations | Real places on trip creation, weather, Explore with recommendations |
 | Maps | The trip on a map (pins by day, ideas), real maps on the web |
+| Smarter places | Real places on plan items and stays, travel time between stops, routes on the map, "Shortest order" |
 
 ## 6. What's not done yet
 
@@ -217,8 +229,8 @@ Known gaps in what exists today:
   a person. See [DEPLOY.md](DEPLOY.md).
 - **No installable app build yet.** It runs in Expo Go for testing; an Android
   APK needs an Expo account and one build command.
-- **Untested on a device:** the MapLibre map in a real build (Expo Go shows a
-  fallback map), saving photos to the gallery, Apple Maps, and paying through
+- **Untested on a device:** the MapLibre map and its route line in a real
+  build (Expo Go shows a fallback map), saving photos to the gallery, Apple Maps, and paying through
   a real UPI app.
 - **Photo locations on Android** only arrive in a real build, where the app
   can ask for the "photo locations" permission; Expo Go can't.
@@ -228,16 +240,16 @@ Known gaps in what exists today:
   friends use the web app.
 - **No in-app card or net-banking payments:** those need a paid payment
   gateway. UPI covers bank accounts.
+- **No public-transport times:** there's no free, key-less source that covers
+  India. Travel times are walking, driving or cycling.
 
 ## 7. What's planned
 
 In the order we intend to build it:
 
-1. **Smarter places for the plan:** search for real places when adding a plan
-   item, travel time and distance between stops, and a route optimiser that
-   reorders a day.
-2. **Checklists, notes and a budget:** packing lists and to-dos, notes on the
-   trip and each day, and a budget with spending tracked against it.
+1. **Checklists and notes:** packing lists and to-dos (shared, or one tick
+   each), notes on the trip and each day.
+2. **A budget:** spending tracked against what the group planned to spend.
 3. **Works offline:** the whole trip saved on the phone, so it works with no
    signal, catching up when back online.
 4. **Bookings from email:** forward a confirmation and the flight or hotel is

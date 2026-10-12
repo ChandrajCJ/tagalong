@@ -5,6 +5,7 @@ import type { Rates } from './lib/fx';
 import type { Geo } from './lib/geo';
 import type { Jobs } from './lib/jobs';
 import type { Mailer } from './lib/mailer';
+import type { Routing } from './lib/routing';
 import type { Storage } from './lib/storage';
 
 /** Everything route modules need, passed in so tests can swap pieces. */
@@ -17,4 +18,5 @@ export interface Deps {
   storage: Storage;
   rates: Rates;
   geo: Geo;
+  routing: Routing;
 }

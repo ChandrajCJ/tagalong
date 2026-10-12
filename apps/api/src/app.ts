@@ -5,10 +5,12 @@ import { frankfurterRates } from './lib/fx';
 import { openGeo } from './lib/geo';
 import { bullJobs } from './lib/jobs';
 import { logMailer, smtpMailer } from './lib/mailer';
+import { osrmRouting } from './lib/routing';
 import { s3Storage } from './lib/storage';
 import { authRoutes } from './modules/auth/routes';
 import { bookingsRoutes } from './modules/bookings/routes';
 import { chatRoutes } from './modules/chat/routes';
+import { daysRoutes } from './modules/days/routes';
 import { devicesRoutes } from './modules/devices/routes';
 import { moneyRoutes } from './modules/money/routes';
 import { placesRoutes } from './modules/places/routes';
@@ -22,8 +24,8 @@ import { tripsRoutes } from './modules/trips/routes';
 import { authPlugin } from './plugins/auth';
 import { errorsPlugin } from './plugins/errors';
 
-type BuildDeps = Omit<Deps, 'mailer' | 'jobs' | 'storage' | 'rates' | 'geo'> &
-  Partial<Pick<Deps, 'mailer' | 'jobs' | 'storage' | 'rates' | 'geo'>>;
+type Swappable = 'mailer' | 'jobs' | 'storage' | 'rates' | 'geo' | 'routing';
+type BuildDeps = Omit<Deps, Swappable> & Partial<Pick<Deps, Swappable>>;
 
 export const buildApp = async (deps: BuildDeps) => {
   const { env } = deps;
@@ -52,6 +54,7 @@ export const buildApp = async (deps: BuildDeps) => {
         overpassUrls: env.OVERPASS_URLS.split(',').map((u) => u.trim()).filter(Boolean),
         wikipediaApi: env.WIKIPEDIA_API,
       }),
+    routing: deps.routing ?? osrmRouting({ baseUrl: env.ROUTING_URL, userAgent: env.GEO_USER_AGENT }),
   };
   app.addHook('onClose', async () => fullDeps.jobs.close());
 
@@ -66,6 +69,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(tripsRoutes, { deps: fullDeps });
   await app.register(invitesRoutes, { deps: fullDeps });
   await app.register(itineraryRoutes, { deps: fullDeps });
+  await app.register(daysRoutes, { deps: fullDeps });
   await app.register(ideasRoutes, { deps: fullDeps });
   await app.register(chatRoutes, { deps: fullDeps });
   await app.register(documentsRoutes, { deps: fullDeps });

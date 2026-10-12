@@ -7,6 +7,8 @@ import { z } from 'zod';
 export const TRIP_EVENT_TYPES = [
   'item.upserted',
   'item.deleted',
+  /** Several items on one day moved at once ("Shortest order"). */
+  'day.reordered',
   'member.joined',
   'member.updated',
   'member.left',

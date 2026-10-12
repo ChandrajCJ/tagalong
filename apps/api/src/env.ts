@@ -25,6 +25,8 @@ const EnvSchema = z.object({
     .string()
     .default('https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter,https://overpass.kumi.systems/api/interpreter'),
   WIKIPEDIA_API: z.string().url().default('https://en.wikipedia.org/w/api.php'),
+  /** Travel times between stops (see lib/routing.ts): the FOSSGIS OSRM servers, or our own. */
+  ROUTING_URL: z.string().url().default('https://routing.openstreetmap.de'),
   /** Daily exchange rates (see lib/fx.ts). */
   FX_API_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
   /** Sends sign-in codes, e.g. smtps://user:app-password@smtp.gmail.com:465. Logged instead when unset. */

@@ -21,10 +21,16 @@ export const PlaceResult = z.object({
   latitude: lat,
   longitude: lng,
   bounds: Bounds.nullable(),
+  /** For a place in town: its street and area, e.g. "Av. 24 de Julho, Lisbon". */
+  address: z.string().nullable().default(null),
 });
 export type PlaceResult = z.infer<typeof PlaceResult>;
 
 export const PlaceSearch = z.object({ results: z.array(PlaceResult) });
+
+/** "destination" finds towns and regions for a trip; "place" finds spots in and around it for the plan. */
+export const PLACE_SCOPES = ['destination', 'place'] as const;
+export type PlaceScope = (typeof PLACE_SCOPES)[number];
 
 /** Where a trip is, once someone picked a real place for it. */
 export const TripLocation = z.object({

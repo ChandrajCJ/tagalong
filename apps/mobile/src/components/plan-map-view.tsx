@@ -5,10 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { request } from '@/lib/api';
 import { openDirections } from '@/lib/directions';
-import { shortDate } from '@/lib/plan';
+import { byPosition, shortDate } from '@/lib/plan';
+import { useDayRoute, useRouteMode } from '@/lib/routes';
 import { colors, fonts, radius, space } from '@/theme';
 import { TripMap } from './trip-map';
-import type { MapPin } from './trip-map.types';
+import type { MapLine, MapPin } from './trip-map.types';
 import { Body, Button } from './ui';
 
 const NO_DAY_COLOR = '#8C867B';
@@ -39,6 +40,22 @@ export function PlanMapView({ trip, items, days }: Props) {
   }, [trip.id]);
 
   const dayIndex = (date: string | null) => (date ? days.indexOf(date) : -1);
+
+  // One day picked: draw its route in the day's colour, travelled the way chosen on the list.
+  const filteredDate = day === 'all' ? null : day;
+  const dayItems = useMemo(
+    () => (filteredDate ? items.filter((i) => i.date === filteredDate).sort(byPosition) : []),
+    [items, filteredDate],
+  );
+  const [mode] = useRouteMode(trip.id, filteredDate, dayItems);
+  const route = useDayRoute(trip.id, filteredDate, mode, dayItems);
+  const line = useMemo<MapLine | null>(
+    () =>
+      filteredDate && route?.geometry
+        ? { coordinates: route.geometry.coordinates, color: dayColor(days.indexOf(filteredDate)) }
+        : null,
+    [filteredDate, route, days],
+  );
   const located = items.filter((i) => i.latitude !== null && i.longitude !== null);
   const openIdeas = (ideas ?? []).filter((i) => i.latitude !== null && i.longitude !== null && !i.promotedItemId);
 
@@ -147,7 +164,7 @@ export function PlanMapView({ trip, items, days }: Props) {
       </ScrollView>
 
       <View style={{ flex: 1 }}>
-        <TripMap pins={pins} bounds={bounds} selectedId={selected ? `${selected.kind}:${selected.kind === 'item' ? selected.item.id : selected.idea.id}` : null} onPressPin={pick} />
+        <TripMap pins={pins} bounds={bounds} line={line} selectedId={selected ? `${selected.kind}:${selected.kind === 'item' ? selected.item.id : selected.idea.id}` : null} onPressPin={pick} />
 
         {pins.length === 0 ? (
           <View style={styles.overlayNote}>

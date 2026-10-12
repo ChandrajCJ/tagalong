@@ -6,7 +6,7 @@ import { colors, fonts } from '@/theme';
 import { MAP_STYLE_URL, type TripMapProps } from './trip-map.types';
 
 /** The trip map in a browser: MapLibre GL with OpenFreeMap, free and keyless. */
-export function TripMap({ pins, bounds, selectedId, onPressPin }: TripMapProps) {
+export function TripMap({ pins, bounds, selectedId, onPressPin, line }: TripMapProps) {
   const holder = useRef<View>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
@@ -63,6 +63,37 @@ export function TripMap({ pins, bounds, selectedId, onPressPin }: TripMapProps) 
       return new maplibregl.Marker({ element: dot }).setLngLat([pin.longitude, pin.latitude]).addTo(m);
     });
   }, [pins, selectedId]);
+
+  // The day's route, under the pins. The style has to finish loading before a layer can be added.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const draw = () => {
+      const data = {
+        type: 'Feature' as const,
+        properties: {},
+        geometry: { type: 'LineString' as const, coordinates: line?.coordinates ?? [] },
+      };
+      const source = m.getSource('route') as maplibregl.GeoJSONSource | undefined;
+      if (source) source.setData(data);
+      else {
+        m.addSource('route', { type: 'geojson', data });
+        m.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: { 'line-color': line?.color ?? colors.accent, 'line-width': 4, 'line-opacity': 0.85 },
+        });
+      }
+      if (line) m.setPaintProperty('route-line', 'line-color', line.color);
+    };
+    if (m.isStyleLoaded()) draw();
+    else m.once('load', draw);
+    return () => {
+      m.off('load', draw);
+    };
+  }, [line]);
 
   return <View ref={holder} style={{ flex: 1 }} />;
 }

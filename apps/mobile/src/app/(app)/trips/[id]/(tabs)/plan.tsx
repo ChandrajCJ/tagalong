@@ -1,10 +1,14 @@
 import Feather from '@expo/vector-icons/Feather';
 import {
+  DayReordered,
   hasRole,
   ItemList,
   ItineraryItem,
+  movableCount,
   newId,
   positionBetween,
+  TRAVEL_MODES,
+  type RouteLeg,
 } from '@tagalong/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,11 +17,13 @@ import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ItemSheet, type ItemFields, type SaveResult } from '@/components/item-sheet';
 import { PlanMapView } from '@/components/plan-map-view';
+import { ShortestOrderSheet } from '@/components/shortest-order-sheet';
 import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import {
   ANYTIME,
   byPosition,
+  dateOfKey,
   dayKeyOf,
   dayOfMonth,
   formatCost,
@@ -28,6 +34,7 @@ import {
   type DayKey,
 } from '@/lib/plan';
 import { openDirections } from '@/lib/directions';
+import { formatDistance, formatDuration, MODE_META, useDayRoute, useRouteMode } from '@/lib/routes';
 import { useTripRealtime } from '@/lib/realtime';
 import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
@@ -46,6 +53,9 @@ export default function PlanTab() {
   const [toast, setToast] = useState<string>();
   // The day-by-day list, or every stop on a map.
   const [view, setView] = useState<'list' | 'map'>('list');
+  const [shortest, setShortest] = useState(false);
+  // Travel connectors hide while a card is being dragged; they'd point at the old neighbours.
+  const [dragging, setDragging] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const tripId = trip?.id;
@@ -110,6 +120,9 @@ export default function PlanTab() {
       if (parsed.success) upsertLocal(parsed.data);
     } else if (event.type === 'item.deleted') {
       removeLocal(event.entityId);
+    } else if (event.type === 'day.reordered') {
+      const parsed = DayReordered.safeParse(event.payload);
+      if (parsed.success) parsed.data.items.forEach(upsertLocal);
     } else if (event.type.startsWith('member.')) {
       void reloadTrip();
     }
@@ -129,6 +142,23 @@ export default function PlanTab() {
     () => (items ?? []).filter((i) => dayKeyOf(i) === current).sort(byPosition),
     [items, current],
   );
+
+  const currentDate = dateOfKey(current);
+  const [mode, setMode] = useRouteMode(tripId ?? '', currentDate, dayItems);
+  const route = useDayRoute(tripId ?? '', currentDate, mode, dayItems);
+  const located = dayItems.filter((i) => i.latitude !== null && i.longitude !== null).length;
+  // The leg leaving each item, but only to the item right after it on the list.
+  const legFrom = useMemo(() => {
+    const next = new Map(dayItems.slice(0, -1).map((item, n) => [item.id, dayItems[n + 1]!.id]));
+    return new Map((route?.legs ?? []).filter((l) => next.get(l.fromId) === l.toId).map((l) => [l.fromId, l]));
+  }, [route, dayItems]);
+  const canShorten = canEdit && currentDate !== null && movableCount(dayItems) >= 3;
+
+  /** Several items saved at once (a new order), or the day as it is now after a conflict. */
+  const applyOrder = (saved: ItineraryItem[], note?: string) => {
+    saved.forEach(upsertLocal);
+    if (note) showToast(note);
+  };
 
   const lastPositionOn = (key: DayKey) => {
     const onDay = (items ?? []).filter((i) => dayKeyOf(i) === key).sort(byPosition);
@@ -158,9 +188,6 @@ export default function PlanTab() {
     const id = newId();
     const position = positionBetween(lastPositionOn(fields.date ?? ANYTIME), null);
     const optimistic: ItineraryItem = {
-      latitude: null,
-      longitude: null,
-      placeRef: null,
       ...fields,
       id,
       tripId: trip.id,
@@ -188,6 +215,7 @@ export default function PlanTab() {
 
   /** Drag and drop: only the moved item gets a new position between its new neighbours. */
   const onDragEnd = async ({ data, from, to }: { data: ItineraryItem[]; from: number; to: number }) => {
+    setDragging(false);
     if (from === to) return;
     const moved = data[to]!;
     let position: string;
@@ -260,6 +288,9 @@ export default function PlanTab() {
                 <Text style={styles.cardTitle} numberOfLines={2}>
                   {item.title}
                 </Text>
+                {item.latitude !== null ? (
+                  <Feather name="map-pin" size={13} color={colors.muted} accessibilityLabel="On the map" />
+                ) : null}
                 {canEdit ? <Feather name="move" size={15} color="#B9B2A6" /> : null}
               </View>
               {meta.length > 0 ? <Body style={{ fontSize: 13 }}>{meta.join(' · ')}</Body> : null}
@@ -277,9 +308,22 @@ export default function PlanTab() {
             ) : null}
           </View>
         </View>
+        {!dragging && !isActive ? connector(legFrom.get(item.id), !!route?.estimated) : null}
       </ScaleDecorator>
     );
   };
+
+  /** "🚶 12 min · 900 m" between two stops on the map, or nothing. */
+  const connector = (leg: RouteLeg | undefined, estimated: boolean) =>
+    leg ? (
+      <View style={styles.connector} accessibilityLabel={`${estimated ? 'About ' : ''}${formatDuration(leg.durationS)} ${MODE_META[mode].by} to the next stop`}>
+        <View style={styles.connectorLine} />
+        <Text style={styles.connectorText}>
+          {MODE_META[mode].emoji} {estimated ? 'about ' : ''}
+          {formatDuration(leg.durationS)} · {formatDistance(leg.distanceM)}
+        </Text>
+      </View>
+    ) : null;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -328,6 +372,34 @@ export default function PlanTab() {
               })}
             </ScrollView>
             <Text style={styles.heading}>{heading}</Text>
+            {currentDate && located >= 2 ? (
+              <View style={styles.routeRow}>
+                <Text style={styles.routeTotal}>
+                  {route
+                    ? `${MODE_META[mode].emoji} ${route.estimated ? 'about ' : ''}${formatDuration(route.totalDurationS)} · ${formatDistance(route.totalDistanceM)} between stops`
+                    : 'Working out travel times…'}
+                </Text>
+                <View style={styles.modes} accessibilityRole="radiogroup" accessibilityLabel="How you'll get around">
+                  {TRAVEL_MODES.map((m) => (
+                    <Pressable
+                      key={m}
+                      accessibilityRole="radio"
+                      aria-checked={mode === m}
+                      onPress={() => setMode(m)}
+                      style={[styles.mode, mode === m && styles.modeOn]}
+                    >
+                      <Text style={[styles.modeText, mode === m && { color: '#FFFFFF' }]}>{MODE_META[m].label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {canShorten ? (
+                  <Pressable accessibilityRole="button" onPress={() => setShortest(true)} style={styles.shortest}>
+                    <Feather name="shuffle" size={13} color={colors.accentInk} />
+                    <Text style={styles.shortestText}>Shortest order</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             {current === ANYTIME ? (
               <Body style={{ fontSize: 13 }}>
                 {days.length === 0
@@ -340,7 +412,7 @@ export default function PlanTab() {
             ) : null}
           </>
         ) : (
-          <Body style={{ fontSize: 13 }}>Every stop with a location, coloured by day. Outlined pins are ideas.</Body>
+          <Body style={{ fontSize: 13 }}>Every stop with a location, coloured by day. Outlined pins are ideas. Pick a day to see its route.</Body>
         )}
       </View>
 
@@ -368,6 +440,7 @@ export default function PlanTab() {
               data={dayItems}
               keyExtractor={(i) => i.id}
               renderItem={renderItem}
+              onDragBegin={() => setDragging(true)}
               onDragEnd={onDragEnd}
               containerStyle={{ flex: 1 }}
               contentContainerStyle={styles.list}
@@ -396,8 +469,20 @@ export default function PlanTab() {
         </>
       )}
 
+      {currentDate ? (
+        <ShortestOrderSheet
+          visible={shortest}
+          tripId={trip.id}
+          date={currentDate}
+          mode={mode}
+          items={dayItems}
+          onSaved={applyOrder}
+          onClose={() => setShortest(false)}
+        />
+      ) : null}
       <ItemSheet
         visible={sheet}
+        tripId={trip.id}
         defaultDay={current}
         draftTitle={draftTitle}
         days={days}
@@ -440,5 +525,16 @@ const styles = StyleSheet.create({
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
   pillNoDay: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: 'center', color: colors.ink },
+  routeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
+  routeTotal: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, flexBasis: '100%' },
+  modes: { flexDirection: 'row', padding: 2, borderRadius: radius.pill, backgroundColor: '#ECE7DF' },
+  mode: { minHeight: 30, justifyContent: 'center', paddingHorizontal: 10, borderRadius: radius.pill },
+  modeOn: { backgroundColor: colors.ink },
+  modeText: { fontFamily: fonts.bold, fontSize: 12, color: colors.muted },
+  shortest: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
+  shortestText: { fontFamily: fonts.bold, fontSize: 12, color: colors.accentInk },
+  connector: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginLeft: 46 + space.md + 14, marginTop: -2, marginBottom: space.sm },
+  connectorLine: { width: 2, height: 18, borderRadius: 1, backgroundColor: colors.lineStrong },
+  connectorText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   toast: { marginHorizontal: space.xl, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
 });
