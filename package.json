@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "start": "docker compose up -d --wait && pnpm db:migrate && turbo run dev dev:gateway --filter=@tagalong/api --filter=@tagalong/worker --filter=@tagalong/mobile --parallel",
     "dev": "turbo run dev --parallel",
     "dev:backend": "turbo run dev dev:gateway --filter=@tagalong/api --filter=@tagalong/worker --parallel",
     "build": "turbo run build",
