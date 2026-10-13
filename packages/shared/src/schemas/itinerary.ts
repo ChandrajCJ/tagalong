@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TripDay } from './lists';
 
 export const ITEM_TYPES = ['activity', 'meal', 'transport', 'stay', 'flight', 'other'] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
@@ -32,7 +33,8 @@ export const ItineraryItem = z.object({
 });
 export type ItineraryItem = z.infer<typeof ItineraryItem>;
 
-export const ItemList = z.object({ items: z.array(ItineraryItem) });
+/** The plan, with each day's own title and note where someone wrote one. */
+export const ItemList = z.object({ items: z.array(ItineraryItem), days: z.array(TripDay).default([]) });
 
 const editableFields = {
   date: isoDate.nullable().optional(),

@@ -15,7 +15,8 @@ export const itineraryRoutes = async (app: FastifyInstance, { deps }: { deps: De
 
   app.get('/trips/:id/items', async (request) => {
     const { id } = parse(TripParams, request.params);
-    return { items: await service.list(id, request.user.sub) };
+    const items = await service.list(id, request.user.sub);
+    return { items, days: await service.days(id, request.user.sub) };
   });
 
   app.post('/trips/:id/items', async (request, reply) => {

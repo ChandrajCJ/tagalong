@@ -73,7 +73,8 @@ This is the app from a traveller's point of view.
 8. The Overview shows a countdown, who's coming, **the weather** for the trip
    days (a forecast up to two weeks out, "typical weather" from last year
    beyond that), the **next booking** ("Flight 6E 2134 · Thu 08:15 · in 2
-   days"), an **Explore** card, and a list of everything you can do here.
+   days"), an **Explore** card, a **Get ready** card ("Packing 12/30 · 2
+   to-dos left · 3 notes"), and a list of everything you can do here.
    **Edit** changes the trip's name, dates, destination or cover.
 
 ### Finding things to do: Explore
@@ -94,7 +95,8 @@ This is the app from a traveller's point of view.
 ### Planning the days: Plan
 12. **Plan** has a page per trip day (and "No day yet" for undecided things).
     Add activities, meals, transport, stays and flights with times, a place,
-    an estimated cost and notes. Hold and drag to reorder. Everyone sees
+    an estimated cost and notes. Give a day a name and a note ("Sintra day —
+   9:10 train from Rossio") just under the day pills. Hold and drag to reorder. Everyone sees
     changes live, sees "Sam is editing" on an item someone has open, and gets
     a clear message instead of silently overwriting each other.
 13. **Where** suggests real places around the destination as you type, with
@@ -112,40 +114,57 @@ This is the app from a traveller's point of view.
     a choice of Apple or Google Maps on iPhone), its bookings, the photos
     taken during it, and a small discussion just about that item.
 
+### Getting ready: packing, to-dos and notes
+17. **Get ready** (from the Overview) has three parts. **Packing**: tap
+   **Start with suggestions** for a starter list picked from the weather and
+   the places on the trip (rain → umbrella, beaches → swimwear), and untick
+   what you don't need. "Each person" lines (passport, charger) are ticked by
+   everyone for themselves and show "3 of 5"; tap that to see who hasn't.
+   "One for the group" lines (first-aid kit) get one tick and can say who's
+   bringing it.
+18. **To-dos** ("Book Sintra tickets") can be given to someone and a due date;
+   hold a line for those options. On a plan item, **Add a to-do for this**
+   links one to it, and the plan shows a ☑ count until it's done. Viewers can
+   tick their own packing but not change the lists.
+19. **Notes** keep things everyone should find: emergency numbers, Wi-Fi
+   codes, useful phrases. Links and phone numbers can be tapped. If two
+   people edit the same note, the second sees both versions side by side and
+   picks which to keep.
+
 ### Bookings, tickets and files
-17. On a plan item, **Add booking** records a flight, stay, train, ticket, car
+20. On a plan item, **Add booking** records a flight, stay, train, ticket, car
     or restaurant table. Only the essentials are asked (who it's with, the
     confirmation code, date and time, one key detail); the rest is under
     **More details**. The confirmation code copies with a tap, times show in
     the local time zone, and stays and restaurants get Directions.
-18. **Tickets & files** (from the Overview) keeps boarding passes, PDFs and
+21. **Tickets & files** (from the Overview) keeps boarding passes, PDFs and
     screenshots for everyone. Each file can be renamed and moved to the right
     category from its **⋯** menu.
 
 ### Talking: Chat
-19. A group chat with reactions, "Priya is typing…", "Seen by 3" and
+22. A group chat with reactions, "Priya is typing…", "Seen by 3" and
     replies. Hold any message to **reply**, react, **add it to the plan**,
     **add it as an expense**, or copy it.
-20. Activity cards appear automatically ("Sam joined", "Priya added a
+23. Activity cards appear automatically ("Sam joined", "Priya added a
     flight", "Alex added Dinner · ₹1,800", "Palolem added to the plan from
     the poll"), so the chat doubles as a record of what happened.
-21. In the installed app, push notifications arrive bundled ("Priya and Sam
+24. In the installed app, push notifications arrive bundled ("Priya and Sam
     sent 5 messages") and skip anyone who has the app open.
 
 ### Photos
-22. **Photos** is one album for the whole group. Add many at once; each keeps
+25. **Photos** is one album for the whole group. Add many at once; each keeps
     when (and, where the phone allows, where) it was taken. Browse by day, on
     a map, or by the group's favourites (hearts). **Select** several to
     download them to your phone or delete them; a photo shows on a plan item
     automatically if it was taken during it.
 
 ### Money
-23. **Money**: tap **Add expense**. Say what it was, the amount in any
+26. **Money**: tap **Add expense**. Say what it was, the amount in any
     currency (today's exchange rate fills in, and can be changed to match
     your bank), who paid, and how to split it: equally, by exact amounts, by
     percent, or by shares (a couple counts as 2). Everyone's share shows as
     you type, and the split always adds up to the cent.
-24. The top says "You're owed ₹900" or "You owe ₹450". **Settle up** suggests
+27. The top says "You're owed ₹900" or "You owe ₹450". **Settle up** suggests
     the fewest payments that square everyone. On a rupee trip, **Pay with
     UPI** opens Google Pay, PhonePe, Paytm or a bank app with the amount
     filled in; afterwards, confirm and it's recorded. Otherwise **Mark as
@@ -219,6 +238,7 @@ requests.
 | Destinations | Real places on trip creation, weather, Explore with recommendations |
 | Maps | The trip on a map (pins by day, ideas), real maps on the web |
 | Smarter places | Real places on plan items and stays, travel time between stops, routes on the map, "Shortest order" |
+| Getting ready | Packing lists (shared or each person) with starter suggestions, to-dos linked to plan items, trip and day notes |
 
 ## 6. What's not done yet
 
@@ -247,14 +267,12 @@ Known gaps in what exists today:
 
 In the order we intend to build it:
 
-1. **Checklists and notes:** packing lists and to-dos (shared, or one tick
-   each), notes on the trip and each day.
+1. **Bookings from email:** forward or paste a confirmation and the flight or
+   hotel is found, ready to review and add.
 2. **A budget:** spending tracked against what the group planned to spend.
 3. **Works offline:** the whole trip saved on the phone, so it works with no
    signal, catching up when back online.
-4. **Bookings from email:** forward a confirmation and the flight or hotel is
-   added automatically.
-5. **AI:** draft a day-by-day plan from the group's ideas and bookings,
+4. **AI:** draft a day-by-day plan from the group's ideas and bookings,
    summarise long chats, and read amounts from receipt photos.
 
 Considered but not planned, because they aren't free to run: live flight

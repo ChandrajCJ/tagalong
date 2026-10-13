@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { hasRole, NextUp } from '@tagalong/shared';
+import { hasRole, listsSummary, NextUp } from '@tagalong/shared';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,6 +9,7 @@ import { WeatherStrip } from '@/components/weather-strip';
 import { request } from '@/lib/api';
 import { BOOKING_META, formatInZone, relativeFrom, routeOf, titleOf } from '@/lib/bookings';
 import { formatDateRange, tripCountdown } from '@/lib/format';
+import { useTripLists, useTripNotes } from '@/lib/lists';
 import { useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
@@ -108,6 +109,8 @@ export default function TripOverview() {
         />
 
         <NextUpCard tripId={trip.id} />
+
+        <GetReadyCard />
 
         {trip.location ? (
           <Pressable
@@ -272,6 +275,44 @@ function NextUpCard({ tripId }: { tripId: string }) {
 }
 
 /** A white button on the cover. Text shows beside the icon, except for Back. */
+/** "Packing 12/30 · 2 to-dos left · 3 notes", opening the lists. */
+function GetReadyCard() {
+  const { trip } = useTrip();
+  const { lists, items } = useTripLists(trip);
+  const { notes } = useTripNotes(trip?.id);
+  if (!trip) return null;
+  const summary = lists ? listsSummary(lists, items, trip.myUserId) : null;
+  const parts = summary
+    ? [
+        summary.packingTotal > 0 ? `Packing ${summary.packed}/${summary.packingTotal}` : null,
+        summary.todosTotal > 0
+          ? summary.todosLeft === 0
+            ? 'To-dos all done'
+            : `${summary.todosLeft} ${summary.todosLeft === 1 ? 'to-do' : 'to-dos'} left`
+          : null,
+        notes && notes.length > 0 ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}` : null,
+      ].filter(Boolean)
+    : [];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push(`/trips/${trip.id}/lists`)}
+      style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
+    >
+      <View style={[styles.exploreIcon, { backgroundColor: '#5B4E86' }]}>
+        <Feather name="check-square" size={22} color="#FFFFFF" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.exploreTitle}>Get ready</Text>
+        <Body style={{ fontSize: 13 }}>
+          {parts.length > 0 ? parts.join(' · ') : 'Packing list, to-dos and notes like Wi-Fi codes and emergency numbers.'}
+        </Body>
+      </View>
+      <Feather name="chevron-right" size={18} color="#8C867B" />
+    </Pressable>
+  );
+}
+
 function RoundButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   const iconOnly = icon === 'chevron-left';
   return (

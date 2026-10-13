@@ -19,6 +19,7 @@ import { healthRoutes } from './modules/health/routes';
 import { ideasRoutes } from './modules/ideas/routes';
 import { invitesRoutes } from './modules/invites/routes';
 import { itineraryRoutes } from './modules/itinerary/routes';
+import { listsRoutes } from './modules/lists/routes';
 import { photosRoutes } from './modules/photos/routes';
 import { tripsRoutes } from './modules/trips/routes';
 import { authPlugin } from './plugins/auth';
@@ -78,6 +79,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(devicesRoutes, { deps: fullDeps });
   await app.register(moneyRoutes, { deps: fullDeps });
   await app.register(placesRoutes, { deps: fullDeps });
+  await app.register(listsRoutes, { deps: fullDeps });
 
   return app;
 };

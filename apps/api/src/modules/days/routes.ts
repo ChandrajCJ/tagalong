@@ -1,4 +1,4 @@
-import { ReorderDayInput, TravelMode } from '@tagalong/shared';
+import { ReorderDayInput, TravelMode, UpsertDayInput } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
@@ -12,7 +12,7 @@ const DayParams = z.object({
 });
 const ModeQuery = z.object({ mode: TravelMode.default('foot') });
 
-/** One day of the plan as a whole: travel between its stops, and its order. */
+/** One day of the plan as a whole: travel between its stops, its order, and its note. */
 export const daysRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
   const service = createDaysService(deps.db, deps.redis, deps.routing);
   app.addHook('preHandler', app.authenticate);
@@ -33,5 +33,12 @@ export const daysRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
     const { id, date } = parse(DayParams, request.params);
     const input = parse(ReorderDayInput, request.body);
     return service.reorder(id, date, request.user.sub, input, originOf(request));
+  });
+
+  /** The day's own title and note ("Sintra day — 9:10 train from Rossio"). */
+  app.put('/trips/:id/days/:date', async (request) => {
+    const { id, date } = parse(DayParams, request.params);
+    const input = parse(UpsertDayInput, request.body ?? {});
+    return service.upsertDay(id, date, request.user.sub, input, originOf(request));
   });
 };

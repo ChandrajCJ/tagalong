@@ -2,7 +2,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { TripProvider } from '@/lib/trip-context';
 import { colors } from '@/theme';
 
-/** The trip hub: tabs, plus Invite, Edit, Members and a plan item's detail on top of them. */
+/** The trip hub: tabs, plus Invite, Edit, Members, Get ready, notes and a plan item's detail on top of them. */
 export default function TripLayout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   return (
@@ -14,6 +14,8 @@ export default function TripLayout() {
         <Stack.Screen name="members" />
         <Stack.Screen name="explore" />
         <Stack.Screen name="items/[itemId]" />
+        <Stack.Screen name="lists" />
+        <Stack.Screen name="notes/[noteId]" />
       </Stack>
     </TripProvider>
   );

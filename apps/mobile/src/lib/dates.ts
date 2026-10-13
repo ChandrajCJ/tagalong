@@ -56,3 +56,10 @@ export const spokenDate = (iso: string) => {
   const weekday = WEEKDAYS_LONG[(new Date(Date.UTC(year, month, day)).getUTCDay() + 6) % 7];
   return `${weekday}, ${MONTH_NAMES[month]} ${day}, ${year}`;
 };
+
+/** The calendar date `n` days after `iso` (before, when negative). */
+export const addDays = (iso: string, n: number) => {
+  const { year, month, day } = parseIso(iso);
+  const d = new Date(Date.UTC(year, month, day + n));
+  return toIso(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+};

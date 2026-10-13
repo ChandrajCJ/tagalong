@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { changeLog, items, type Db } from '@tagalong/db';
+import { changeLog, items, tripDays, type Db } from '@tagalong/db';
 import {
   estimateLeg,
   isLocated,
@@ -12,14 +12,16 @@ import {
   type ReorderDayInput,
   type RouteLine,
   type TravelMode,
+  type TripDay,
+  type UpsertDayInput,
 } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 import { requireTripRole } from '../../lib/access';
-import { badRequest, conflict } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Point } from '../../lib/geo';
 import type { Routing } from '../../lib/routing';
-import { toItem } from '../itinerary/service';
+import { toDay, toItem } from '../itinerary/service';
 
 type Row = typeof items.$inferSelect;
 
@@ -225,6 +227,57 @@ export const createDaysService = (db: Db, redis: Redis, routing: Routing) => {
         });
       }
       return { items: result.all satisfies ItineraryItem[] };
+    },
+
+    /**
+     * A day's title and note. The first write makes the row (send no
+     * version); after that, send the version you saw, and a mismatch is a 409
+     * with the day as it is now. An empty title or note clears it.
+     */
+    async upsertDay(tripId: string, date: string, userId: string, input: UpsertDayInput, origin?: string): Promise<TripDay> {
+      await requireTripRole(db, tripId, userId, 'editor');
+      const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() ? v.trim() : null);
+      const fields = Object.fromEntries(
+        Object.entries({ title: blankToNull(input.title), notes: blankToNull(input.notes) }).filter(([, v]) => v !== undefined),
+      ) as { title?: string | null; notes?: string | null };
+
+      const saved = await db.transaction(async (tx) => {
+        const [row] =
+          input.version === undefined
+            ? await tx
+                .insert(tripDays)
+                .values({ tripId, date, title: fields.title ?? null, notes: fields.notes ?? null })
+                .onConflictDoNothing()
+                .returning()
+            : await tx
+                .update(tripDays)
+                .set({ ...fields, version: sql`${tripDays.version} + 1` })
+                .where(and(eq(tripDays.tripId, tripId), eq(tripDays.date, date), eq(tripDays.version, input.version)))
+                .returning();
+        if (!row) return null;
+        await tx.insert(changeLog).values({ tripId, entity: 'trip_day', entityId: row.id, op: 'upsert', changedBy: userId });
+        return row;
+      });
+
+      if (!saved) {
+        const [latest] = await db
+          .select()
+          .from(tripDays)
+          .where(and(eq(tripDays.tripId, tripId), eq(tripDays.date, date)));
+        if (!latest) throw notFound('That day has no title or note yet');
+        throw conflict('Someone changed this day’s note while you were editing.', { current: toDay(latest) });
+      }
+      const day = toDay(saved);
+      await publishTripEvent(redis, {
+        type: 'day.upserted',
+        tripId,
+        entityId: saved.id,
+        actorId: userId,
+        version: day.version,
+        payload: day,
+        originClientId: origin,
+      });
+      return day;
     },
   };
 };

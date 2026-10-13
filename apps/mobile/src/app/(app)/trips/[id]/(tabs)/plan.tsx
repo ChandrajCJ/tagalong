@@ -6,8 +6,10 @@ import {
   ItineraryItem,
   movableCount,
   newId,
+  openTodosByItem,
   positionBetween,
   TRAVEL_MODES,
+  TripDay,
   type RouteLeg,
 } from '@tagalong/shared';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DayNoteSheet } from '@/components/day-note-sheet';
 import { ItemSheet, type ItemFields, type SaveResult } from '@/components/item-sheet';
 import { PlanMapView } from '@/components/plan-map-view';
 import { ShortestOrderSheet } from '@/components/shortest-order-sheet';
@@ -34,6 +37,7 @@ import {
   type DayKey,
 } from '@/lib/plan';
 import { openDirections } from '@/lib/directions';
+import { useTripLists } from '@/lib/lists';
 import { formatDistance, formatDuration, MODE_META, useDayRoute, useRouteMode } from '@/lib/routes';
 import { useTripRealtime } from '@/lib/realtime';
 import { VIEWER_NOTE } from '@/lib/roles';
@@ -46,6 +50,9 @@ type Editors = Record<string, { itemId: string; name: string }>;
 export default function PlanTab() {
   const { trip, reload: reloadTrip } = useTrip();
   const [items, setItems] = useState<ItineraryItem[] | null>(null);
+  // Days someone gave a name or a note.
+  const [dayNotes, setDayNotes] = useState<TripDay[]>([]);
+  const [editingDay, setEditingDay] = useState(false);
   const [error, setError] = useState<string>();
   const [selected, setSelected] = useState<DayKey | null>(null);
   const [sheet, setSheet] = useState(false);
@@ -72,6 +79,7 @@ export default function PlanTab() {
     try {
       const data = await request(`/trips/${tripId}/items`, { schema: ItemList });
       setItems(data.items);
+      setDayNotes(data.days);
       setError(undefined);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load the plan');
@@ -94,6 +102,19 @@ export default function PlanTab() {
       return next;
     });
   }, []);
+  const upsertDay = useCallback((day: TripDay) => {
+    setDayNotes((prev) => {
+      const old = prev.find((d) => d.date === day.date);
+      if (old && old.version > day.version) return prev;
+      return [...prev.filter((d) => d.date !== day.date), day];
+    });
+  }, []);
+  // To-dos linked to plan items, for the ☑ badge.
+  const { lists: todoLists, items: listItems } = useTripLists(trip);
+  const openTodos = useMemo(
+    () => (trip && todoLists ? openTodosByItem(todoLists, listItems, trip.myUserId) : new Map<string, number>()),
+    [trip, todoLists, listItems],
+  );
   const removeLocal = useCallback((id: string) => {
     setItems((prev) => prev?.filter((p) => p.id !== id) ?? prev);
   }, []);
@@ -120,6 +141,9 @@ export default function PlanTab() {
       if (parsed.success) upsertLocal(parsed.data);
     } else if (event.type === 'item.deleted') {
       removeLocal(event.entityId);
+    } else if (event.type === 'day.upserted') {
+      const parsed = TripDay.safeParse(event.payload);
+      if (parsed.success) upsertDay(parsed.data);
     } else if (event.type === 'day.reordered') {
       const parsed = DayReordered.safeParse(event.payload);
       if (parsed.success) parsed.data.items.forEach(upsertLocal);
@@ -288,6 +312,12 @@ export default function PlanTab() {
                 <Text style={styles.cardTitle} numberOfLines={2}>
                   {item.title}
                 </Text>
+                {openTodos.get(item.id) ? (
+                  <View style={styles.todoBadge} accessibilityLabel={`${openTodos.get(item.id)} open to-dos`}>
+                    <Feather name="check-square" size={11} color={colors.accentInk} />
+                    <Text style={styles.todoBadgeText}>{openTodos.get(item.id)}</Text>
+                  </View>
+                ) : null}
                 {item.latitude !== null ? (
                   <Feather name="map-pin" size={13} color={colors.muted} accessibilityLabel="On the map" />
                 ) : null}
@@ -372,6 +402,27 @@ export default function PlanTab() {
               })}
             </ScrollView>
             <Text style={styles.heading}>{heading}</Text>
+            {currentDate ? (
+              (() => {
+                const note = dayNotes.find((d) => d.date === currentDate);
+                const text = [note?.title, note?.notes].filter(Boolean).join(' — ');
+                if (!text && !canEdit) return null;
+                return (
+                  <Pressable
+                    accessibilityRole={canEdit ? 'button' : undefined}
+                    accessibilityHint={canEdit ? 'Edit the day’s name and note' : undefined}
+                    disabled={!canEdit}
+                    onPress={() => setEditingDay(true)}
+                    style={[styles.dayNote, !text && styles.dayNoteEmpty]}
+                  >
+                    <Feather name={text ? 'file-text' : 'plus'} size={13} color={text ? colors.ink : colors.accent} />
+                    <Text style={[styles.dayNoteText, !text && { color: colors.accent }]} numberOfLines={3}>
+                      {text || 'Name this day or add a note'}
+                    </Text>
+                  </Pressable>
+                );
+              })()
+            ) : null}
             {currentDate && located >= 2 ? (
               <View style={styles.routeRow}>
                 <Text style={styles.routeTotal}>
@@ -470,6 +521,16 @@ export default function PlanTab() {
       )}
 
       {currentDate ? (
+        <DayNoteSheet
+          visible={editingDay}
+          tripId={trip.id}
+          date={currentDate}
+          day={dayNotes.find((d) => d.date === currentDate)}
+          onSaved={upsertDay}
+          onClose={() => setEditingDay(false)}
+        />
+      ) : null}
+      {currentDate ? (
         <ShortestOrderSheet
           visible={shortest}
           tripId={trip.id}
@@ -525,6 +586,11 @@ const styles = StyleSheet.create({
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
   pillNoDay: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: 'center', color: colors.ink },
+  dayNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: '#FBF3DC' },
+  dayNoteEmpty: { backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 2 },
+  dayNoteText: { flex: 1, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, color: colors.ink },
+  todoBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
+  todoBadgeText: { fontFamily: fonts.bold, fontSize: 11, color: colors.accentInk },
   routeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
   routeTotal: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, flexBasis: '100%' },
   modes: { flexDirection: 'row', padding: 2, borderRadius: radius.pill, backgroundColor: '#ECE7DF' },

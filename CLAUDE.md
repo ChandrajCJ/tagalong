@@ -1,8 +1,8 @@
 # Tagalong
 
-Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–016), deployment in `docs/DEPLOY.md`. Read only the part you need.
+Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–018), deployment in `docs/DEPLOY.md`. Read only the part you need.
 
-Roadmap: `docs/plans/weeks-14-16.md` (week 14 done; 15 checklists & notes, 16 bookings from email) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, release track, chores). Build one week per session, in order.
+Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–15 done; 16 bookings from email) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, release track, chores). Build one week per session, in order.
 
 ## Rules
 - Commit as `Chandraj1710 <chandraj1710@gmail.com>`. Never use the work email.

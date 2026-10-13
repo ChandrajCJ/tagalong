@@ -47,7 +47,7 @@ Status: approved — defaults below are decided (Overview card, Walk under 3 km 
   - Optimise response.
   - The order endpoint: happy path, a stale version (409), viewer (403), an item from another day or trip (400), and one event published.
 
-## Week 15 — Checklists and notes
+## Week 15 — Checklists and notes (done)
 
 ### 15.1 Checklists (packing and to-dos)
 - **DB (new `lists` schema, migration 0015):**

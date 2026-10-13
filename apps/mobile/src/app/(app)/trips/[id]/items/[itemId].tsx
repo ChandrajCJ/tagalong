@@ -7,6 +7,7 @@ import {
   DocumentList,
   FavouriteResult,
   hasRole,
+  isDoneFor,
   ItineraryItem,
   MessagePage,
   newId,
@@ -49,10 +50,12 @@ import {
   type SaveResult as ItemSaveResult,
 } from '@/components/item-sheet';
 import { PhotoViewer } from '@/components/photo-viewer';
+import { TextPrompt } from '@/components/text-prompt';
 import { Avatar, Body, Button, Label } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { mergeMessages, timeOf, type LocalMessage } from '@/lib/chat';
 import { documentUrl, fileSize, typeLabel } from '@/lib/documents';
+import { personName, useTripLists } from '@/lib/lists';
 import { dayKeyOf, formatCost, ITEM_TYPE_META, planDays, shortDate } from '@/lib/plan';
 import { realtime, useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
@@ -91,6 +94,8 @@ export default function ItemDetail() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
+  const [addingTodo, setAddingTodo] = useState(false);
+  const checklists = useTripLists(trip);
 
   const tripId = trip?.id;
   const canEdit = !!trip && hasRole(trip.myRole, 'editor');
@@ -176,6 +181,7 @@ export default function ItemDetail() {
   });
 
   const mine = useMemo(() => bookings.filter((b) => b.itemId === itemId), [bookings, itemId]);
+  const todos = useMemo(() => checklists.items.filter((t) => t.itemId === itemId), [checklists.items, itemId]);
   const days = useMemo(
     () => (trip && item ? planDays(trip.startDate, trip.endDate, [item]) : []),
     [trip, item],
@@ -549,6 +555,45 @@ export default function ItemDetail() {
             ) : null}
           </View>
 
+          {todos.length > 0 || canEdit ? (
+            <View style={{ gap: space.md }}>
+              <Label>{todos.length > 0 ? `To-dos · ${todos.filter((t) => !isDoneFor(t, trip.myUserId)).length} open` : 'To-dos'}</Label>
+              {todos.map((t) => {
+                const done = isDoneFor(t, trip.myUserId);
+                const canTick = t.scope === 'everyone' || canEdit;
+                return (
+                  <Pressable
+                    key={t.id}
+                    accessibilityRole="checkbox"
+                    aria-checked={done}
+                    aria-disabled={!canTick}
+                    onPress={() =>
+                      void checklists.toggle(t, canEdit).then((problem) => problem && Alert.alert('Couldn’t tick that', problem))
+                    }
+                    style={styles.docRow}
+                  >
+                    <Feather name={done ? 'check-square' : 'square'} size={18} color={done ? colors.accent : colors.muted} />
+                    <Text style={[styles.docName, done && { color: colors.muted, textDecorationLine: 'line-through' }]} numberOfLines={2}>
+                      {t.text}
+                    </Text>
+                    {t.assigneeId ? <Body style={{ fontSize: 12 }}>{personName(trip, t.assigneeId)}</Body> : null}
+                  </Pressable>
+                );
+              })}
+              {todos.length === 0 ? (
+                <Body style={{ fontSize: 13 }}>Something to sort out first, like booking tickets? Add it as a to-do.</Body>
+              ) : null}
+              {canEdit ? (
+                <Button
+                  label="Add a to-do for this"
+                  variant="outline"
+                  icon={<Feather name="check-square" size={16} color={colors.ink} />}
+                  onPress={() => setAddingTodo(true)}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
           {photos.length > 0 ? (
             <View style={{ gap: space.md }}>
               <View style={{ gap: 2 }}>
@@ -664,6 +709,16 @@ export default function ItemDetail() {
         ) : null}
       </KeyboardAvoidingView>
 
+      <TextPrompt
+        visible={addingTodo}
+        title="Add a to-do"
+        message={`It goes on the trip’s to-do list, linked to “${item.title}”.`}
+        label="To-do"
+        initial={`Book ${item.title}`}
+        saveLabel="Add"
+        onSave={(text) => checklists.add({ kind: 'todo', text, itemId: item.id })}
+        onClose={() => setAddingTodo(false)}
+      />
       <FindOnMapSheet
         visible={finding}
         tripId={trip.id}

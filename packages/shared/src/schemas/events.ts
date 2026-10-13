@@ -32,6 +32,14 @@ export const TRIP_EVENT_TYPES = [
   'expense.deleted',
   'settlement.upserted',
   'settlement.deleted',
+  'list.upserted',
+  'list.deleted',
+  'list_item.upserted',
+  'list_item.deleted',
+  'note.upserted',
+  'note.deleted',
+  /** A day's title or note changed; the payload is the day. */
+  'day.upserted',
 ] as const;
 
 export const TripEvent = z.object({

@@ -1,11 +1,12 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
-import { changeLog, items, type Db, type Tx } from '@tagalong/db';
+import { changeLog, items, tripDays, type Db, type Tx } from '@tagalong/db';
 import {
   CreateItemInput,
   newId,
   positionBetween,
   UpdateItemInput,
   type ItineraryItem,
+  type TripDay,
 } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 import type { z } from 'zod';
@@ -38,6 +39,14 @@ export const toItem = (r: Row): ItineraryItem => ({
   longitude: r.longitude,
   placeRef: r.placeRef,
   createdBy: r.createdBy,
+  version: r.version,
+  updatedAt: r.updatedAt.toISOString(),
+});
+
+export const toDay = (r: typeof tripDays.$inferSelect): TripDay => ({
+  date: r.date,
+  title: r.title,
+  notes: r.notes,
   version: r.version,
   updatedAt: r.updatedAt.toISOString(),
 });
@@ -82,6 +91,13 @@ export const createItineraryService = (db: Db, redis: Redis) => {
         .where(and(eq(items.tripId, tripId), isNull(items.deletedAt)))
         .orderBy(sql`${items.date} asc nulls first`, asc(byPosition));
       return rows.map(toItem);
+    },
+
+    /** Days someone gave a title or a note. */
+    async days(tripId: string, userId: string): Promise<TripDay[]> {
+      await requireTripRole(db, tripId, userId, 'viewer');
+      const rows = await db.select().from(tripDays).where(eq(tripDays.tripId, tripId)).orderBy(asc(tripDays.date));
+      return rows.map(toDay);
     },
 
     /** One item, for its detail screen. */
