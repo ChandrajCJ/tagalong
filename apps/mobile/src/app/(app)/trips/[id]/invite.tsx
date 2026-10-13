@@ -1,10 +1,11 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Invite, InviteList, type CreateInviteInput } from '@tagalong/shared';
 import * as Clipboard from 'expo-clipboard';
+import Constants from 'expo-constants';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
@@ -20,14 +21,21 @@ const ROLES: { role: Role; title: string; can: string }[] = [
 ];
 
 /**
- * Once deployed, invites are web links (https://app.…/invite/<token>): they're
- * tappable in every chat app and open the web app for friends who don't have
- * Tagalong yet. Without a deployed web app (development), they fall back to a
- * link that opens the app directly: exp:// in Expo Go, tagalong:// in a build.
+ * Invites are web links (http(s)://…/invite/<token>): chat apps only make
+ * http(s) tappable, and the web app works for friends who don't have Tagalong
+ * yet. Once deployed that's EXPO_PUBLIC_APP_URL; in development it's the dev
+ * server, which serves the web app too. A tagalong:// link is the last resort.
  */
 const APP_URL = process.env.EXPO_PUBLIC_APP_URL?.replace(/\/$/, '');
-const inviteUrl = (token: string) =>
-  APP_URL ? `${APP_URL}/invite/${token}` : Linking.createURL(`/invite/${token}`);
+const devWebUrl = () => {
+  if (Platform.OS === 'web') return typeof window === 'undefined' ? null : window.location.origin;
+  const host = Constants.expoConfig?.hostUri;
+  return host ? `http://${host}` : null;
+};
+const inviteUrl = (token: string) => {
+  const base = APP_URL ?? devWebUrl();
+  return base ? `${base}/invite/${token}` : Linking.createURL(`/invite/${token}`);
+};
 
 /** Invite your crew (design: Invite.dc.html). */
 export default function InviteScreen() {
