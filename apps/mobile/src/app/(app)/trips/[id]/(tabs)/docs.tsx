@@ -36,6 +36,7 @@ import {
   uploadDocument,
   type PickedFile,
 } from '@/lib/documents';
+import { useImports } from '@/lib/imports';
 import { useTripRealtime } from '@/lib/realtime';
 import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
@@ -69,6 +70,8 @@ export default function DocsTab() {
 
   const tripId = trip?.id;
   const canUpload = !!trip && hasRole(trip.myRole, 'editor');
+  // Bookings found in emails, waiting for someone to check them.
+  const { openCount } = useImports(tripId, canUpload);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -299,6 +302,21 @@ export default function DocsTab() {
         </Pressable>
         <Title>Tickets & files</Title>
         <Body style={{ fontSize: 13 }}>Tickets, bookings and anything worth keeping.</Body>
+        {canUpload ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push(`/trips/${trip.id}/imports`)}
+            style={[styles.fromEmail, openCount > 0 && styles.fromEmailWaiting]}
+          >
+            <Feather name="mail" size={16} color={openCount > 0 ? '#FFFFFF' : colors.accent} />
+            <Text style={[styles.fromEmailText, openCount > 0 && { color: '#FFFFFF' }]}>
+              {openCount > 0
+                ? `${openCount} ${openCount === 1 ? 'booking' : 'bookings'} found in email to check`
+                : 'Add bookings from email'}
+            </Text>
+            <Feather name="chevron-right" size={16} color={openCount > 0 ? '#FFFFFF' : colors.muted} />
+          </Pressable>
+        ) : null}
 
         <View style={styles.searchBox}>
           <Feather name="search" size={16} color={colors.muted} />
@@ -439,6 +457,16 @@ export default function DocsTab() {
                 { icon: 'external-link', label: 'Open', onPress: () => void open(menuFor) },
                 ...(canUpload
                   ? [
+                      ...(menuFor.contentType === 'application/pdf' || menuFor.contentType === 'text/plain'
+                        ? [
+                            {
+                              icon: 'search' as const,
+                              label: 'Find booking in this',
+                              hint: 'Reads the ticket and offers the booking to add',
+                              onPress: () => router.push(`/trips/${trip.id}/imports?focus=${menuFor.id}`),
+                            },
+                          ]
+                        : []),
                       { icon: 'edit-3' as const, label: 'Rename', hint: 'So everyone can tell what it is', onPress: () => setRenaming(menuFor) },
                       {
                         icon: 'folder' as const,
@@ -483,6 +511,9 @@ export default function DocsTab() {
 }
 
 const styles = StyleSheet.create({
+  fromEmail: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44, paddingHorizontal: space.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  fromEmailWaiting: { backgroundColor: colors.accent, borderColor: colors.accent },
+  fromEmailText: { flex: 1, fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
   more: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: -space.sm },
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, gap: space.sm },

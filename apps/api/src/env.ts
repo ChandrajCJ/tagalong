@@ -32,6 +32,11 @@ const EnvSchema = z.object({
   /** Sends sign-in codes, e.g. smtps://user:app-password@smtp.gmail.com:465. Logged instead when unset. */
   SMTP_URL: z.string().url().optional(),
   MAIL_FROM: z.string().default('Tagalong <no-reply@tagalong.app>'),
+  /**
+   * The Gmail inbox confirmations are forwarded to (see docs/DEPLOY.md). Each
+   * trip gets its own "+code" address on it. Unset hides forwarding in the app.
+   */
+  IMPORT_ADDRESS: z.preprocess((v) => (v === '' ? undefined : v), z.string().email().optional()),
   /** Websites allowed to call the API from a browser, comma-separated. Unset allows any (development). */
   CORS_ORIGINS: z.string().optional(),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().default(15 * 60),

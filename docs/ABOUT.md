@@ -140,31 +140,38 @@ This is the app from a traveller's point of view.
 21. **Tickets & files** (from the Overview) keeps boarding passes, PDFs and
     screenshots for everyone. Each file can be renamed and moved to the right
     category from its **⋯** menu.
+22. **Bookings from email** (at the top of Tickets & files): forward a
+   confirmation to the trip's own address, paste the email, or pick a ticket
+   PDF ("Find booking in this" in a file's ⋯ menu). Flights, trains, stays,
+   tables, cars and event tickets found in it wait there, with a note in chat
+   for forwarded ones. **Check and add** opens the booking form already filled
+   in, and also puts it in the plan on its day; **Not this** skips it.
+   Nothing is added by itself. A return trip shows up as two flights.
 
 ### Talking: Chat
-22. A group chat with reactions, "Priya is typing…", "Seen by 3" and
+23. A group chat with reactions, "Priya is typing…", "Seen by 3" and
     replies. Hold any message to **reply**, react, **add it to the plan**,
     **add it as an expense**, or copy it.
-23. Activity cards appear automatically ("Sam joined", "Priya added a
+24. Activity cards appear automatically ("Sam joined", "Priya added a
     flight", "Alex added Dinner · ₹1,800", "Palolem added to the plan from
     the poll"), so the chat doubles as a record of what happened.
-24. In the installed app, push notifications arrive bundled ("Priya and Sam
+25. In the installed app, push notifications arrive bundled ("Priya and Sam
     sent 5 messages") and skip anyone who has the app open.
 
 ### Photos
-25. **Photos** is one album for the whole group. Add many at once; each keeps
+26. **Photos** is one album for the whole group. Add many at once; each keeps
     when (and, where the phone allows, where) it was taken. Browse by day, on
     a map, or by the group's favourites (hearts). **Select** several to
     download them to your phone or delete them; a photo shows on a plan item
     automatically if it was taken during it.
 
 ### Money
-26. **Money**: tap **Add expense**. Say what it was, the amount in any
+27. **Money**: tap **Add expense**. Say what it was, the amount in any
     currency (today's exchange rate fills in, and can be changed to match
     your bank), who paid, and how to split it: equally, by exact amounts, by
     percent, or by shares (a couple counts as 2). Everyone's share shows as
     you type, and the split always adds up to the cent.
-27. The top says "You're owed ₹900" or "You owe ₹450". **Settle up** suggests
+28. The top says "You're owed ₹900" or "You owe ₹450". **Settle up** suggests
     the fewest payments that square everyone. On a rupee trip, **Pay with
     UPI** opens Google Pay, PhonePe, Paytm or a bank app with the amount
     filled in; afterwards, confirm and it's recorded. Otherwise **Mark as
@@ -194,6 +201,8 @@ This is the app from a traveller's point of view.
 - **Map tiles:** OpenFreeMap; maps drawn by MapLibre.
 - **Exchange rates:** Frankfurter (European Central Bank rates).
 - **Sign-in emails:** any SMTP mailbox (a Gmail app password works).
+- **Bookings by email:** one Gmail inbox read over IMAP (optional); PDFs are
+  read with `unpdf`, emails with `mailparser`.
 - **Push notifications:** Expo's push service.
 
 All outside data goes through the API, which caches it (rates for a day,
@@ -216,7 +225,7 @@ requests.
   open data, and the whole backend runs on one free server.
 
 ### How it's checked
-- 82 tests for the shared logic and 203 for the API, all run on every change.
+- 96 tests for the shared logic and 251 for the API, all run on every change.
 - New screens are tried in a browser with two people signed in at once, and
   then on a real phone.
 
@@ -239,6 +248,7 @@ requests.
 | Maps | The trip on a map (pins by day, ideas), real maps on the web |
 | Smarter places | Real places on plan items and stays, travel time between stops, routes on the map, "Shortest order" |
 | Getting ready | Packing lists (shared or each person) with starter suggestions, to-dos linked to plan items, trip and day notes |
+| Bookings from email | Forward, paste or read a ticket PDF; bookings found wait for review, then go in as a booking and a plan item |
 
 ## 6. What's not done yet
 
@@ -260,6 +270,9 @@ Known gaps in what exists today:
   friends use the web app.
 - **No in-app card or net-banking payments:** those need a paid payment
   gateway. UPI covers bank accounts.
+- **Forwarding emails isn't switched on yet:** it needs the free Gmail inbox
+  from DEPLOY.md. Until then, paste the email or read a ticket PDF instead.
+  Screenshots of tickets can't be read (no OCR).
 - **No public-transport times:** there's no free, key-less source that covers
   India. Travel times are walking, driving or cycling.
 
@@ -267,13 +280,12 @@ Known gaps in what exists today:
 
 In the order we intend to build it:
 
-1. **Bookings from email:** forward or paste a confirmation and the flight or
-   hotel is found, ready to review and add.
-2. **A budget:** spending tracked against what the group planned to spend.
-3. **Works offline:** the whole trip saved on the phone, so it works with no
+1. **A budget:** spending tracked against what the group planned to spend.
+2. **Works offline:** the whole trip saved on the phone, so it works with no
    signal, catching up when back online.
-4. **AI:** draft a day-by-day plan from the group's ideas and bookings,
-   summarise long chats, and read amounts from receipt photos.
+3. **AI, self-hosted and free:** draft a day-by-day plan from the group's
+   ideas and bookings, summarise long chats, and read amounts from receipt
+   photos.
 
 Considered but not planned, because they aren't free to run: live flight
 status, hotel price comparison, and Google's ratings and reviews.

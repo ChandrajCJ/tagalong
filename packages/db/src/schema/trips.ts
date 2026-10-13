@@ -41,6 +41,11 @@ export const trips = tripsSchema.table('trips', {
     .notNull()
     .references(() => users.id),
   publicSlug: text('public_slug').unique(),
+  /**
+   * The "+code" in the trip's forwarding address (tagalong.inbox+code@gmail.com).
+   * Random, made the first time someone asks for the address; the owner can change it.
+   */
+  inboxCode: text('inbox_code').unique(),
   version: version(),
   ...timestamps(),
   ...softDelete(),

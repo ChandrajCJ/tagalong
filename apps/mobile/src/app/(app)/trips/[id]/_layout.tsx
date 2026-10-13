@@ -16,6 +16,7 @@ export default function TripLayout() {
         <Stack.Screen name="items/[itemId]" />
         <Stack.Screen name="lists" />
         <Stack.Screen name="notes/[noteId]" />
+        <Stack.Screen name="imports" />
       </Stack>
     </TripProvider>
   );

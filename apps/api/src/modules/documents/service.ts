@@ -20,9 +20,9 @@ type UpdateDocument = z.output<typeof UpdateDocumentInput>;
 type Row = typeof documents.$inferSelect;
 
 /** Keeps the extension, drops anything that could escape the key's folder. */
-const safeName = (name: string) => name.replace(/[^\w.\- ]+/g, '_').slice(0, 200);
+export const safeName = (name: string) => name.replace(/[^\w.\- ]+/g, '_').slice(0, 200);
 
-const toDocument = (r: Row, uploaderName: string | null): TripDocument => ({
+export const toDocument = (r: Row, uploaderName: string | null): TripDocument => ({
   id: r.id,
   tripId: r.tripId,
   uploadedBy: r.uploadedBy,

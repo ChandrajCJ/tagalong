@@ -1,0 +1,15 @@
+IndiGo - Your booking is confirmed
+
+Dear Priya Sharma,
+Thank you for choosing IndiGo. Your flights are confirmed.
+
+PNR: K7XQ2M
+
+Onward | Fri, 12 Jun 2026 | 6E 2134 | BOM 08:15 Terminal 1 | GOI 09:30
+Return | Mon, 15 Jun 2026 | 6E 5098 | GOI 18:40 | BOM 19:55 Terminal 1
+
+Passengers: Priya Sharma, Sam Mehta
+Seats: 14A, 14B
+
+Total fare: ₹9,840
+Web check-in opens 48 hours before departure.

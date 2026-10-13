@@ -5,6 +5,7 @@ import {
   toInstant,
   wallClock,
   type Booking,
+  type BookingDraft,
   type BookingType,
   type TripDocument,
 } from '@tagalong/shared';
@@ -50,6 +51,10 @@ interface Props {
   /** The trip, so a stay's address can be found on the map nearby. */
   tripId: string;
   booking?: Booking;
+  /** A new booking's fields to start from, e.g. ones found in an email. */
+  draft?: BookingDraft & { documentId?: string | null };
+  /** Says where the draft came from, above the form. */
+  draftNote?: string;
   /** The type to start with for a new booking, from the plan item's type. */
   defaultType: BookingType;
   currency: string;
@@ -65,7 +70,11 @@ const DEFAULT_TIMES: Partial<Record<BookingType, { start: string; end: string }>
   stay: { start: '15:00', end: '11:00' },
 };
 
-const fromBooking = (b: Booking | undefined, type: BookingType) => {
+type Start = Pick<Booking, 'type' | 'timezone' | 'provider' | 'reference' | 'startsAt' | 'endsAt' | 'details' | 'costMinor'> & {
+  documentId?: string | null;
+};
+
+const fromBooking = (b: Start | undefined, type: BookingType) => {
   const tz = b?.timezone ?? deviceTimezone();
   const start = b?.startsAt ? wallClock(b.startsAt, tz) : null;
   const end = b?.endsAt ? wallClock(b.endsAt, tz) : null;
@@ -90,8 +99,8 @@ const fromBooking = (b: Booking | undefined, type: BookingType) => {
 };
 
 export function BookingSheet(props: Props) {
-  const { visible, tripId, booking, defaultType, currency, documents, onSave, onDelete, onClose } = props;
-  const [form, setForm] = useState(() => fromBooking(booking, defaultType));
+  const { visible, tripId, booking, draft, draftNote, defaultType, currency, documents, onSave, onDelete, onClose } = props;
+  const [form, setForm] = useState(() => fromBooking(booking ?? draft, defaultType));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -101,17 +110,18 @@ export function BookingSheet(props: Props) {
 
   useEffect(() => {
     if (visible) {
-      const initial = fromBooking(booking, defaultType);
+      const initial = fromBooking(booking ?? draft, defaultType);
       setForm(initial);
       setErrors({});
       setNotice(undefined);
       setAddressPicked(false);
       // Open "More details" only when there's something in it already.
       const extras = DETAIL_FIELDS[initial.type].filter((f) => f.more).some((f) => initial.details[f.key]);
-      setShowMore(!!booking && (extras || !!booking.endsAt || booking.costMinor != null || !!booking.documentId));
+      const start = booking ?? draft;
+      setShowMore(!!start && (extras || !!start.endsAt || start.costMinor != null || !!start.documentId));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, booking?.id]);
+  }, [visible, booking?.id, draft]);
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -216,6 +226,12 @@ export function BookingSheet(props: Props) {
               <View style={styles.notice} accessibilityLiveRegion="polite">
                 <Feather name="info" size={16} color={colors.coralInk} />
                 <Body style={{ flex: 1, color: colors.coralInk }}>{notice}</Body>
+              </View>
+            ) : null}
+            {draftNote && !booking ? (
+              <View style={styles.draftNote}>
+                <Feather name="mail" size={16} color={colors.accentInk} />
+                <Body style={{ flex: 1, color: colors.accentInk, fontSize: 13 }}>{draftNote}</Body>
               </View>
             ) : null}
 
@@ -413,6 +429,7 @@ export function BookingSheet(props: Props) {
 }
 
 const styles = StyleSheet.create({
+  draftNote: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
   sheet: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.lg, paddingTop: space.md },
   headerButton: { minWidth: 64, minHeight: 44, justifyContent: 'center' },

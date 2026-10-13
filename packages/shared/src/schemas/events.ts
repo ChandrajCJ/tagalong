@@ -40,6 +40,9 @@ export const TRIP_EVENT_TYPES = [
   'note.deleted',
   /** A day's title or note changed; the payload is the day. */
   'day.upserted',
+  /** Bookings found in an email, waiting for review; and changes as they're added or skipped. */
+  'import.created',
+  'import.updated',
 ] as const;
 
 export const TripEvent = z.object({

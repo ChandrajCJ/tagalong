@@ -16,6 +16,8 @@ x-app-env: &app-env
   S3_SECRET_KEY: ${S3_SECRET_KEY}
   SMTP_URL: ${SMTP_URL}
   MAIL_FROM: ${MAIL_FROM}
+  IMPORT_IMAP_URL: ${IMPORT_IMAP_URL:-}
+  IMPORT_ADDRESS: ${IMPORT_ADDRESS:-}
   CORS_ORIGINS: https://app.${DOMAIN}
 
 x-app: &app

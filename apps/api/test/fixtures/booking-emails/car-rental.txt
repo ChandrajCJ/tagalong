@@ -1,0 +1,11 @@
+Zoomcar - Car rental booking confirmed
+
+Booking ID: ZC88421907
+Vehicle: Maruti Swift (Manual, Petrol)
+
+Pick-up location: Dabolim Airport, Goa
+Pick-up date: 12 Jun 2026, 10:00
+Drop-off location: Dabolim Airport, Goa
+Drop-off date: 15 Jun 2026, 17:00
+
+Amount paid: INR 6,450.00

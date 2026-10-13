@@ -47,7 +47,7 @@ Status: approved — defaults below are decided (Overview card, Walk under 3 km 
   - Optimise response.
   - The order endpoint: happy path, a stale version (409), viewer (403), an item from another day or trip (400), and one event published.
 
-## Week 15 — Checklists and notes (done)
+## Week 15 — Checklists and notes (done: commit 4669078)
 
 ### 15.1 Checklists (packing and to-dos)
 - **DB (new `lists` schema, migration 0015):**
@@ -88,7 +88,7 @@ Status: approved — defaults below are decided (Overview card, Walk under 3 km 
 - Day-note upsert and its 409, and note CRUD with its 409.
 - Events published after commit.
 
-## Week 16 — Bookings from email
+## Week 16 — Bookings from email (done)
 
 Free, no paid parser. Imports never become bookings on their own: everything lands as a **draft to review**, so a wrong guess or a spoofed email can't change a trip.
 

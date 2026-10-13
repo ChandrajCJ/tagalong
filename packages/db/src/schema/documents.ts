@@ -12,7 +12,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { id, softDelete, timestamps, version } from './columns';
 import { users } from './identity';
-import { items } from './itinerary';
+import { items, itinerarySchema } from './itinerary';
 import { trips } from './trips';
 
 export const documentsSchema = pgSchema('documents');
@@ -93,5 +93,38 @@ export const bookings = documentsSchema.table(
       'bookings_type_check',
       sql.raw(`type in ('flight', 'stay', 'train', 'ticket', 'car', 'restaurant')`),
     ),
+  ],
+);
+
+/**
+ * A confirmation email (forwarded, pasted, or read from a file) and the
+ * bookings found in it, waiting for someone to review them. Imports never
+ * become bookings on their own.
+ */
+export const bookingImports = itinerarySchema.table(
+  'booking_imports',
+  {
+    id: id(),
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    /** Who pasted or forwarded it. */
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    fromAddress: text('from_address'),
+    subject: text('subject'),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+    status: text('status').notNull().default('pending'),
+    /** What the parser found, each with whether it's been added or skipped. */
+    candidates: jsonb('candidates').notNull().$type<unknown[]>().default([]),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'set null' }),
+    /** The email's Message-ID, so the same email forwarded twice is read once. */
+    messageId: text('message_id').unique(),
+    ...timestamps(),
+  },
+  (t) => [
+    index('booking_imports_trip_idx').on(t.tripId, t.createdAt.desc()),
+    check('booking_imports_source_check', sql.raw(`source in ('email', 'paste', 'document')`)),
+    check('booking_imports_status_check', sql.raw(`status in ('pending', 'added', 'dismissed')`)),
   ],
 );

@@ -1,0 +1,13 @@
+Electronic Reservation Slip (ERS)
+IRCTC - Indian Railways
+
+PNR No: 4521378960
+Train No./Name: 12051 / JAN SHATABDI EXP
+Date of Journey: 14-Jun-2026
+From: MADGAON (MAO) | To: MUMBAI CSMT (CSMT)
+Departure: 14-Jun-2026 14:30 | Arrival: 15-Jun-2026 06:15
+Class: AC CHAIR CAR (CC) | Quota: GENERAL
+Coach: C2 | Berth: 41, 42
+Passenger 1: PRIYA SHARMA, F, 29, CNF/C2/41
+Passenger 2: SAM MEHTA, M, 31, CNF/C2/42
+Total Fare: Rs. 2,310.00

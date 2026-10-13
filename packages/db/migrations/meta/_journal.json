@@ -113,6 +113,13 @@
       "when": 1791893656951,
       "tag": "0015_lists_and_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791898396464,
+      "tag": "0016_bookings_from_email",
+      "breakpoints": true
     }
   ]
 }

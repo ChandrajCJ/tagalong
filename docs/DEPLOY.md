@@ -212,6 +212,35 @@ there except push notifications and the photo library's location fallback.
 
 ---
 
+## Bookings by email (optional, also free)
+
+People can forward a booking confirmation to the trip and find the flight or
+hotel waiting in **Tickets & files**, ready to check and add. It needs one
+Gmail inbox for the whole server. Without it, the app still lets people paste
+an email or read a ticket PDF from Docs; it just doesn't show an address.
+
+1. Make a **new** Gmail account just for this, e.g. `tagalong.inbox@gmail.com`.
+   Don't use your own: the server reads every email that arrives in it.
+2. Turn on **2-Step Verification** for it, then make an **app password** at
+   **myaccount.google.com/apppasswords** (name it `Tagalong inbox`), as in
+   step 3. Copy it and remove the spaces.
+3. In Gmail's settings (⚙ → *See all settings* → *Forwarding and POP/IMAP*),
+   make sure **IMAP is enabled**, and save.
+4. Add these to `deploy/.env` (the `@` in the address becomes `%40` in the URL):
+   ```
+   IMPORT_IMAP_URL=imaps://tagalong.inbox%40gmail.com:abcdabcdabcdabcd@imap.gmail.com:993
+   IMPORT_ADDRESS=tagalong.inbox@gmail.com
+   ```
+5. Restart: `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`.
+   The worker's log says `listening on queues ... and "inbox"` when it's on.
+
+Each trip gets its own address, such as `tagalong.inbox+k3x9q2m7tz@gmail.com`
+(Gmail delivers everything after a `+` to the same inbox). The worker reads
+the inbox every two minutes. It only reads an email if it comes from the
+address of someone who can edit that trip, **and** Gmail confirms that sender
+really sent it (DKIM or SPF). Anything else is marked read and skipped. Even
+then, nothing becomes a booking until someone taps **Add**.
+
 ## Paying back with UPI
 
 On a trip kept in rupees (INR), anyone who adds their **UPI ID** under

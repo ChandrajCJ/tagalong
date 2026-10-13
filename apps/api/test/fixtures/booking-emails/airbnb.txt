@@ -1,0 +1,17 @@
+Reservation confirmed
+
+Your reservation at Sunny loft by the river is confirmed. You're going to Lisbon!
+
+Check-in
+Fri, Jun 12
+3:00 PM
+
+Checkout
+Mon, Jun 15
+11:00 AM
+
+Address: Rua da Bica de Duarte Belo 21, 1200-056 Lisboa, Portugal
+
+Confirmation code: HMABC12345
+
+Total (EUR): €480.00

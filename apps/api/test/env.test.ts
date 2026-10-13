@@ -31,6 +31,12 @@ describe('environment', () => {
     expect(loadEnv(production)).toMatchObject({ NODE_ENV: 'production', CORS_ORIGINS: 'https://app.example.com' });
   });
 
+  it('treats an empty forwarding address as not set, as Docker Compose passes one', () => {
+    expect(loadEnv({ ...production, IMPORT_ADDRESS: '' }).IMPORT_ADDRESS).toBeUndefined();
+    expect(loadEnv({ ...production, IMPORT_ADDRESS: 'tagalong.inbox@gmail.com' }).IMPORT_ADDRESS).toBe('tagalong.inbox@gmail.com');
+    expect(() => loadEnv({ ...production, IMPORT_ADDRESS: 'not an address' })).toThrow(/IMPORT_ADDRESS/);
+  });
+
   it('only lets listed websites call the API in production', async () => {
     const { buildApp } = await import('../src/app');
     const { createDb } = await import('@tagalong/db');

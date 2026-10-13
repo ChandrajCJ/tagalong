@@ -17,6 +17,7 @@ import { placesRoutes } from './modules/places/routes';
 import { documentsRoutes } from './modules/documents/routes';
 import { healthRoutes } from './modules/health/routes';
 import { ideasRoutes } from './modules/ideas/routes';
+import { importsRoutes } from './modules/imports/routes';
 import { invitesRoutes } from './modules/invites/routes';
 import { itineraryRoutes } from './modules/itinerary/routes';
 import { listsRoutes } from './modules/lists/routes';
@@ -80,6 +81,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(moneyRoutes, { deps: fullDeps });
   await app.register(placesRoutes, { deps: fullDeps });
   await app.register(listsRoutes, { deps: fullDeps });
+  await app.register(importsRoutes, { deps: fullDeps });
 
   return app;
 };
