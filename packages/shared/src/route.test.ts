@@ -107,6 +107,31 @@ describe('optimiseDay', () => {
     expect(after).toBe(15);
   });
 
+  it('keeps fixed stops at their index on random days, short and long', () => {
+    const rand = seeded(2026);
+    for (let round = 0; round < 60; round++) {
+      // Up to 24 stops, so some stretches go past the exact limit to the quick method.
+      const { stops, matrix } = randomDay(rand, 2 + Math.floor(rand() * 23), round % 3 === 0);
+      stops.forEach((s, i) => {
+        if (i === 0) return;
+        const r = rand();
+        if (r < 0.1) s.startTime = '12:00';
+        else if (r < 0.18) [s.latitude, s.longitude] = [null, null];
+      });
+      const fixed = fixedStops(stops);
+      const result = optimiseDay(stops, matrix);
+      const ids = result.order.map((id) => stops.findIndex((s) => s.id === id));
+      stops.forEach((s, i) => fixed[i] && expect(result.order[i]).toBe(s.id));
+      expect([...result.order].sort()).toEqual(stops.map((s) => s.id).sort());
+      // Never worse than now, and the reported cost is the real one.
+      expect(result.after).toBeLessThanOrEqual(result.before + 1e-9);
+      expect(result.before).toBeCloseTo(orderCost(stops.map((_, i) => i), stops, matrix), 9);
+      expect(result.after).toBeCloseTo(orderCost(ids, stops, matrix), 9);
+      // Exact whenever brute force is still cheap enough to check.
+      if (stops.length <= 8) expect(result.after).toBeCloseTo(bruteForce(stops, matrix), 9);
+    }
+  });
+
   it('copes with nothing to move', () => {
     expect(optimiseDay([], [])).toEqual({ order: [], before: 0, after: 0 });
     expect(optimiseDay([stop('a')], [[0]]).order).toEqual(['a']);

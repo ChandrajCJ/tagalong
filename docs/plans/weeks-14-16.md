@@ -2,7 +2,7 @@
 
 Status: approved — defaults below are decided (Overview card, Walk under 3 km else Drive, viewers tick their own packing). Everything here is free with no API keys.
 
-## Week 14 — Smarter places for the plan
+## Week 14 — Smarter places for the plan (done: commit 9060e73)
 
 ### 14.1 Real places on plan items
 - **API:** `GET /places/search` gains `scope=place` (default stays `destination`). In place scope Photon is called without the city/region `layer` filter, biased to the trip's location (`lat`, `lon`, `location_bias_scale`), and limited to the trip's bounds widened by ~30 km. Same 1-day cache and 60/min limit.
