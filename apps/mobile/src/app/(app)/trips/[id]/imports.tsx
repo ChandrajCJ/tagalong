@@ -58,6 +58,8 @@ export default function ImportsScreen() {
   const [toast, setToast] = useState<{ text: string; itemId?: string | null }>();
   const [reviewing, setReviewing] = useState<{ found: BookingImport; index: number } | null>(null);
   const [addToPlan, setAddToPlan] = useState(true);
+  // Candidates someone said to add as a booking only, without a plan item.
+  const [bookingOnly, setBookingOnly] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!trip?.id) return;
@@ -207,6 +209,28 @@ export default function ImportsScreen() {
                           </View>
                         </View>
                         <Text style={[styles.confidence, c.confidence !== 'high' && { color: colors.coralInk }]}>{confidenceNote(c)}</Text>
+                        {(() => {
+                          const key = `${found.id}:${index}`;
+                          const on = !bookingOnly.has(key);
+                          return (
+                            <Pressable
+                              accessibilityRole="checkbox"
+                              aria-checked={on}
+                              onPress={() =>
+                                setBookingOnly((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                })
+                              }
+                              style={styles.planToggle}
+                            >
+                              <Feather name={on ? 'check-square' : 'square'} size={18} color={on ? colors.accent : colors.muted} />
+                              <Text style={styles.planToggleText}>Also put it in the plan on its day</Text>
+                            </Pressable>
+                          );
+                        })()}
                         <View style={styles.candidateButtons}>
                           <Button
                             label="Not this"
@@ -218,7 +242,7 @@ export default function ImportsScreen() {
                             label="Check and add"
                             style={{ flex: 1, minHeight: 44 }}
                             onPress={() => {
-                              setAddToPlan(true);
+                              setAddToPlan(!bookingOnly.has(`${found.id}:${index}`));
                               setReviewing({ found, index });
                             }}
                           />
@@ -331,6 +355,8 @@ const styles = StyleSheet.create({
   candidateMeta: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   confidence: { fontFamily: fonts.medium, fontSize: 12, color: colors.accent },
   candidateButtons: { flexDirection: 'row', gap: space.sm },
+  planToggle: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 40 },
+  planToggleText: { fontFamily: fonts.medium, fontSize: 13, color: colors.ink },
   card: { gap: space.sm, padding: space.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   address: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 48, paddingHorizontal: space.md, borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.lineStrong },
   addressText: { flex: 1, fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
