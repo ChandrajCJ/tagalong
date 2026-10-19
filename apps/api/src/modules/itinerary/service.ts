@@ -13,6 +13,7 @@ import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
 import { conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import { dayName, type Notifier } from '../../lib/notifier';
 import { postSystemMessage } from '../chat/channel';
 
 type CreateItem = z.output<typeof CreateItemInput>;
@@ -38,6 +39,7 @@ export const toItem = (r: Row): ItineraryItem => ({
   latitude: r.latitude,
   longitude: r.longitude,
   placeRef: r.placeRef,
+  placeHintDismissed: r.placeHintDismissed,
   createdBy: r.createdBy,
   version: r.version,
   updatedAt: r.updatedAt.toISOString(),
@@ -70,7 +72,18 @@ export const endOfDay = async (tx: Tx, tripId: string, date: string | null) => {
   return positionBetween(last?.position ?? null, null);
 };
 
-export const createItineraryService = (db: Db, redis: Redis) => {
+export const createItineraryService = (db: Db, redis: Redis, notifier?: Notifier) => {
+  /** "Sam added Lunch to Day 2": a line for everyone else's plan push. */
+  const tellPlan = async (tripId: string, userId: string, date: string | null, text: (day: string) => string) => {
+    if (!notifier) return;
+    const day = dayName(date, await notifier.tripStart(tripId));
+    await notifier.activity('plan', tripId, userId, {
+      text: text(day),
+      group: day,
+      url: date ? `/trips/${tripId}/plan?day=${date}` : `/trips/${tripId}/plan`,
+    });
+  };
+
   /** Loads a live item and checks the user can act on its trip. */
   const loadForWrite = async (itemId: string, userId: string) => {
     const [row] = await db
@@ -183,6 +196,7 @@ export const createItineraryService = (db: Db, redis: Redis) => {
           payload: result.card,
         });
       }
+      if (result.created) await tellPlan(tripId, userId, result.item.date, (day) => `added “${result.item.title}” to ${day}`);
       return { item: result.item, created: result.created };
     },
 
@@ -244,6 +258,10 @@ export const createItineraryService = (db: Db, redis: Redis) => {
         payload: item,
         originClientId: origin,
       });
+      // Moving a stop to another day is news; fixing a typo isn't.
+      if (item.date !== current.date) {
+        await tellPlan(current.tripId, userId, item.date, (day) => `moved “${item.title}” to ${day}`);
+      }
       return item;
     },
 
@@ -275,6 +293,7 @@ export const createItineraryService = (db: Db, redis: Redis) => {
         version: deleted.version,
         originClientId: origin,
       });
+      await tellPlan(current.tripId, userId, current.date, (day) => `removed “${current.title}” from ${day}`);
     },
   };
 };

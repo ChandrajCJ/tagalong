@@ -1,4 +1,5 @@
 import { Queue } from 'bullmq';
+import type { NotificationKind } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 
 export const NOTIFY_QUEUE = 'notify';
@@ -8,6 +9,13 @@ export const NOTIFY_DELAY_MS = 20_000;
 export interface NotifyJob {
   tripId: string;
   userId: string;
+}
+
+/** Plan, money, to-do or trip changes for one person, summed up after a short wait. */
+export interface ActivityJob {
+  tripId: string;
+  userId: string;
+  kind: Exclude<NotificationKind, 'chat' | 'mentions'>;
 }
 
 /** Someone was @mentioned: tell them now, not in the next summary. */
@@ -35,13 +43,15 @@ export interface ThumbnailJob {
 export interface Jobs {
   notifyChat(tripId: string, userIds: string[]): Promise<void>;
   notifyMention(tripId: string, messageId: string, userIds: string[]): Promise<void>;
+  /** Plan, money, to-do and trip changes, batched like chat; `now` skips the wait (due-tomorrow). */
+  notifyActivity(kind: ActivityJob['kind'], tripId: string, userIds: string[], now?: boolean): Promise<void>;
   makeThumbnail(photoId: string): Promise<void>;
   linkPreview(messageId: string): Promise<void>;
   close(): Promise<void>;
 }
 
 export const bullJobs = (redis: Redis): Jobs => {
-  const notify = new Queue<NotifyJob | MentionJob>(NOTIFY_QUEUE, { connection: redis });
+  const notify = new Queue<NotifyJob | MentionJob | ActivityJob>(NOTIFY_QUEUE, { connection: redis });
   const media = new Queue<ThumbnailJob>(MEDIA_QUEUE, { connection: redis });
   const preview = new Queue<LinkPreviewJob>(PREVIEW_QUEUE, { connection: redis });
   return {
@@ -69,6 +79,22 @@ export const bullJobs = (redis: Redis): Jobs => {
           name: 'mention',
           data: { tripId, messageId, userId },
           opts: { jobId: `mention-${messageId}-${userId}`, removeOnComplete: true, removeOnFail: true },
+        })),
+      );
+    },
+    async notifyActivity(kind, tripId, userIds, now = false) {
+      if (userIds.length === 0) return;
+      // One waiting job per person, trip and kind: a burst of changes becomes one push.
+      await notify.addBulk(
+        userIds.map((userId) => ({
+          name: 'activity',
+          data: { tripId, userId, kind },
+          opts: {
+            jobId: `activity-${kind}-${tripId}-${userId}`,
+            delay: now ? 0 : NOTIFY_DELAY_MS,
+            removeOnComplete: true,
+            removeOnFail: true,
+          },
         })),
       );
     },

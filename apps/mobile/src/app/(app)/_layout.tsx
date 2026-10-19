@@ -2,6 +2,7 @@ import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { resetPushRegistration, usePushNavigation } from '@/lib/push';
 import { realtime } from '@/lib/realtime';
+import { useReminderSync } from '@/lib/reminders';
 import { useSession } from '@/lib/session';
 import { colors } from '@/theme';
 
@@ -22,8 +23,10 @@ export default function AppLayout() {
     };
   }, []);
 
-  // Tapping a chat notification opens that trip's chat.
+  // Tapping a notification opens the screen it's about.
   usePushNavigation();
+  // Reminders before timed stops, scheduled on the phone.
+  useReminderSync();
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

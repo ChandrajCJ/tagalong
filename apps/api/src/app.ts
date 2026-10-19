@@ -21,6 +21,7 @@ import { importsRoutes } from './modules/imports/routes';
 import { invitesRoutes } from './modules/invites/routes';
 import { itineraryRoutes } from './modules/itinerary/routes';
 import { listsRoutes } from './modules/lists/routes';
+import { notificationsRoutes } from './modules/notifications/routes';
 import { photosRoutes } from './modules/photos/routes';
 import { tripsRoutes } from './modules/trips/routes';
 import { authPlugin } from './plugins/auth';
@@ -75,6 +76,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(healthRoutes, { deps: fullDeps });
   await app.register(authRoutes, { deps: fullDeps });
   await app.register(tripsRoutes, { deps: fullDeps });
+  await app.register(notificationsRoutes, { deps: fullDeps });
   await app.register(invitesRoutes, { deps: fullDeps });
   await app.register(itineraryRoutes, { deps: fullDeps });
   await app.register(daysRoutes, { deps: fullDeps });

@@ -27,6 +27,8 @@ export const ItineraryItem = z.object({
   latitude: z.number().nullable().default(null),
   longitude: z.number().nullable().default(null),
   placeRef: z.string().nullable().default(null),
+  /** Someone said this stop needs no place, so the plan stops suggesting one. */
+  placeHintDismissed: z.boolean().default(false),
   createdBy: z.string().uuid(),
   version: z.number().int(),
   updatedAt: z.string(),
@@ -50,6 +52,7 @@ const editableFields = {
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
   placeRef: z.string().max(100).nullable().optional(),
+  placeHintDismissed: z.boolean().optional(),
 };
 
 export const CreateItemInput = z.object({

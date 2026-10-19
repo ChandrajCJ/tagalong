@@ -1,11 +1,13 @@
 import Feather from '@expo/vector-icons/Feather';
-import { Me, UPI_ID } from '@tagalong/shared';
+import { Me, NotificationPrefs, REMINDER_LEADS, UPI_ID, type NotificationKind } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { NotificationToggles } from '@/components/notification-toggles';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
+import { remindersAvailable, syncReminders } from '@/lib/reminders';
 import { useSession } from '@/lib/session';
 import { colors, fonts, radius, space } from '@/theme';
 
@@ -18,6 +20,26 @@ export default function ProfileScreen() {
   const [errors, setErrors] = useState<{ name?: string; upi?: string }>({});
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
+
+  const [prefs, setPrefs] = useState<NotificationPrefs>();
+  useEffect(() => {
+    void request('/me/notifications', { schema: NotificationPrefs })
+      .then(setPrefs)
+      .catch(() => undefined);
+  }, []);
+  /** Notification settings save straight away too; reminders reschedule to match. */
+  const changePrefs = async (changes: Partial<NotificationPrefs>) => {
+    if (!prefs) return;
+    const before = prefs;
+    setPrefs({ ...prefs, ...changes });
+    try {
+      setPrefs(await request('/me/notifications', { method: 'PATCH', body: changes, schema: NotificationPrefs }));
+      if ('reminders' in changes || 'reminderMinutes' in changes) void syncReminders();
+    } catch {
+      setPrefs(before);
+      setNotice('Couldn’t change that. Try again.');
+    }
+  };
 
   /** Saved straight away, like a phone's own settings. */
   const setReadReceipts = async (on: boolean) => {
@@ -125,6 +147,54 @@ export default function ProfileScreen() {
           <Button label="Save" onPress={save} loading={busy} disabled={!me} />
 
           <View style={{ gap: space.sm, marginTop: space.xl }}>
+            <Label>Notifications</Label>
+            <Body style={{ fontSize: 13 }}>
+              What you’re told about on every trip. Each trip’s ⋯ menu can change these for that trip, or mute it.
+            </Body>
+            {prefs ? (
+              <NotificationToggles
+                prefs={prefs}
+                onChange={(kind: NotificationKind, on) => void changePrefs({ [kind]: on })}
+              />
+            ) : null}
+            <View style={styles.setting}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.settingTitle}>Reminders before timed stops</Text>
+                <Body style={{ fontSize: 13 }}>
+                  {remindersAvailable
+                    ? '“Lunch at Fisherman’s Wharf in 30 min”, set on this phone, so they work offline. Flights get at least 3 hours.'
+                    : 'Reminders only work in the phone app; the web app can’t set them.'}
+                </Body>
+              </View>
+              <Switch
+                accessibilityLabel="Reminders before timed stops"
+                value={prefs?.reminders ?? true}
+                disabled={!prefs || !remindersAvailable}
+                onValueChange={(on) => void changePrefs({ reminders: on })}
+                trackColor={{ true: colors.accent, false: colors.lineStrong }}
+              />
+            </View>
+            {prefs?.reminders && remindersAvailable ? (
+              <View style={styles.leads} accessibilityRole="radiogroup" accessibilityLabel="How long before">
+                {REMINDER_LEADS.map((m) => {
+                  const on = prefs.reminderMinutes === m;
+                  return (
+                    <Pressable
+                      key={m}
+                      accessibilityRole="radio"
+                      aria-checked={on}
+                      onPress={() => void changePrefs({ reminderMinutes: m })}
+                      style={[styles.lead, on && styles.leadOn]}
+                    >
+                      <Text style={[styles.leadText, on && { color: '#FFFFFF' }]}>{m < 60 ? `${m} min` : `${m / 60} h`} before</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+
+          <View style={{ gap: space.sm, marginTop: space.xl }}>
             <Label>Privacy</Label>
             <View style={styles.setting}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -160,6 +230,10 @@ const styles = StyleSheet.create({
   close: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   closeText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   setting: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  leads: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  lead: { minHeight: 40, paddingHorizontal: space.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface, justifyContent: 'center' },
+  leadOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  leadText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   settingTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   notice: { flexDirection: 'row', gap: space.sm, alignItems: 'center', padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
 });

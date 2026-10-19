@@ -7,3 +7,4 @@ export * from './documents';
 export * from './media';
 export * from './expenses';
 export * from './lists';
+export * from './notifications';

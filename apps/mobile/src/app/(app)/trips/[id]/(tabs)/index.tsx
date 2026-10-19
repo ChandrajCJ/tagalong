@@ -90,6 +90,12 @@ export default function TripOverview() {
   };
 
   const menu: MenuAction[] = [
+    {
+      icon: 'bell',
+      label: 'Notifications',
+      hint: 'Mute this trip, or choose what it tells you about',
+      onPress: () => router.push(`${base}/notifications`),
+    },
     trip.archived
       ? {
           icon: 'inbox',
@@ -140,7 +146,7 @@ export default function TripOverview() {
                 <IconButton icon="user-plus" label="Invite people" onPress={() => router.push(`${base}/invite`)} />
               ) : null}
               <IconButton icon="users" label="People on this trip" onPress={() => router.push(`${base}/members`)} />
-              <IconButton icon="more-horizontal" label="More: archive, delete or leave" onPress={() => setMenuOpen(true)} />
+              <IconButton icon="more-horizontal" label="More: notifications, archive, delete or leave" onPress={() => setMenuOpen(true)} />
             </View>
           </View>
           <View style={{ gap: 6 }}>

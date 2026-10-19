@@ -17,7 +17,7 @@ const SearchQuery = z.object({
 const RecommendationQuery = z.object({ category: RecommendationCategory.default('sights') });
 
 export const placesRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const service = createPlacesService(deps.db, deps.redis, deps.geo);
+  const service = createPlacesService(deps.db, deps.redis, deps.geo, deps.env.NODE_ENV === 'test' ? 0 : 2 * 60_000);
   app.addHook('preHandler', app.authenticate);
 
   app.get('/places/search', async (request) => {

@@ -11,6 +11,7 @@ export default function TripLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="invite" options={{ presentation: 'modal' }} />
         <Stack.Screen name="edit" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
         <Stack.Screen name="members" />
         <Stack.Screen name="explore" />
         <Stack.Screen name="items/[itemId]" />

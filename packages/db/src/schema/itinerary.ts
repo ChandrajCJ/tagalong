@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   char,
   check,
   date,
@@ -61,6 +62,8 @@ export const items = itinerarySchema.table(
     latitude: doublePrecision('latitude'),
     longitude: doublePrecision('longitude'),
     placeRef: text('place_ref'),
+    /** Someone said "no place needed" for this stop, so the plan stops suggesting one. */
+    placeHintDismissed: boolean('place_hint_dismissed').notNull().default(false),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),

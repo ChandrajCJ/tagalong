@@ -17,6 +17,7 @@ import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import type { Notifier } from '../../lib/notifier';
 
 type CreateList = z.output<typeof CreateListInput>;
 type UpdateList = z.output<typeof UpdateListInput>;
@@ -82,7 +83,13 @@ const hydrate = async (db: Db | Tx, row: ItemRow) =>
 
 const live = <T extends { deletedAt: unknown }>(row: T | undefined) => (row && !row.deletedAt ? row : undefined);
 
-export const createListsService = (db: Db, redis: Redis) => {
+export const createListsService = (db: Db, redis: Redis, notifier?: Notifier) => {
+  /** "Priya gave you: Book Sintra tickets", when someone else puts a line on your name. */
+  const tellAssignee = (tripId: string, userId: string, assigneeId: string | null | undefined, text: string) =>
+    assigneeId && assigneeId !== userId
+      ? notifier?.activity('todos', tripId, userId, { text: `gave you: ${text}`, url: `/trips/${tripId}/lists` }, [assigneeId])
+      : undefined;
+
   const loadList = async (listId: string) => {
     const [row] = await db.select().from(lists).where(eq(lists.id, listId));
     if (!live(row)) throw notFound('That list no longer exists');
@@ -348,7 +355,10 @@ export const createListsService = (db: Db, redis: Redis) => {
       });
 
       if (result.newList) await announceList(toList(result.newList), userId, origin);
-      if (result.created) await announceItem(result.item, userId, origin);
+      if (result.created) {
+        await announceItem(result.item, userId, origin);
+        await tellAssignee(tripId, userId, result.item.assigneeId, result.item.text);
+      }
       return { item: result.item, created: result.created, list: result.newList ? toList(result.newList) : null };
     },
 
@@ -384,6 +394,7 @@ export const createListsService = (db: Db, redis: Redis) => {
       }
       const item = await hydrate(db, updated);
       await announceItem(item, userId, origin);
+      if (item.assigneeId !== current.assigneeId) await tellAssignee(item.tripId, userId, item.assigneeId, item.text);
       return item;
     },
 

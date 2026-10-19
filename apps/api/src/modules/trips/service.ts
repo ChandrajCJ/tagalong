@@ -18,6 +18,7 @@ import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Geo } from '../../lib/geo';
+import type { Notifier } from '../../lib/notifier';
 import type { Storage } from '../../lib/storage';
 import { postSystemMessage, unreadCounts } from '../chat/channel';
 
@@ -38,7 +39,14 @@ const memberOf = (tripId: string, userId: string) =>
 /** The cover photo's file, while that photo is still there. */
 const coverJoin = and(eq(photos.id, trips.coverMediaId), isNull(photos.deletedAt), eq(photos.status, 'ready'));
 
-export const createTripsService = (db: Db, redis?: Redis, geo?: Geo, storage?: Storage, ttl = 600) => {
+export const createTripsService = (
+  db: Db,
+  redis?: Redis,
+  geo?: Geo,
+  storage?: Storage,
+  ttl = 600,
+  notifier?: Notifier,
+) => {
   /** A short-lived link to the cover, or null for a colour-only cover. */
   const coverUrl = async (key: string | null) =>
     key && storage ? storage.downloadUrl(key, 'cover.jpg', ttl) : null;
@@ -291,7 +299,7 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo, storage?: S
       await requireTripRole(db, tripId, userId, 'editor');
       const { version, ...fields } = input;
       const [current] = await db
-        .select({ startDate: trips.startDate, endDate: trips.endDate, baseCurrency: trips.baseCurrency })
+        .select({ name: trips.name, startDate: trips.startDate, endDate: trips.endDate, baseCurrency: trips.baseCurrency })
         .from(trips)
         .where(eq(trips.id, tripId));
       const start = fields.startDate !== undefined ? fields.startDate : current!.startDate;
@@ -341,6 +349,13 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo, storage?: S
           version: trip.version,
           originClientId: origin,
         });
+      }
+      // A new name or new dates is news for everyone; a new cover colour isn't.
+      const renamed = trip.name !== current!.name;
+      const redated = trip.startDate !== current!.startDate || trip.endDate !== current!.endDate;
+      if (renamed || redated) {
+        const what = renamed && redated ? 'renamed the trip and changed its dates' : renamed ? `renamed the trip “${trip.name}”` : 'changed the trip’s dates';
+        await notifier?.activity('trip', tripId, userId, { text: what, url: `/trips/${tripId}` });
       }
       return trip;
     },

@@ -184,6 +184,41 @@ describe('recommendations', () => {
     expect(ctx.geo.calls.filter((c) => c.startsWith('osm:'))).toEqual(['osm:sights', 'osm:food']);
   });
 
+  it('still finds food from Photon when Overpass doesn’t answer', async () => {
+    const me = await ctx.signIn('priya@example.com');
+    const trip = await createTrip(me.accessToken);
+    ctx.geo.answers.wiki = [];
+    ctx.geo.answers.osm = null;
+    ctx.geo.answers.photon = [place('osm:node/9', 'Fisherman’s Wharf', 'food', 0.5)];
+    const list = (await recs(me.accessToken, trip.id, 'food')).json<RecommendationList>();
+    expect(list).toMatchObject({ partial: true, places: [{ name: 'Fisherman’s Wharf', category: 'food' }] });
+    expect(ctx.geo.calls).toContain('photon:food');
+  });
+
+  it('asks Overpass about small boxes around a region’s busy spots, not the whole state', async () => {
+    const me = await ctx.signIn('priya@example.com');
+    const trip = await createTrip(me.accessToken);
+    ctx.geo.answers.wiki = [
+      place('wiki:1', 'Fort Aguada', 'culture', 5, 15.4925, 73.7732),
+      place('wiki:2', 'Palolem Beach', 'nature', 4, 15.01, 74.02),
+      place('wiki:3', 'Next to the fort', 'culture', 3, 15.493, 73.774),
+    ];
+    await recs(me.accessToken, trip.id, 'food');
+    // The centre and the two places far enough apart; the one next to the fort shares its box.
+    expect(ctx.geo.calls.filter((c) => c === 'osm:food')).toHaveLength(3);
+  });
+
+  it('says it couldn’t load places when every source fails, instead of showing nothing', async () => {
+    const me = await ctx.signIn('priya@example.com');
+    const trip = await createTrip(me.accessToken);
+    ctx.geo.answers.wiki = null;
+    ctx.geo.answers.osm = null;
+    ctx.geo.answers.photon = null;
+    const res = await recs(me.accessToken, trip.id, 'food');
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ error: 'places_unavailable' });
+  });
+
   it('are for people on the trip, viewers included', async () => {
     const me = await ctx.signIn('priya@example.com');
     const trip = await createTrip(me.accessToken);

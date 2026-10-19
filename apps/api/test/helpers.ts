@@ -80,6 +80,8 @@ export const useTestApp = () => {
     mentioned: { tripId: string; messageId: string; userId: string }[];
     /** Messages the API asked the worker to fetch a link preview for. */
     previews: string[];
+    /** Plan, money, to-do and trip pushes asked for. */
+    activity: { kind: string; tripId: string; userId: string }[];
     /** The fake storage's contents, so tests can play the worker's part. */
     storage: Storage;
     signIn: (email: string) => Promise<AuthTokens>;
@@ -103,7 +105,11 @@ export const useTestApp = () => {
     const thumbnails: string[] = [];
     const mentioned: { tripId: string; messageId: string; userId: string }[] = [];
     const previews: string[] = [];
+    const activity: { kind: string; tripId: string; userId: string }[] = [];
     const jobs: Jobs = {
+      async notifyActivity(kind, tripId, userIds) {
+        activity.push(...userIds.map((userId) => ({ kind, tripId, userId })));
+      },
       async notifyMention(tripId, messageId, userIds) {
         mentioned.push(...userIds.map((userId) => ({ tripId, messageId, userId })));
       },
@@ -140,6 +146,7 @@ export const useTestApp = () => {
     ctx.thumbnails = thumbnails;
     ctx.mentioned = mentioned;
     ctx.previews = previews;
+    ctx.activity = activity;
     ctx.storage = storage;
     ctx.fx = fx;
     ctx.geo = geo;
@@ -171,6 +178,8 @@ export const useTestApp = () => {
     ctx.thumbnails.length = 0;
     ctx.mentioned.length = 0;
     ctx.previews.length = 0;
+    ctx.activity.length = 0;
+    await ctx.redis.eval("for _, k in ipairs(redis.call('keys', 'activity:*')) do redis.call('del', k) end", 0);
     ctx.fx.clear();
     ctx.geo.reset();
     ctx.routing.reset();
@@ -228,6 +237,7 @@ export type FakeGeo = Geo & {
     search: Awaited<ReturnType<Geo['search']>>;
     wiki: Awaited<ReturnType<Geo['wikipediaNearby']>> | null;
     osm: Awaited<ReturnType<Geo['osmPlaces']>>;
+    photon: Awaited<ReturnType<Geo['photonPlaces']>>;
     weather: Awaited<ReturnType<Geo['weather']>>;
     timezone: string | null;
     photo: Awaited<ReturnType<Geo['destinationPhoto']>>;
@@ -245,6 +255,7 @@ export const fakeGeo = (): FakeGeo => {
     search: [],
     wiki: [],
     osm: [],
+    photon: [],
     weather: { timezone: 'Asia/Kolkata', days: [] },
     timezone: 'Asia/Kolkata',
     photo: null,
@@ -272,6 +283,10 @@ export const fakeGeo = (): FakeGeo => {
     async osmPlaces(_bounds, category) {
       geo.calls.push(`osm:${category}`);
       return geo.answers.osm;
+    },
+    async photonPlaces(_bounds, category) {
+      geo.calls.push(`photon:${category}`);
+      return geo.answers.photon;
     },
     async weather(_centre, kind, from, to) {
       geo.calls.push(`weather:${kind}:${from}:${to}`);

@@ -134,6 +134,13 @@
       "when": 1792423323660,
       "tag": "0018_chat_media_receipts_covers",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792426445383,
+      "tag": "0019_notifications_place_hints",
+      "breakpoints": true
     }
   ]
 }

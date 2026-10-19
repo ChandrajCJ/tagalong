@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
 import { originOf } from '../../lib/events';
+import { createNotifier } from '../../lib/notifier';
 import { parse } from '../../lib/validate';
 import { createMoneyService } from './service';
 
@@ -13,7 +14,7 @@ const currency = z.string().trim().length(3).toUpperCase();
 const QuoteQuery = z.object({ from: currency, to: currency });
 
 export const moneyRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const service = createMoneyService(deps.db, deps.redis, deps.rates);
+  const service = createMoneyService(deps.db, deps.redis, deps.rates, createNotifier(deps.db, deps.redis, deps.jobs));
   app.addHook('preHandler', app.authenticate);
 
   app.get('/fx', async (request) => {

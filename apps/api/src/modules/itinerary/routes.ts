@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
 import { originOf } from '../../lib/events';
+import { createNotifier } from '../../lib/notifier';
 import { parse } from '../../lib/validate';
 import { createItineraryService } from './service';
 
@@ -10,7 +11,7 @@ const TripParams = z.object({ id: z.string().uuid() });
 const ItemParams = z.object({ itemId: z.string().uuid() });
 
 export const itineraryRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const service = createItineraryService(deps.db, deps.redis);
+  const service = createItineraryService(deps.db, deps.redis, createNotifier(deps.db, deps.redis, deps.jobs));
   app.addHook('preHandler', app.authenticate);
 
   app.get('/trips/:id/items', async (request) => {

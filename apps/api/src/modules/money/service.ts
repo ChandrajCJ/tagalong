@@ -40,6 +40,7 @@ import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import type { Notifier } from '../../lib/notifier';
 import type { Rates } from '../../lib/fx';
 import { postSystemMessage } from '../chat/channel';
 
@@ -87,7 +88,7 @@ const toSettlement = (r: SettlementRow): Settlement => ({
   version: r.version,
 });
 
-export const createMoneyService = (db: Db, redis: Redis, rates: Rates) => {
+export const createMoneyService = (db: Db, redis: Redis, rates: Rates, notifier?: Notifier) => {
   const splitsOf = async (dbOrTx: Db | Tx, expenseIds: string[]) => {
     const bucket = new Map<string, SplitRow[]>();
     if (expenseIds.length === 0) return bucket;
@@ -312,6 +313,20 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates) => {
           origin,
         );
         await publishCard(tripId, userId, result.card);
+        // Everyone sharing it hears what it means for them: "Arun added Dinner, you owe ₹640".
+        for (const share of split) {
+          const owes = share.userId !== input.paidBy && share.shareMinor > 0;
+          await notifier?.activity(
+            'money',
+            tripId,
+            userId,
+            {
+              text: `added ${input.description}${owes ? `, you owe ${formatMoney(share.shareMinor, base, 'en-GB')}` : ''}`,
+              url: `/trips/${tripId}/money`,
+            },
+            [share.userId],
+          );
+        }
       }
       return { expense: result.expense, created: result.created };
     },
@@ -469,6 +484,18 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates) => {
           origin,
         );
         await publishCard(tripId, userId, result.card);
+        // "Sam paid you ₹500", unless you recorded it yourself.
+        const amount = formatMoney(input.amountMinor, base, 'en-GB');
+        await notifier?.activity(
+          'money',
+          tripId,
+          userId,
+          {
+            text: input.fromUser === userId ? `paid you ${amount}` : `recorded a payment to you: ${amount}`,
+            url: `/trips/${tripId}/money`,
+          },
+          [input.toUser],
+        );
       }
       return result;
     },

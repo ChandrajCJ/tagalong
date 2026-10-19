@@ -175,9 +175,6 @@ export default function IdeasTab() {
     if (!existing) {
       const id = newId();
       const optimistic: Idea = {
-        latitude: null,
-        longitude: null,
-        placeRef: null,
         imageUrl: null,
         ...fields,
         id,
@@ -193,13 +190,17 @@ export default function IdeasTab() {
       };
       upsertLocal(optimistic);
       try {
-        upsertLocal(
-          await request(`/trips/${trip.id}/ideas`, {
-            method: 'POST',
-            body: { ...fields, id },
-            schema: Idea,
-          }),
-        );
+        const saved = await request(`/trips/${trip.id}/ideas`, {
+          method: 'POST',
+          body: { ...fields, id },
+          schema: Idea,
+        });
+        // The same place was already an idea: the board keeps that one.
+        if (saved.id !== id) {
+          removeLocal(id);
+          showToast(`“${saved.title}” is already an idea`);
+        }
+        upsertLocal(saved);
         return { ok: true };
       } catch (e) {
         removeLocal(id);
@@ -476,6 +477,7 @@ export default function IdeasTab() {
       <IdeaSheet
         visible={sheet.open}
         idea={sheet.idea}
+        tripId={trip.id}
         canEdit={canEdit}
         onSave={save}
         onDelete={remove}

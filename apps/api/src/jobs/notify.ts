@@ -9,9 +9,12 @@ import {
   users,
   type Db,
 } from '@tagalong/db';
+import { channelFor } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
-import type { MentionJob, NotifyJob } from '../lib/jobs';
+import type { ActivityJob, MentionJob, NotifyJob } from '../lib/jobs';
+import { activityKey, type ActivityLine } from '../lib/notifier';
 import { ONLINE_WINDOW_MS, onlineKey } from '../lib/presence';
+import { effectivePrefs, wants } from '../modules/notifications/service';
 
 export interface PushMessage {
   to: string;
@@ -19,6 +22,8 @@ export interface PushMessage {
   body: string;
   data: { url: string };
   sound: 'default';
+  /** The Android channel, so people can tune each kind in system settings. */
+  channelId: string;
 }
 
 /** One result per message, in the same order (Expo calls these tickets). */
@@ -46,8 +51,14 @@ export const expoPushSender: PushSender = {
 };
 
 export type NotifyResult =
-  | { skipped: 'online' | 'not_member' | 'nothing_unread' | 'no_device' }
+  | { skipped: 'online' | 'not_member' | 'nothing_unread' | 'no_device' | 'turned_off' }
   | { sent: number };
+
+/** Whether they've had the app open on this trip in the last minute. */
+const isOnline = async (redis: Redis, tripId: string, userId: string) => {
+  const lastSeen = await redis.zscore(onlineKey(tripId), userId);
+  return !!lastSeen && Date.now() - Number(lastSeen) < ONLINE_WINDOW_MS;
+};
 
 const preview = (text: string) => (text.length > 120 ? `${text.slice(0, 117)}…` : text);
 
@@ -70,8 +81,9 @@ export const processNotify = async (
 ): Promise<NotifyResult> => {
   const { db, redis, push } = deps;
 
-  const lastSeen = await redis.zscore(onlineKey(tripId), userId);
-  if (lastSeen && Date.now() - Number(lastSeen) < ONLINE_WINDOW_MS) return { skipped: 'online' };
+  if (await isOnline(redis, tripId, userId)) return { skipped: 'online' };
+  const prefs = (await effectivePrefs(db, [userId], tripId)).get(userId)!;
+  if (!wants(prefs, 'chat')) return { skipped: 'turned_off' };
 
   const [membership] = await db
     .select({ tripName: trips.name })
@@ -134,6 +146,7 @@ export const processNotify = async (
       body,
       data: { url: `/trips/${tripId}/chat` },
       sound: 'default',
+      channelId: channelFor('chat'),
     })),
   );
 
@@ -152,18 +165,21 @@ const forgetDeadTokens = async (db: Db, tokens: { id: string }[], tickets: PushT
   );
 };
 
-export type MentionResult = { skipped: 'gone' | 'not_member' | 'no_device' } | { sent: number };
+export type MentionResult = { skipped: 'gone' | 'not_member' | 'no_device' | 'online' | 'turned_off' } | { sent: number };
 
 /**
- * "Priya mentioned you: …", sent straight away. Unlike the chat summary it
- * goes even while they have the app open: being asked something directly
- * shouldn't wait.
+ * "Priya mentioned you: …", sent straight away rather than in the next
+ * summary, and even while the trip is muted: being asked something directly
+ * shouldn't wait. Not while they're looking at the trip, though.
  */
 export const processMention = async (
-  deps: { db: Db; push: PushSender },
+  deps: { db: Db; redis: Redis; push: PushSender },
   { tripId, messageId, userId }: MentionJob,
 ): Promise<MentionResult> => {
-  const { db, push } = deps;
+  const { db, redis, push } = deps;
+  if (await isOnline(redis, tripId, userId)) return { skipped: 'online' };
+  const prefs = (await effectivePrefs(db, [userId], tripId)).get(userId)!;
+  if (!wants(prefs, 'mentions')) return { skipped: 'turned_off' };
   const [message] = await db
     .select({ body: messages.body, kind: messages.kind, sender: users.displayName, tripName: trips.name })
     .from(messages)
@@ -191,6 +207,67 @@ export const processMention = async (
       body: `${message.sender} mentioned you: ${describe(message)}`,
       data: { url: `/trips/${tripId}/chat` },
       sound: 'default',
+      channelId: channelFor('mentions'),
+    })),
+  );
+  await forgetDeadTokens(db, tokens, tickets);
+  return { sent: tokens.length };
+};
+
+export type ActivityResult = { skipped: 'online' | 'not_member' | 'turned_off' | 'nothing' | 'no_device' } | { sent: number };
+
+/** "Sam added Lunch to Day 2", or for several: "Sam and Priya changed Day 2: 3 updates". */
+export const summarise = (kind: ActivityJob['kind'], lines: ActivityLine[]) => {
+  const sentence = (l: ActivityLine) => (l.actorName ? `${l.actorName} ${l.text}` : l.text);
+  if (lines.length === 1) return sentence(lines[0]!);
+  const names = [...new Set(lines.map((l) => l.actorName).filter((n): n is string => !!n))];
+  const who = names.length === 0 ? '' : `${joinNames(names.slice(0, 3))}${names.length > 3 ? ' and others' : ''}`;
+  const groups = new Set(lines.map((l) => l.group ?? ''));
+  const what = { plan: 'plan updates', money: 'money updates', todos: 'to-do updates', trip: 'trip updates' }[kind];
+  if (kind === 'plan' && groups.size === 1 && lines[0]!.group) return `${who || 'Someone'} changed ${lines[0]!.group}: ${lines.length} updates`;
+  return who ? `${who}: ${lines.length} ${what}` : `${lines.length} ${what}`;
+};
+
+/**
+ * Sends one person the plan, money, to-do or trip changes that waited for
+ * them, as one push, if they want that kind, haven't muted the trip and
+ * aren't looking at it right now. The lines are used up either way.
+ */
+export const processActivity = async (
+  deps: { db: Db; redis: Redis; push: PushSender },
+  { tripId, userId, kind }: ActivityJob,
+): Promise<ActivityResult> => {
+  const { db, redis, push } = deps;
+  const key = activityKey(kind, tripId, userId);
+  const [[, raw]] = (await redis.multi().lrange(key, 0, -1).del(key).exec()) as [[unknown, string[]], unknown];
+  const lines = (raw ?? []).map((r) => JSON.parse(r) as ActivityLine);
+  if (lines.length === 0) return { skipped: 'nothing' };
+
+  if (await isOnline(redis, tripId, userId)) return { skipped: 'online' };
+  const prefs = (await effectivePrefs(db, [userId], tripId)).get(userId)!;
+  if (!wants(prefs, kind)) return { skipped: 'turned_off' };
+
+  const [membership] = await db
+    .select({ tripName: trips.name })
+    .from(tripMembers)
+    .innerJoin(trips, eq(trips.id, tripMembers.tripId))
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt), isNull(trips.deletedAt)));
+  if (!membership) return { skipped: 'not_member' };
+
+  const tokens = await db
+    .select({ id: devices.id, token: devices.pushToken })
+    .from(devices)
+    .where(and(eq(devices.userId, userId), isNotNull(devices.pushToken)));
+  if (tokens.length === 0) return { skipped: 'no_device' };
+
+  const tickets = await push.send(
+    tokens.map((t) => ({
+      to: t.token!,
+      title: membership.tripName,
+      body: summarise(kind, lines),
+      data: { url: lines.at(-1)!.url },
+      sound: 'default',
+      channelId: channelFor(kind),
     })),
   );
   await forgetDeadTokens(db, tokens, tickets);

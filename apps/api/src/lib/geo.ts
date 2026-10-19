@@ -21,6 +21,12 @@ export interface Geo {
   wikipediaNearby(centre: Point): Promise<GeoPlace[]>;
   /** Named OpenStreetMap places of a category in an area, or null if no server answered. */
   osmPlaces(bounds: Bounds, category: RecommendationCategory): Promise<GeoPlace[] | null>;
+  /**
+   * The same kind of places from Photon's search, by OpenStreetMap tag. A
+   * second source for food, nightlife and shopping, which Wikipedia rarely
+   * lists and Overpass often can't answer for a big area. Null if it failed.
+   */
+  photonPlaces(bounds: Bounds, category: RecommendationCategory): Promise<GeoPlace[] | null>;
   weather(centre: Point, kind: 'forecast' | 'archive', from: string, to: string): Promise<GeoWeather>;
   timezoneAt(centre: Point): Promise<string | null>;
   /** The lead photo of the destination's Wikipedia article, with its credit, for a trip cover. */
@@ -115,6 +121,25 @@ const OSM_FILTERS: Record<RecommendationCategory, string[]> = {
 };
 
 const KIND_TAGS = ['tourism', 'amenity', 'natural', 'leisure', 'historic', 'shop'];
+
+/** Photon searches by word and tag; these are the words and tags for each category it helps with. */
+export const PHOTON_TAGS: Partial<Record<RecommendationCategory, { q: string; tag: string }[]>> = {
+  food: [
+    { q: 'restaurant', tag: 'amenity:restaurant' },
+    { q: 'cafe', tag: 'amenity:cafe' },
+    { q: 'food court', tag: 'amenity:food_court' },
+  ],
+  nightlife: [
+    { q: 'bar', tag: 'amenity:bar' },
+    { q: 'pub', tag: 'amenity:pub' },
+    { q: 'nightclub', tag: 'amenity:nightclub' },
+  ],
+  shopping: [
+    { q: 'mall', tag: 'shop:mall' },
+    { q: 'market', tag: 'amenity:marketplace' },
+    { q: 'department store', tag: 'shop:department_store' },
+  ],
+};
 
 /** Turns an Overpass element into a place, judging how notable it is from its tags. */
 const fromOsm = (
@@ -326,7 +351,8 @@ export const openGeo = (config: GeoConfig): Geo => {
 
     async osmPlaces([west, south, east, north], category) {
       const box = `(${south},${west},${north},${east})`;
-      const query = `[out:json][timeout:20];(${OSM_FILTERS[category].map((f) => `${f}${box};`).join('')});out center tags 400;`;
+      // A short server timeout and a capped answer: the public servers drop long, big questions.
+      const query = `[out:json][timeout:15];(${OSM_FILTERS[category].map((f) => `${f}${box};`).join('')});out center tags 80;`;
       // The public servers are often busy; try each in turn before giving up.
       for (const url of config.overpassUrls) {
         try {
@@ -334,7 +360,7 @@ export const openGeo = (config: GeoConfig): Geo => {
             method: 'POST',
             headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ data: query }),
-            signal: AbortSignal.timeout(25_000),
+            signal: AbortSignal.timeout(18_000),
           });
           if (!res.ok) continue;
           const body = (await res.json()) as { elements?: Parameters<typeof fromOsm>[0][] };
@@ -344,6 +370,45 @@ export const openGeo = (config: GeoConfig): Geo => {
         }
       }
       return null;
+    },
+
+    async photonPlaces([west, south, east, north], category) {
+      const asks = PHOTON_TAGS[category];
+      if (!asks) return [];
+      type Feature = {
+        geometry: { coordinates: [number, number] };
+        properties: { name?: string; osm_type?: string; osm_id?: number; osm_key?: string; osm_value?: string; extent?: unknown };
+      };
+      const answers = await Promise.all(
+        asks.map(async ({ q, tag }) => {
+          const params = new URLSearchParams({ q, osm_tag: tag, bbox: [west, south, east, north].join(','), limit: '40', lang: 'en' });
+          try {
+            const body = await getJson<{ features: Feature[] }>(`${config.photonUrl}/api/?${params}`, 10_000);
+            return body.features.flatMap((f): GeoPlace[] => {
+              const p = f.properties;
+              if (!p.name) return [];
+              return [
+                {
+                  id: `osm:${p.osm_type === 'N' ? 'node' : p.osm_type === 'W' ? 'way' : 'relation'}/${p.osm_id ?? 0}`,
+                  name: p.name,
+                  category,
+                  description: null,
+                  imageUrl: null,
+                  url: null,
+                  kind: p.osm_value ? pretty(p.osm_value) : null,
+                  longitude: f.geometry.coordinates[0],
+                  latitude: f.geometry.coordinates[1],
+                  // Below what Overpass gives a place with a website or Wikipedia link: fills gaps, doesn't lead.
+                  score: 0.5,
+                },
+              ];
+            });
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return answers.every((a) => a === null) ? null : answers.flatMap((a) => a ?? []);
     },
 
     async weather(centre, kind, from, to) {

@@ -8,6 +8,7 @@ import { colors, space } from '@/theme';
 import { ApiError, request } from './api';
 import { CLIENT_ID } from './client-id';
 import { useTripRealtime } from './realtime';
+import { requestReminderSync } from './reminders';
 
 interface TripValue {
   trip: Trip | undefined;
@@ -42,6 +43,8 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   useTripRealtime(tripId, (message) => {
     if (message.kind !== 'event') return;
     if (message.event.type === 'trip.updated') void reload();
+    // A stop or booking was added, moved or removed: reminders follow.
+    if (/^(item|booking|day)\.|^trip\.updated$/.test(message.event.type)) requestReminderSync();
     // Whoever deleted it already left; everyone else is told why it's gone.
     if (message.event.type === 'trip.deleted' && message.event.originClientId !== CLIENT_ID) setDeleted(true);
   });

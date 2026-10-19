@@ -7,9 +7,11 @@ import {
   movableCount,
   newId,
   openTodosByItem,
+  PlaceSearch,
   positionBetween,
   TRAVEL_MODES,
   TripDay,
+  type PlaceResult,
   type RouteLeg,
 } from '@tagalong/shared';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -18,6 +20,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DayNoteSheet } from '@/components/day-note-sheet';
+import { FindOnMapSheet } from '@/components/find-on-map-sheet';
 import { ItemSheet, type ItemFields, type SaveResult } from '@/components/item-sheet';
 import { PlanMapView } from '@/components/plan-map-view';
 import { ShortestOrderSheet } from '@/components/shortest-order-sheet';
@@ -46,6 +49,11 @@ import { colors, fonts, radius, space } from '@/theme';
 
 type Editors = Record<string, { itemId: string; name: string }>;
 
+/** A stop worth suggesting a place for: not on the map, not "other", and nobody said it needs none. */
+const needsPlace = (i: ItineraryItem) => i.latitude === null && i.type !== 'other' && !i.placeHintDismissed;
+/** How many stops of a day get a guess looked up at once, to stay gentle on the search. */
+const GUESSES_PER_DAY = 5;
+
 /** The shared day-by-day plan (design: Plan.dc.html), live for everyone on the trip. */
 export default function PlanTab() {
   const { trip, reload: reloadTrip } = useTrip();
@@ -64,6 +72,10 @@ export default function PlanTab() {
   // Travel connectors hide while a card is being dragged; they'd point at the old neighbours.
   const [dragging, setDragging] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // "Add place" on a stop: the search, prefilled with the stop's text.
+  const [findingFor, setFindingFor] = useState<ItineraryItem | null>(null);
+  // A single clear match for a stop's text near the trip, offered as "Is this …?". Keyed by id and title.
+  const [guesses, setGuesses] = useState<Record<string, PlaceResult | null>>({});
 
   const tripId = trip?.id;
   const canEdit = !!trip && hasRole(trip.myRole, 'editor');
@@ -177,6 +189,69 @@ export default function PlanTab() {
     return new Map((route?.legs ?? []).filter((l) => next.get(l.fromId) === l.toId).map((l) => [l.fromId, l]));
   }, [route, dayItems]);
   const canShorten = canEdit && currentDate !== null && movableCount(dayItems) >= 3;
+  const placeless = canEdit ? dayItems.filter(needsPlace) : [];
+
+  // Look up a guess for the day's stops without a place: only a single clear match is offered.
+  const guessKey = (i: ItineraryItem) => `${i.id}:${i.title}`;
+  useEffect(() => {
+    if (!tripId || !trip?.location) return;
+    const todo = placeless.filter((i) => !(guessKey(i) in guesses)).slice(0, GUESSES_PER_DAY);
+    if (todo.length === 0) return;
+    let live = true;
+    void Promise.all(
+      todo.map(async (i) => {
+        const found = await request(`/places/search?scope=place&tripId=${tripId}&q=${encodeURIComponent(i.title)}`, {
+          schema: PlaceSearch,
+        }).catch(() => null);
+        return [guessKey(i), found?.results.length === 1 ? found.results[0]! : null] as const;
+      }),
+    ).then((pairs) => {
+      if (live) setGuesses((prev) => ({ ...prev, ...Object.fromEntries(pairs) }));
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId, trip?.location, placeless.map(guessKey).join('|')]);
+
+  /** Puts a stop on the map at the picked place, keeping any place name it already had. */
+  const pinItem = async (item: ItineraryItem, place: { name: string; latitude: number; longitude: number; placeRef: string | null }) => {
+    try {
+      upsertLocal(
+        await request(`/items/${item.id}`, {
+          method: 'PATCH',
+          body: {
+            version: item.version,
+            placeName: item.placeName ?? place.name,
+            latitude: place.latitude,
+            longitude: place.longitude,
+            placeRef: place.placeRef,
+          },
+          schema: ItineraryItem,
+        }),
+      );
+    } catch (e) {
+      const latest = e instanceof ApiError && e.status === 409 && ItineraryItem.safeParse(e.data.current);
+      if (latest && latest.success) upsertLocal(latest.data);
+      throw new Error(e instanceof ApiError ? e.message : 'Could not save that', { cause: e });
+    }
+  };
+
+  /** "No place needed": the plan stops suggesting one for this stop. */
+  const dismissPlace = async (item: ItineraryItem) => {
+    upsertLocal({ ...item, placeHintDismissed: true });
+    try {
+      upsertLocal(
+        await request(`/items/${item.id}`, {
+          method: 'PATCH',
+          body: { version: item.version, placeHintDismissed: true },
+          schema: ItineraryItem,
+        }),
+      );
+    } catch {
+      void load();
+    }
+  };
 
   /** Several items saved at once (a new order), or the day as it is now after a conflict. */
   const applyOrder = (saved: ItineraryItem[], note?: string) => {
@@ -196,8 +271,13 @@ export default function PlanTab() {
     setDraftTitle(undefined);
   };
 
-  // "Add to plan" from a chat message lands here with ?draft=<text>.
-  const { draft } = useLocalSearchParams<{ draft?: string }>();
+  // "Add to plan" from a chat message lands here with ?draft=<text>; a push about a day, with ?day=.
+  const { draft, day } = useLocalSearchParams<{ draft?: string; day?: string }>();
+  useEffect(() => {
+    if (!day) return;
+    setSelected(day as DayKey);
+    router.setParams({ day: undefined });
+  }, [day]);
   const [draftTitle, setDraftTitle] = useState<string>();
   useEffect(() => {
     if (!draft || !canEdit) return;
@@ -216,6 +296,7 @@ export default function PlanTab() {
       id,
       tripId: trip.id,
       position,
+      placeHintDismissed: false,
       createdBy: trip.myUserId,
       version: 0,
       updatedAt: new Date().toISOString(),
@@ -336,6 +417,19 @@ export default function PlanTab() {
                 <Text style={styles.directionsText}>Directions</Text>
               </Pressable>
             ) : null}
+            {canEdit && needsPlace(item) && !isActive ? (
+              <PlaceHint
+                item={item}
+                guess={guesses[guessKey(item)] ?? null}
+                onYes={(g) =>
+                  void pinItem(item, { name: g.name, latitude: g.latitude, longitude: g.longitude, placeRef: g.id }).catch((e: Error) =>
+                    showToast(e.message),
+                  )
+                }
+                onFind={() => setFindingFor(item)}
+                onDismiss={() => void dismissPlace(item)}
+              />
+            ) : null}
           </View>
         </View>
         {!dragging && !isActive ? connector(legFrom.get(item.id), !!route?.estimated) : null}
@@ -451,6 +545,14 @@ export default function PlanTab() {
                 ) : null}
               </View>
             ) : null}
+            {placeless.length >= 2 ? (
+              <View style={styles.placeNudge}>
+                <Feather name="map-pin" size={13} color={colors.accentInk} />
+                <Text style={styles.placeNudgeText}>
+                  {placeless.length} stops aren’t on the map yet. Add places for travel times.
+                </Text>
+              </View>
+            ) : null}
             {current === ANYTIME ? (
               <Body style={{ fontSize: 13 }}>
                 {days.length === 0
@@ -541,6 +643,16 @@ export default function PlanTab() {
           onClose={() => setShortest(false)}
         />
       ) : null}
+      <FindOnMapSheet
+        visible={!!findingFor}
+        tripId={trip.id}
+        query={findingFor?.placeName ?? findingFor?.title ?? ''}
+        onPick={async (place) => {
+          if (findingFor) await pinItem(findingFor, place);
+          setFindingFor(null);
+        }}
+        onClose={() => setFindingFor(null)}
+      />
       <ItemSheet
         visible={sheet}
         tripId={trip.id}
@@ -556,7 +668,49 @@ export default function PlanTab() {
   );
 }
 
+/** Under a stop with no place: "Is this Fort Aguada? Yes / Pick another", or a quiet "Add place". */
+function PlaceHint(props: {
+  item: ItineraryItem;
+  guess: PlaceResult | null;
+  onYes: (guess: PlaceResult) => void;
+  onFind: () => void;
+  onDismiss: () => void;
+}) {
+  const { guess } = props;
+  return (
+    <View style={styles.hint}>
+      <Feather name="map-pin" size={13} color={colors.accent} />
+      {guess ? (
+        <Text style={styles.hintText} numberOfLines={2}>
+          Is this <Text style={{ fontFamily: fonts.bold }}>{guess.name}</Text>
+          {guess.address ? ` (${guess.address})` : ''}?
+        </Text>
+      ) : (
+        <Text style={styles.hintText}>Not on the map yet</Text>
+      )}
+      {guess ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={`Yes, it's ${guess.name}`} onPress={() => props.onYes(guess)} style={styles.hintButton}>
+          <Text style={styles.hintAction}>Yes</Text>
+        </Pressable>
+      ) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel={`Find ${props.item.title} on the map`} onPress={props.onFind} style={styles.hintButton}>
+        <Text style={styles.hintAction}>{guess ? 'Pick another' : 'Add place'}</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="No place needed" onPress={props.onDismiss} style={styles.hintClose}>
+        <Feather name="x" size={14} color={colors.muted} />
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  hint: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.line },
+  hintText: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.muted },
+  hintButton: { minHeight: 32, paddingHorizontal: 8, justifyContent: 'center' },
+  hintAction: { fontFamily: fonts.bold, fontSize: 12, color: colors.accent },
+  hintClose: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  placeNudge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.md, backgroundColor: colors.accentSoft },
+  placeNudgeText: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.accentInk },
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.md, gap: space.md },
   pills: { gap: space.sm, paddingVertical: 2 },

@@ -57,6 +57,7 @@ describe('chat push notifications', () => {
         body: 'owner: 3 new messages',
         data: { url: `/trips/${tripId}/chat` },
         sound: 'default',
+        channelId: 'chat',
       },
     ]);
   });

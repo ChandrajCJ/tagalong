@@ -5,6 +5,7 @@ import {
   MEDIA_QUEUE,
   NOTIFY_QUEUE,
   PREVIEW_QUEUE,
+  type ActivityJob,
   type LinkPreviewJob,
   type MentionJob,
   type NotifyJob,
@@ -12,9 +13,12 @@ import {
 } from '../lib/jobs';
 import type { Storage } from '../lib/storage';
 import { imapMailbox, INBOX_QUEUE, processInbox } from './inbox';
-import { expoPushSender, processMention, processNotify } from './notify';
+import { expoPushSender, processActivity, processMention, processNotify } from './notify';
 import { processLinkPreview } from './preview';
 import { PURGE_JOB, purgeDeletedTrips } from './purge';
+import { DUE_JOB, queueDueTomorrow } from './due';
+import { bullJobs } from '../lib/jobs';
+import { createNotifier } from '../lib/notifier';
 import { processThumbnail } from './thumbnail';
 
 export interface WorkerLog {
@@ -56,6 +60,10 @@ export const startWorkers = async ({
   authservId,
   ownHosts,
 }: WorkerDeps) => {
+  // The due-tomorrow job queues its pushes the same way the API does.
+  const jobs = bullJobs(connection);
+  const notifier = createNotifier(db, redis, jobs);
+
   // One queue per workload keeps slow jobs (video, AI) from blocking fast ones (push).
   const system = new Worker(
     'system',
@@ -63,6 +71,11 @@ export const startWorkers = async ({
       if (job.name === 'ping') {
         log.info({ data: job.data }, 'Received ping from the API. The queue is working.');
         return { pong: true };
+      }
+      if (job.name === DUE_JOB) {
+        const result = await queueDueTomorrow({ db, redis, notifier });
+        if (result.queued) log.info(result, 'To-dos due tomorrow');
+        return result;
       }
       if (job.name === PURGE_JOB) {
         const result = await purgeDeletedTrips({ db, storage });
@@ -74,15 +87,20 @@ export const startWorkers = async ({
     { connection },
   );
 
-  const notify = new Worker<NotifyJob | MentionJob>(
+  const notify = new Worker<NotifyJob | MentionJob | ActivityJob>(
     NOTIFY_QUEUE,
     async (job) => {
       if (job.name === 'mention') {
-        const result = await processMention({ db, push: expoPushSender }, job.data as MentionJob);
+        const result = await processMention({ db, redis, push: expoPushSender }, job.data as MentionJob);
         log.info({ ...job.data, result }, 'Mention notification');
         return result;
       }
-      const result = await processNotify({ db, redis, push: expoPushSender }, job.data);
+      if (job.name === 'activity') {
+        const result = await processActivity({ db, redis, push: expoPushSender }, job.data as ActivityJob);
+        log.info({ ...job.data, result }, 'Activity notification');
+        return result;
+      }
+      const result = await processNotify({ db, redis, push: expoPushSender }, job.data as NotifyJob);
       log.info({ ...job.data, result }, 'Chat notification');
       return result;
     },
@@ -114,6 +132,8 @@ export const startWorkers = async ({
   // Deleted trips past their restore window go for good, once a day at 03:00 UTC.
   const systemQueue = new Queue('system', { connection });
   await systemQueue.upsertJobScheduler(PURGE_JOB, { pattern: '0 3 * * *' }, { name: PURGE_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
+  // To-dos due tomorrow: every hour, so each trip's evening comes round; each is sent once.
+  await systemQueue.upsertJobScheduler(DUE_JOB, { pattern: '15 * * * *' }, { name: DUE_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
   await systemQueue.close();
 
   // Forwarded booking emails: read the inbox every two minutes, one run at a time.
@@ -160,7 +180,7 @@ export const startWorkers = async ({
 
   return {
     close: async () => {
-      await Promise.all([system.close(), notify.close(), media.close(), preview.close(), inbox?.close()]);
+      await Promise.all([system.close(), notify.close(), media.close(), preview.close(), inbox?.close(), jobs.close()]);
     },
   };
 };

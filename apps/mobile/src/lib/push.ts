@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { PUSH_CHANNELS } from '@tagalong/shared';
 import { request } from './api';
 
 export type PushStatus = 'registered' | 'denied' | 'unavailable';
@@ -22,7 +23,24 @@ const pushSupported = () =>
   !!projectId();
 
 // Loaded lazily so the app never touches the module where push can't work.
-const notifications = () => import('expo-notifications');
+export const notifications = () => import('expo-notifications');
+
+/**
+ * Android's notification channels: Chat, Mentions, Plan & money, Reminders.
+ * People can tune each in system settings; the server says which a push uses.
+ */
+export const ensureChannels = async (N: Awaited<ReturnType<typeof notifications>>) => {
+  if (Platform.OS !== 'android') return;
+  const { HIGH, DEFAULT } = N.AndroidImportance;
+  await Promise.all([
+    N.setNotificationChannelAsync(PUSH_CHANNELS.chat.id, { name: PUSH_CHANNELS.chat.name, importance: HIGH }),
+    N.setNotificationChannelAsync(PUSH_CHANNELS.mentions.id, { name: PUSH_CHANNELS.mentions.name, importance: HIGH }),
+    N.setNotificationChannelAsync(PUSH_CHANNELS.activity.id, { name: PUSH_CHANNELS.activity.name, importance: DEFAULT }),
+    N.setNotificationChannelAsync(PUSH_CHANNELS.reminders.id, { name: PUSH_CHANNELS.reminders.name, importance: HIGH }),
+    // Pushes from before channels existed still arrive here.
+    N.setNotificationChannelAsync('default', { name: 'Other', importance: DEFAULT }),
+  ]);
+};
 
 let registered: Promise<PushStatus> | null = null;
 
@@ -46,12 +64,7 @@ export const registerForPush = (): Promise<PushStatus> => {
       let { status } = await N.getPermissionsAsync();
       if (status !== 'granted') ({ status } = await N.requestPermissionsAsync());
       if (status !== 'granted') return 'denied';
-      if (Platform.OS === 'android') {
-        await N.setNotificationChannelAsync('default', {
-          name: 'Messages',
-          importance: N.AndroidImportance.HIGH,
-        });
-      }
+      await ensureChannels(N);
       const { data: token } = await N.getExpoPushTokenAsync({ projectId: projectId() });
       await request('/me/devices/push-token', {
         method: 'POST',

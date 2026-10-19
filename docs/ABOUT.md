@@ -168,7 +168,11 @@ This is the app from a traveller's point of view.
     flight", "Alex added Dinner · ₹1,800", "Palolem added to the plan from
     the poll"), so the chat doubles as a record of what happened.
 25. In the installed app, push notifications arrive bundled ("Priya and Sam
-    sent 5 messages") and skip anyone who has the app open.
+    sent 5 messages") and skip anyone who has the app open. Besides chat,
+    they cover @mentions, plan changes, money you're part of, to-dos and
+    trip changes. **Profile → Notifications** switches each kind and sets
+    reminders before timed stops ("Lunch in 30 min"); each trip's ⋯ menu can
+    mute it for a day, a week or until turned back on.
 
 ### Photos
 26. **Photos** is one album for the whole group. Add many at once; each keeps
@@ -263,6 +267,7 @@ requests.
 | Bookings from email | Forward, paste or read a ticket PDF; bookings found wait for review, then go in as a booking and a plan item |
 | Polish 1, part A | Archive trips; owners delete and restore them (purged after 30 days); edit and delete chat messages; unread counts on trips, the Chat tab and the app icon |
 | Polish 1, part B | Photos and screenshots in chat, @mentions, link previews, delivered and read ticks with an Info sheet and a read-receipts setting, trip cover photos |
+| Polish 1, part C | Notifications you control (six kinds, per-trip mute), reminders before timed stops, gentle "add a place" hints in the plan, places for ideas, Explore food and nightlife that load |
 
 ## 6. What's not done yet
 

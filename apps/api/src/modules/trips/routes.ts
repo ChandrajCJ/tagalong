@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
 import { originOf } from '../../lib/events';
+import { createNotifier } from '../../lib/notifier';
 import { parse } from '../../lib/validate';
 import { createCoverService } from './cover';
 import { createMembersService } from './members';
@@ -12,7 +13,14 @@ const TripParams = z.object({ id: z.string().uuid() });
 const MemberParams = TripParams.extend({ userId: z.string().uuid() });
 
 export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const tripsService = createTripsService(deps.db, deps.redis, deps.geo, deps.storage, deps.env.S3_URL_TTL_SEC);
+  const tripsService = createTripsService(
+    deps.db,
+    deps.redis,
+    deps.geo,
+    deps.storage,
+    deps.env.S3_URL_TTL_SEC,
+    createNotifier(deps.db, deps.redis, deps.jobs),
+  );
   const membersService = createMembersService(deps.db, deps.redis);
   const cover = createCoverService(deps.db, deps.redis, deps.storage, deps.jobs, deps.geo);
   app.addHook('preHandler', app.authenticate);

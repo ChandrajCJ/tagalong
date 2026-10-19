@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
 import { originOf } from '../../lib/events';
+import { createNotifier } from '../../lib/notifier';
 import { parse } from '../../lib/validate';
 import { createNotesService } from './notes';
 import { createListsService } from './service';
@@ -21,7 +22,7 @@ const NoteParams = z.object({ noteId: z.string().uuid() });
 
 /** Checklists (packing and to-dos) and trip notes. */
 export const listsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const service = createListsService(deps.db, deps.redis);
+  const service = createListsService(deps.db, deps.redis, createNotifier(deps.db, deps.redis, deps.jobs));
   const notes = createNotesService(deps.db, deps.redis);
   app.addHook('preHandler', app.authenticate);
 

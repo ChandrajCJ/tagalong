@@ -13,8 +13,8 @@ import {
 } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 import { requireTripRole } from '../../lib/access';
-import { badRequest, tooMany } from '../../lib/errors';
-import type { Geo, GeoPlace, Point } from '../../lib/geo';
+import { badRequest, HttpError, tooMany } from '../../lib/errors';
+import { PHOTON_TAGS, type Geo, type GeoPlace, type Point } from '../../lib/geo';
 
 const DAY = 24 * 60 * 60;
 const ATTRIBUTION = 'Places from Wikipedia and © OpenStreetMap contributors';
@@ -78,9 +78,43 @@ export const wikiPoints = (centre: Point, area: Bounds, region: boolean): Point[
   return points;
 };
 
+/** Half the width of a box around a busy spot, in degrees (about 6.5 km). */
+const SPOT_HALF_SPAN = 0.06;
+/** How many boxes to ask Overpass about for a region: enough for the busy places, few enough to answer. */
+const MAX_SPOTS = 4;
+
+/**
+ * Where to ask Overpass. A town is one question; a region (a whole state) is
+ * too big a question for the free servers, which time out on it, so it's a
+ * few small boxes around its busiest spots: the centre and the best-known
+ * Wikipedia places, at least 10 km apart.
+ */
+export const overpassBoxes = (centre: Point, area: Bounds, region: boolean, known: GeoPlace[]): Bounds[] => {
+  if (!region) return [area];
+  const spots: Point[] = [centre];
+  for (const place of [...known].sort((a, b) => b.score - a.score)) {
+    if (spots.length >= MAX_SPOTS) break;
+    const far = spots.every((s) => Math.hypot(s.latitude - place.latitude, s.longitude - place.longitude) > 0.09);
+    if (far) spots.push(place);
+  }
+  const [w, s, e, n] = area;
+  return spots.map((p): Bounds => [
+    Math.max(w, p.longitude - SPOT_HALF_SPAN),
+    Math.max(s, p.latitude - SPOT_HALF_SPAN),
+    Math.min(e, p.longitude + SPOT_HALF_SPAN),
+    Math.min(n, p.latitude + SPOT_HALF_SPAN),
+  ]);
+};
+
 const addYears = (iso: string, years: number) => `${Number(iso.slice(0, 4)) + years}${iso.slice(4)}`;
 
-export const createPlacesService = (db: Db, redis: Redis, geo: Geo) => {
+export const createPlacesService = (
+  db: Db,
+  redis: Redis,
+  geo: Geo,
+  /** How long to wait before quietly asking again after a partial answer; 0 never does (tests). */
+  retryPartialMs = 0,
+) => {
   /** Reads a cached answer, or works it out and keeps it for `ttl` seconds. */
   const cached = async <T>(key: string, ttl: number, work: () => Promise<{ value: T; keep: boolean }>) => {
     const hit = await redis.get(key).catch(() => null);
@@ -146,7 +180,9 @@ export const createPlacesService = (db: Db, redis: Redis, geo: Geo) => {
       const region = isRegion(trip.bounds ?? null);
       const spot = `${centre.latitude.toFixed(3)},${centre.longitude.toFixed(3)}${region ? ':region' : ''}`;
 
-      return cached(`geo:recs:${category}:${spot}`, 7 * DAY, async () => {
+      // "v2": answers cached before Photon joined (often empty food lists) are left to expire.
+      const key = `geo:recs:v2:${category}:${spot}`;
+      const work = async (): Promise<RecommendationList> => {
         // Wikipedia's list serves every category, so it's fetched once per spot.
         const wikiAll = await cached(`geo:wiki:${spot}`, 7 * DAY, async () => {
           const answers = await Promise.all(
@@ -155,15 +191,43 @@ export const createPlacesService = (db: Db, redis: Redis, geo: Geo) => {
           const places = answers.every((a) => a === null) ? null : answers.flatMap((a) => a ?? []);
           return { value: places, keep: places !== null };
         });
-        const osm = await geo.osmPlaces(area, category).catch(() => null);
+        const boxes = overpassBoxes(centre, area, region, wikiAll ?? []);
+        const osmAnswers = await Promise.all(boxes.map((box) => geo.osmPlaces(box, category).catch(() => null)));
+        const osm = osmAnswers.every((a) => a === null) ? null : osmAnswers.flatMap((a) => a ?? []);
+        // Food, nightlife and shopping also ask Photon, which answers when Overpass is busy.
+        const usesPhoton = !!PHOTON_TAGS[category];
+        const photon = usesPhoton ? await geo.photonPlaces(area, category).catch(() => null) : [];
+
+        const failed = [wikiAll === null && 'wikipedia', osm === null && 'overpass', photon === null && 'photon'].filter(
+          (x): x is string => !!x,
+        );
+        if (failed.length > 0) console.warn('Explore sources failed', { category, spot, failed });
+        if (wikiAll === null && osm === null && (photon === null || !usesPhoton)) {
+          throw new HttpError(503, 'places_unavailable', 'Couldn’t load places right now. Try again.');
+        }
         // "Sights" is the best of everything Wikipedia knows; other tabs, their own kind.
         const wiki = (wikiAll ?? []).filter((p) => category === 'sights' || p.category === category);
-        const places = mergePlaces<GeoPlace>([wiki, osm ?? []], centre).map(({ score: _s, ...p }) => ({ ...p, category }));
-        const partial = wikiAll === null || osm === null;
-        // A partial answer is kept briefly, so a busy server gets another chance soon.
-        const value = { category, places, partial, region, attribution: ATTRIBUTION };
-        if (partial) await redis.set(`geo:recs:${category}:${spot}`, JSON.stringify(value), 'EX', 600).catch(() => undefined);
-        return { value, keep: !partial };
+        const places = mergePlaces<GeoPlace>([wiki, osm ?? [], photon ?? []], centre).map(({ score: _s, ...p }) => ({
+          ...p,
+          category,
+        }));
+        return { category, places, partial: failed.length > 0, region, attribution: ATTRIBUTION };
+      };
+
+      return cached(key, 7 * DAY, async () => {
+        const value = await work();
+        if (value.partial) {
+          // Kept briefly, and asked again in the background, so the next visit is likely whole.
+          await redis.set(key, JSON.stringify(value), 'EX', 600).catch(() => undefined);
+          if (retryPartialMs > 0) {
+            setTimeout(() => {
+              void work()
+                .then((again) => (again.partial ? undefined : redis.set(key, JSON.stringify(again), 'EX', 7 * DAY)))
+                .catch(() => undefined);
+            }, retryPartialMs).unref();
+          }
+        }
+        return { value, keep: !value.partial };
       });
     },
 

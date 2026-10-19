@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ITEM_TYPE_META } from '@/lib/plan';
 import { colors, fonts, radius, space } from '@/theme';
+import { PlaceField } from './place-field';
 import { Body, Button, Field, Label } from './ui';
 
 /** The fields the sheet edits, in the shape the API takes. */
@@ -23,6 +24,10 @@ export interface IdeaFields {
   type: ItemType;
   note: string | null;
   url: string | null;
+  /** Set when a real place was picked, so it shows on the map and gets directions. */
+  latitude: number | null;
+  longitude: number | null;
+  placeRef: string | null;
 }
 
 export type SaveResult = { ok: true } | { conflict: Idea } | { error: string };
@@ -31,6 +36,8 @@ interface Props {
   visible: boolean;
   /** The idea being edited, or undefined to add a new one. */
   idea?: Idea;
+  /** The trip whose area places are searched in. */
+  tripId: string;
   canEdit: boolean;
   onSave: (fields: IdeaFields) => Promise<SaveResult>;
   onDelete?: () => Promise<void>;
@@ -42,9 +49,15 @@ const fromIdea = (idea: Idea | undefined) => ({
   type: idea?.type ?? ('activity' as ItemType),
   note: idea?.note ?? '',
   url: idea?.url ?? '',
+  // An idea from Explore is its place, so its title doubles as where.
+  where: idea && idea.latitude !== null ? idea.title : '',
+  spot:
+    idea && idea.latitude !== null && idea.longitude !== null
+      ? { latitude: idea.latitude, longitude: idea.longitude, placeRef: idea.placeRef }
+      : null,
 });
 
-export function IdeaSheet({ visible, idea, canEdit, onSave, onDelete, onClose }: Props) {
+export function IdeaSheet({ visible, idea, tripId, canEdit, onSave, onDelete, onClose }: Props) {
   const [form, setForm] = useState(() => fromIdea(idea));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string>();
@@ -78,6 +91,9 @@ export function IdeaSheet({ visible, idea, canEdit, onSave, onDelete, onClose }:
       type: form.type,
       note: form.note.trim() || null,
       url: url || null,
+      latitude: form.spot?.latitude ?? null,
+      longitude: form.spot?.longitude ?? null,
+      placeRef: form.spot?.placeRef ?? null,
     });
     setBusy(false);
 
@@ -133,6 +149,26 @@ export function IdeaSheet({ visible, idea, canEdit, onSave, onDelete, onClose }:
               error={errors.title}
               editable={canEdit}
               autoFocus={!idea}
+            />
+
+            <PlaceField
+              label="Where (optional)"
+              value={form.where}
+              picked={!!form.spot}
+              tripId={tripId}
+              editable={canEdit}
+              placeholder="Search places near the trip"
+              onChangeText={(v) => setForm((f) => ({ ...f, where: v, spot: null }))}
+              onPick={(p) =>
+                setForm((f) => ({
+                  ...f,
+                  where: p.name,
+                  // An idea with no name yet is named after its place.
+                  title: f.title.trim() ? f.title : p.name,
+                  spot: { latitude: p.latitude, longitude: p.longitude, placeRef: p.placeRef },
+                }))
+              }
+              pickedHint="On the Plan map, with directions. It keeps its place when it moves into the plan."
             />
 
             <View style={{ gap: space.sm }}>

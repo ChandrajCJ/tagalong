@@ -230,7 +230,7 @@ export default function ExploreScreen() {
               ListHeaderComponent={
                 <>
                   {!canEdit ? <Body style={{ fontSize: 13 }}>{VIEWER_NOTE}</Body> : null}
-                  {list.partial ? (
+                  {list.partial && list.places.length > 0 ? (
                     <Body style={{ fontSize: 13, color: colors.coralInk }}>
                       Some sources were busy, so this list may be shorter than usual. Try again later for more.
                     </Body>
@@ -239,11 +239,19 @@ export default function ExploreScreen() {
                 </>
               }
               ListEmptyComponent={
-                <View style={styles.center}>
-                  <Body style={{ textAlign: 'center' }}>
-                    Nothing found in this category near {city}. Try another one.
-                  </Body>
-                </View>
+                list.partial ? (
+                  // Empty because sources were busy, not because there's nothing: say so, and offer a retry.
+                  <View style={styles.center}>
+                    <Body style={{ textAlign: 'center' }}>Couldn’t load places right now. Try again.</Body>
+                    <Button label="Try again" variant="outline" onPress={() => void load(category)} />
+                  </View>
+                ) : (
+                  <View style={styles.center}>
+                    <Body style={{ textAlign: 'center' }}>
+                      Nothing found in this category near {city}. Try another one.
+                    </Body>
+                  </View>
+                )
               }
               ListFooterComponent={<Text style={styles.attribution}>{list.attribution}</Text>}
             />
