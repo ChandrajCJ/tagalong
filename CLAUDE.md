@@ -2,7 +2,7 @@
 
 Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–019), deployment in `docs/DEPLOY.md`. Read only the part you need.
 
-Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, release track, chores). Build one week per session, in order.
+Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, release track, chores). Build one week per session, in order. Before week 17, do `docs/plans/polish-1.md` sessions A–D (archive/delete trips, chat edit/delete, unread counts, chat media + mentions + link previews, notifications + reminders, video, dark mode).
 
 ## Rules
 - Commit as `Chandraj1710 <chandraj1710@gmail.com>`. Never use the work email.
