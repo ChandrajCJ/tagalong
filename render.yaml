@@ -1,0 +1,99 @@
+# Render Blueprint: the free, no-card deployment in docs/DEPLOY-FREE.md.
+# Render → New → Blueprint → pick this repo. It creates all three services and
+# asks for every value marked `sync: false` (the secrets; nothing secret lives here).
+#
+# Service names become addresses: tagalong-api.onrender.com and
+# tagalong.onrender.com. If Render says a name is taken, rename it here and
+# update the URLs below to match.
+
+services:
+  # API + live updates (/ws) + background jobs, all in one process (src/all.ts),
+  # because the free plan runs one server.
+  - type: web
+    name: tagalong-api
+    runtime: node
+    region: singapore
+    plan: free
+    # Only the API and the packages it uses: skips the mobile app's dependencies.
+    # NODE_ENV=development for the install only: production would skip the build tools (esbuild).
+    buildCommand: NODE_ENV=development npx --yes pnpm@10.18.0 install --frozen-lockfile --filter tagalong --filter "@tagalong/api..." && npx --yes pnpm@10.18.0 --filter @tagalong/api build
+    # Runs migrations first, then serves. Plain node: no TypeScript compiling at start.
+    startCommand: node --enable-source-maps apps/api/dist/all.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: tagalong-redis
+          property: connectionString
+      # Neon: the pooled address (host contains "-pooler") for the app…
+      - key: DATABASE_URL
+        sync: false
+      # …and the direct one for migrations, which hold a lock.
+      - key: DATABASE_DIRECT_URL
+        sync: false
+      # Photos and files: Supabase Storage (or Backblaze B2), S3 settings.
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_PUBLIC_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        value: tagalong
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      # Sign-in emails over HTTPS: Render's free plan blocks SMTP.
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://tagalong.onrender.com
+      # Bookings by email (optional): the Gmail inbox and its IMAP address.
+      - key: IMPORT_ADDRESS
+        sync: false
+      - key: IMPORT_IMAP_URL
+        sync: false
+      - key: GEO_USER_AGENT
+        value: Tagalong/1.0 (group trip planner; https://github.com/ChandrajCJ/tagalong)
+
+  # The web app: static files, free, never sleeps.
+  - type: web
+    name: tagalong
+    runtime: static
+    buildCommand: npx --yes pnpm@10.18.0 install --frozen-lockfile --filter tagalong --filter "@tagalong/mobile..." && npx --yes pnpm@10.18.0 --filter @tagalong/mobile exec expo export --platform web --output-dir dist
+    staticPublishPath: apps/mobile/dist
+    autoDeploy: true
+    # A single-page app: /invite/abc and every other path load index.html.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Baked into the web app when it's built.
+      - key: EXPO_PUBLIC_API_URL
+        value: https://tagalong-api.onrender.com
+      # The app adds /ws itself.
+      - key: EXPO_PUBLIC_GATEWAY_URL
+        value: wss://tagalong-api.onrender.com
+      - key: EXPO_PUBLIC_APP_URL
+        value: https://tagalong.onrender.com
+
+  # Redis for live-update fan-out, caches, presence and the job queue.
+  # Free: in memory only, so a restart empties it; nothing permanent lives here.
+  - type: keyvalue
+    name: tagalong-redis
+    region: singapore
+    plan: free
+    # The job queue must never have keys evicted from under it.
+    maxmemoryPolicy: noeviction
+    # Only Render services can connect.
+    ipAllowList: []

@@ -10,7 +10,7 @@ import {
   type ServerMessage,
 } from '@tagalong/shared';
 import { eq } from 'drizzle-orm';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import type { Redis } from 'ioredis';
 import type { WebSocket } from 'ws';
 import type { Env } from '../env';
@@ -46,7 +46,8 @@ const CLIENT_ID = /^[A-Za-z0-9-]{8,64}$/;
  * The realtime gateway: keeps a WebSocket open to each phone and forwards
  * trip events from Redis to everyone subscribed to that trip.
  */
-export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) => {
+export const buildGateway = async (deps: GatewayDeps) => {
+  const { env } = deps;
   const app = Fastify({
     logger:
       env.NODE_ENV === 'test'
@@ -57,6 +58,21 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
           },
   });
   await app.register(authPlugin, { secret: env.JWT_SECRET });
+  await registerGateway(app, deps);
+  return app;
+};
+
+/**
+ * Adds the gateway's `/ws` endpoint to an app that already has the auth
+ * plugin. On its own it's a separate process (`buildGateway`); on a host
+ * with one free server it shares the API's (`src/all.ts`), where the API
+ * already answers `/health`.
+ */
+export const registerGateway = async (
+  app: FastifyInstance,
+  { db, redis, subscriber }: Omit<GatewayDeps, 'env'>,
+  { healthRoute = true }: { healthRoute?: boolean } = {},
+) => {
   await app.register(websocket);
 
   const rooms = new Map<string, Set<Conn>>();
@@ -70,7 +86,8 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
     if (!room) rooms.set(tripId, (room = new Set()));
     room.add(conn);
     conn.trips.add(tripId);
-    await redis.zadd(onlineKey(tripId), Date.now(), conn.userId);
+    // Presence is a nicety: a full or restarting Redis mustn't stop live updates.
+    await redis.zadd(onlineKey(tripId), Date.now(), conn.userId).catch(() => undefined);
   };
 
   const leave = async (conn: Conn, tripId: string) => {
@@ -168,7 +185,7 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
     await subscriber.punsubscribe();
   });
 
-  app.get('/health', async () => ({ status: 'ok', connections: conns.size }));
+  if (healthRoute) app.get('/health', async () => ({ status: 'ok', connections: conns.size }));
 
   app.get<{ Querystring: { token?: string; clientId?: string } }>(
     '/ws',
@@ -211,7 +228,7 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
         const conn = await ready;
         if (!conn) return;
         conn.alive = true;
-        for (const tripId of conn.trips) void redis.zadd(onlineKey(tripId), Date.now(), conn.userId);
+        for (const tripId of conn.trips) void redis.zadd(onlineKey(tripId), Date.now(), conn.userId).catch(() => undefined);
       });
 
       socket.on('close', async () => {
@@ -265,6 +282,4 @@ export const buildGateway = async ({ env, db, redis, subscriber }: GatewayDeps) 
       });
     },
   );
-
-  return app;
 };

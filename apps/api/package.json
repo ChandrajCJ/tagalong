@@ -11,6 +11,9 @@
     "start": "tsx --env-file-if-exists=../../.env src/server.ts",
     "dev:gateway": "tsx watch --env-file-if-exists=../../.env src/gateway.ts",
     "start:gateway": "tsx --env-file-if-exists=../../.env src/gateway.ts",
+    "dev:all": "tsx watch --env-file-if-exists=../../.env src/all.ts",
+    "build": "node build.mjs",
+    "start:all": "node --enable-source-maps dist/all.js",
     "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
@@ -39,6 +42,7 @@
     "@types/mailparser": "^3.9.0",
     "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.18.2",
+    "esbuild": "~0.25.12",
     "pino-pretty": "^13.1.3",
     "ws": "^8.22.0"
   }

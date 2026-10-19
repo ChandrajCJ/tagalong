@@ -22,7 +22,9 @@ const reachable = async (endpoint: string) => {
 
 describe('object storage', async () => {
   loadTestEnv();
-  const env = loadEnv();
+  // Talk to storage directly: the phone-facing address follows the laptop's Wi-Fi
+  // address, which changes, and this test is about signing, not networks.
+  const env = { ...loadEnv(), S3_PUBLIC_ENDPOINT: undefined };
   const up = await reachable(env.S3_ENDPOINT);
   const maybe = up ? it : it.skip;
   let storage: Storage;

@@ -7,6 +7,11 @@ const EnvSchema = z.object({
   GATEWAY_PORT: z.coerce.number().int().default(3002),
   LOG_LEVEL: z.string().default('info'),
   DATABASE_URL: z.string().url(),
+  /**
+   * A direct (not pooled) connection for migrations, which hold a session lock.
+   * Neon gives both; unset uses DATABASE_URL.
+   */
+  DATABASE_DIRECT_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
   REDIS_URL: z.string().url(),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   S3_ENDPOINT: z.string().url().default('http://localhost:8333'),
@@ -31,12 +36,21 @@ const EnvSchema = z.object({
   FX_API_URL: z.string().url().default('https://api.frankfurter.dev/v1'),
   /** Sends sign-in codes, e.g. smtps://user:app-password@smtp.gmail.com:465. Logged instead when unset. */
   SMTP_URL: z.string().url().optional(),
+  /**
+   * Sends sign-in codes through Brevo's HTTPS API instead (free, 300 a day).
+   * For hosts that block SMTP, such as Render's free plan. Wins over SMTP_URL.
+   */
+  BREVO_API_KEY: z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
   MAIL_FROM: z.string().default('Tagalong <no-reply@tagalong.app>'),
   /**
    * The Gmail inbox confirmations are forwarded to (see docs/DEPLOY.md). Each
    * trip gets its own "+code" address on it. Unset hides forwarding in the app.
    */
   IMPORT_ADDRESS: z.preprocess((v) => (v === '' ? undefined : v), z.string().email().optional()),
+  /** That inbox over IMAP, for the worker: imaps://user:app-password@imap.gmail.com:993. */
+  IMPORT_IMAP_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  /** Whose Authentication-Results headers to trust: the receiving server's. */
+  IMPORT_AUTHSERV_ID: z.string().default('mx.google.com'),
   /** Websites allowed to call the API from a browser, comma-separated. Unset allows any (development). */
   CORS_ORIGINS: z.string().optional(),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().default(15 * 60),
@@ -45,7 +59,9 @@ const EnvSchema = z.object({
   // Development defaults are fine on a laptop and dangerous on the internet.
   if (env.NODE_ENV !== 'production') return;
   const problem = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
-  if (!env.SMTP_URL) problem('SMTP_URL', 'required in production, or nobody can get a sign-in code');
+  if (!env.SMTP_URL && !env.BREVO_API_KEY) {
+    problem('SMTP_URL', 'set SMTP_URL or BREVO_API_KEY in production, or nobody can get a sign-in code');
+  }
   if (env.JWT_SECRET.length < 32 || env.JWT_SECRET.startsWith('change-me')) {
     problem('JWT_SECRET', 'use at least 32 random characters in production (openssl rand -hex 32)');
   }

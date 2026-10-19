@@ -116,8 +116,9 @@ export const createPlacesService = (db: Db, redis: Redis, geo: Geo) => {
       { near, scope = 'destination', tripId }: { near?: Point; scope?: PlaceScope; tripId?: string } = {},
     ): Promise<PlaceResult[]> {
       if (tripId) await requireTripRole(db, tripId, userId, 'viewer');
-      const count = await redis.incr(`geo:rate:${userId}`);
-      if (count === 1) await redis.expire(`geo:rate:${userId}`, 60);
+      // If Redis can't count (full, restarting), let the search through.
+      const count = await redis.incr(`geo:rate:${userId}`).catch(() => 0);
+      if (count === 1) await redis.expire(`geo:rate:${userId}`, 60).catch(() => undefined);
       if (count > 60) throw tooMany('Searching too fast. Wait a moment and try again.');
 
       let bbox: Bounds | undefined;

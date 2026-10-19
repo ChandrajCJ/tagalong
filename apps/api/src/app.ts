@@ -4,7 +4,7 @@ import type { Deps } from './deps';
 import { frankfurterRates } from './lib/fx';
 import { openGeo } from './lib/geo';
 import { bullJobs } from './lib/jobs';
-import { logMailer, smtpMailer } from './lib/mailer';
+import { brevoMailer, logMailer, smtpMailer } from './lib/mailer';
 import { osrmRouting } from './lib/routing';
 import { s3Storage } from './lib/storage';
 import { authRoutes } from './modules/auth/routes';
@@ -44,7 +44,13 @@ export const buildApp = async (deps: BuildDeps) => {
 
   const fullDeps: Deps = {
     ...deps,
-    mailer: deps.mailer ?? (env.SMTP_URL ? smtpMailer(env.SMTP_URL, env.MAIL_FROM) : logMailer(app.log)),
+    mailer:
+      deps.mailer ??
+      (env.BREVO_API_KEY
+        ? brevoMailer(env.BREVO_API_KEY, env.MAIL_FROM)
+        : env.SMTP_URL
+          ? smtpMailer(env.SMTP_URL, env.MAIL_FROM)
+          : logMailer(app.log)),
     jobs: deps.jobs ?? bullJobs(deps.redis),
     storage: deps.storage ?? s3Storage(env),
     rates: deps.rates ?? frankfurterRates(deps.redis, env.FX_API_URL),

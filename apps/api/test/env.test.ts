@@ -31,6 +31,19 @@ describe('environment', () => {
     expect(loadEnv(production)).toMatchObject({ NODE_ENV: 'production', CORS_ORIGINS: 'https://app.example.com' });
   });
 
+  it('accepts Brevo instead of SMTP, for hosts that block SMTP', () => {
+    const noSmtp = { ...production, SMTP_URL: undefined };
+    expect(() => loadEnv(noSmtp)).toThrow(/SMTP_URL or BREVO_API_KEY/);
+    expect(loadEnv({ ...noSmtp, BREVO_API_KEY: 'xkeysib-123' }).BREVO_API_KEY).toBe('xkeysib-123');
+  });
+
+  it('takes an optional direct database address for migrations', () => {
+    expect(loadEnv({ ...production, DATABASE_DIRECT_URL: '' }).DATABASE_DIRECT_URL).toBeUndefined();
+    expect(loadEnv({ ...production, DATABASE_DIRECT_URL: 'postgres://u:p@direct:5432/db' }).DATABASE_DIRECT_URL).toBe(
+      'postgres://u:p@direct:5432/db',
+    );
+  });
+
   it('treats an empty forwarding address as not set, as Docker Compose passes one', () => {
     expect(loadEnv({ ...production, IMPORT_ADDRESS: '' }).IMPORT_ADDRESS).toBeUndefined();
     expect(loadEnv({ ...production, IMPORT_ADDRESS: 'tagalong.inbox@gmail.com' }).IMPORT_ADDRESS).toBe('tagalong.inbox@gmail.com');
