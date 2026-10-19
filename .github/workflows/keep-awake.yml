@@ -1,0 +1,23 @@
+# Render's free plan puts the API to sleep after 15 minutes without requests,
+# and the next person then waits about a minute. Asking /health every few
+# minutes keeps it awake (750 free hours a month covers one service running
+# all month), and a failed run is an email that the API is down.
+# GitHub can start scheduled runs late when it's busy, hence every 5 minutes.
+name: Keep the API awake
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ask the API if it's healthy
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-delay 20 --retry-all-errors --max-time 90 \
+            https://tagalong-api-9twu.onrender.com/health
