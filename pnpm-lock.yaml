@@ -59,6 +59,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.3.3
         version: 11.3.3
+      '@photostructure/tz-lookup':
+        specifier: 11.7.0
+        version: 11.7.0
       '@tagalong/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -1810,6 +1813,9 @@ packages:
 
   '@oxc-project/types@0.151.0':
     resolution: {integrity: sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA==}
+
+  '@photostructure/tz-lookup@11.7.0':
+    resolution: {integrity: sha512-QbKHXvleluMIlAHf2JiQTJNU5rLQBeQhLobyRqgXZ6NNGKqNikaRkjYviJ4nMU7Y75QE7bBYM8xjiFGjAukyhw==}
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -6929,6 +6935,8 @@ snapshots:
 
   '@oxc-project/types@0.151.0': {}
 
+  '@photostructure/tz-lookup@11.7.0': {}
+
   '@pinojs/redact@0.4.0': {}
 
   '@radix-ui/primitive@1.1.7': {}
@@ -7247,9 +7255,7 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 

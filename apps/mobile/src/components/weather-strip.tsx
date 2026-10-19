@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { TripWeather, weatherInfo } from '@tagalong/shared';
+import { TripWeather, tripWeather, weatherInfo, type Trip } from '@tagalong/shared';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { request } from '@/lib/api';
@@ -10,19 +10,27 @@ import { colors, fonts, radius, space } from '@/theme';
  * The weather for the trip's days: a forecast for the coming two weeks, or
  * last year's weather on the same dates for a trip further out. Hidden when
  * the trip has no real location or is over.
+ *
+ * The phone asks Open-Meteo itself: it limits requests per address, and a free
+ * server's address is shared with strangers who use the allowance up. The
+ * API's copy is the fallback.
  */
-export function WeatherStrip({ tripId, refreshKey }: { tripId: string; refreshKey?: string }) {
+export function WeatherStrip({ trip }: { trip: Trip }) {
   const [weather, setWeather] = useState<TripWeather | null>(null);
+  const latitude = trip.location?.latitude ?? null;
+  const longitude = trip.location?.longitude ?? null;
 
   useEffect(() => {
     let live = true;
-    request(`/trips/${tripId}/weather`, { schema: TripWeather })
+    const today = new Date().toISOString().slice(0, 10);
+    tripWeather(fetch, { latitude, longitude, startDate: trip.startDate, endDate: trip.endDate }, today)
+      .catch(() => request(`/trips/${trip.id}/weather`, { schema: TripWeather }))
       .then((w) => live && setWeather(w))
       .catch(() => live && setWeather(null));
     return () => {
       live = false;
     };
-  }, [tripId, refreshKey]);
+  }, [trip.id, latitude, longitude, trip.startDate, trip.endDate]);
 
   if (!weather || weather.kind === 'none' || weather.days.length === 0) return null;
   const typical = weather.kind === 'typical';

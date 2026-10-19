@@ -103,10 +103,7 @@ export default function TripOverview() {
           ) : null}
         </View>
 
-        <WeatherStrip
-          tripId={trip.id}
-          refreshKey={`${trip.version}:${trip.startDate}:${trip.endDate}:${trip.location?.placeId ?? ''}`}
-        />
+        <WeatherStrip trip={trip} />
 
         <NextUpCard tripId={trip.id} />
 

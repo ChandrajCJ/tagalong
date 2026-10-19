@@ -1,4 +1,12 @@
-import { classifyWikiPlace, type Bounds, type PlaceResult, type PlaceScope, type RecommendationCategory } from '@tagalong/shared';
+import tzlookup from '@photostructure/tz-lookup';
+import {
+  classifyWikiPlace,
+  openMeteoDaily,
+  type Bounds,
+  type PlaceResult,
+  type PlaceScope,
+  type RecommendationCategory,
+} from '@tagalong/shared';
 
 /**
  * Open map data for destinations: OpenStreetMap search (Photon), places worth
@@ -271,56 +279,17 @@ export const openGeo = (config: GeoConfig): Geo => {
     },
 
     async weather(centre, kind, from, to) {
-      const archive = kind === 'archive';
-      const params = new URLSearchParams({
-        latitude: String(centre.latitude),
-        longitude: String(centre.longitude),
-        daily: archive
-          ? 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum'
-          : 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
-        timezone: 'auto',
-        start_date: from,
-        end_date: to,
-      });
-      const base = archive ? 'https://archive-api.open-meteo.com/v1/archive' : 'https://api.open-meteo.com/v1/forecast';
-      type Daily = {
-        time: string[];
-        weather_code: (number | null)[];
-        temperature_2m_max: (number | null)[];
-        temperature_2m_min: (number | null)[];
-        precipitation_probability_max?: (number | null)[];
-        precipitation_sum?: (number | null)[];
-      };
-      const body = await getJson<{ timezone?: string; daily?: Daily }>(`${base}?${params}`);
-      const d = body.daily;
-      return {
-        timezone: body.timezone ?? null,
-        days: (d?.time ?? []).flatMap((date, i) =>
-          d!.weather_code[i] == null || d!.temperature_2m_max[i] == null
-            ? []
-            : [
-                {
-                  date,
-                  code: d!.weather_code[i]!,
-                  maxC: Math.round(d!.temperature_2m_max[i]!),
-                  minC: Math.round(d!.temperature_2m_min[i] ?? d!.temperature_2m_max[i]!),
-                  rainChance: d!.precipitation_probability_max?.[i] ?? null,
-                  rainMm: d!.precipitation_sum?.[i] ?? null,
-                },
-              ],
-        ),
-      };
+      return openMeteoDaily(fetch, centre, kind, from, to, headers);
     },
 
     async timezoneAt(centre) {
-      const params = new URLSearchParams({
-        latitude: String(centre.latitude),
-        longitude: String(centre.longitude),
-        timezone: 'auto',
-        forecast_days: '1',
-      });
-      const body = await getJson<{ timezone?: string }>(`https://api.open-meteo.com/v1/forecast?${params}`).catch(() => null);
-      return body?.timezone ?? null;
+      // Worked out from a built-in map of time zones: no service to ask, so
+      // nothing to be rate-limited by (Open-Meteo refuses shared server addresses).
+      try {
+        return tzlookup(centre.latitude, centre.longitude);
+      } catch {
+        return null;
+      }
     },
   };
 };
