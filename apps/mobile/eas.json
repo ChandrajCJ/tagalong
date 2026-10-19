@@ -5,15 +5,20 @@
   },
   "build": {
     "preview": {
+      "channel": "preview",
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://tagalong-api-9twu.onrender.com",
         "EXPO_PUBLIC_GATEWAY_URL": "wss://tagalong-api-9twu.onrender.com",
         "EXPO_PUBLIC_APP_URL": "https://tagalong-u4wh.onrender.com"
-      }
+      },
+      "autoIncrement": true
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://tagalong-api-9twu.onrender.com",

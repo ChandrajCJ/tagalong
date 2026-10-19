@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { UpdateBanner } from '@/components/update-banner';
 import { SessionProvider, useSession } from '@/lib/session';
 import { colors } from '@/theme';
 
@@ -41,6 +42,7 @@ function Navigator() {
         {/* Invite links work whether or not you're signed in. */}
         <Stack.Screen name="invite/[token]" />
       </Stack>
+      <UpdateBanner />
     </>
   );
 }

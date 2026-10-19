@@ -112,6 +112,11 @@ Sign up at uptimerobot.com (free). Add an **HTTP(s) monitor** for `https://tagal
    - Pay with UPI
    - a push notification (from a second account's chat message while the app is closed)
 
+### Updating the Android app
+- **Most changes (screens, wording, fixes):** `./scripts/ota-update.sh "What changed"`. Installed APKs download it the next time they open and switch on the launch after, or straight away from the "new version ready" banner. Free (EAS Update, up to 1,000 monthly users).
+- **Native changes (new native module, permission, icon, Firebase):** `./scripts/build-apk.sh`, then install the new APK over the old one. Same signing key, so it upgrades in place and keeps everyone signed in. Build numbers go up automatically.
+- Each update carries the app's native "fingerprint", so an update never reaches an APK that can't run it.
+
 ### Step 9 — iPhone friends
 They open `https://tagalong-u4wh.onrender.com` in Safari → Share → **Add to Home Screen**. **Why:** installing a real iPhone app needs Apple's paid account. The web app has everything except push.
 

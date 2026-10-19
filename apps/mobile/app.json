@@ -63,6 +63,14 @@
         "projectId": "0de1aa1d-890f-45cf-a533-2978608d6ed5"
       }
     },
-    "owner": "chandraj_n"
+    "owner": "chandraj_n",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0de1aa1d-890f-45cf-a533-2978608d6ed5",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

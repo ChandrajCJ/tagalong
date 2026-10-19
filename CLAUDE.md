@@ -29,6 +29,7 @@ Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks
 - Infra: `pnpm infra:up` (Postgres 5432, Redis 6380, SeaweedFS S3 8333).
 - Backend: `pnpm dev:backend` (API, gateway, worker). Mobile/web: Expo on 8081 (preview config `tagalong-expo`). Laptop LAN IP for the phone has been `10.10.1.5`.
 - Migrations: `pnpm db:generate`, `pnpm db:migrate`.
+- Android: `./scripts/build-apk.sh` (EAS APK, native changes) and `./scripts/ota-update.sh "msg"` (over-the-air JS updates, channel preview).
 - Free hosting: `docs/DEPLOY-FREE.md` + `render.yaml`. Production runs one process, `apps/api/src/all.ts` (API + `/ws` + workers), built by `pnpm --filter @tagalong/api build`.
 
 ## Checking work (keep output small)
