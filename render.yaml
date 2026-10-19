@@ -20,7 +20,6 @@ services:
     # Runs migrations first, then serves. Plain node: no TypeScript compiling at start.
     startCommand: node --enable-source-maps apps/api/dist/all.js
     healthCheckPath: /health
-    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
@@ -71,7 +70,6 @@ services:
     runtime: static
     buildCommand: npx --yes pnpm@10.18.0 install --frozen-lockfile --filter tagalong --filter "@tagalong/mobile..." && npx --yes pnpm@10.18.0 --filter @tagalong/mobile exec expo export --platform web --output-dir dist
     staticPublishPath: apps/mobile/dist
-    autoDeploy: true
     # A single-page app: /invite/abc and every other path load index.html.
     routes:
       - type: rewrite
