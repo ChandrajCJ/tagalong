@@ -8,7 +8,7 @@ Sessions at a glance:
 - **A:** archive and delete trips · edit and delete messages · unread counts
 - **B:** chat photos and screenshots · @mentions · link previews · message info (delivered/read) · photo covers for trips
 - **C:** notifications you control · places for plan stops *and ideas* · fix Explore → Food & drink · reminders for timed stops
-- **D:** video · dark mode · invite links open the installed app (one new APK)
+- **D:** video · dark mode · invite links open the installed app · new app icon (one new APK)
 
 Starting point:
 - Last migration: `0016_bookings_from_email`.
@@ -212,7 +212,26 @@ Starting point:
 - **Verify:** `adb shell pm get-app-links com.chandrajcj.tagalong` shows `verified`, or Android's *Open by default* settings show the domain as verified.
 - **Later, with a domain of our own:** the same file and filter for that host.
 
-**Ship:** migration `0020`, deploy API, **one new APK** (`./scripts/build-apk.sh`) with expo-video, expo-video-thumbnails, native dark mode and App Links. Then OTA as usual.
+### D4. A real app icon (concept A, "Tag along")
+- **The current state:** the app still uses Expo's template icon, splash and favicon.
+- **The chosen design:** concept A, approved 19 Oct, shown with the others in `docs/plans/icon-concepts.png`. A deep-green pin (`#0E6B5C`) with a coral pin (`#B54A28`) tagging along behind it, over a faint dotted trail, on cream (`#F6F3EE`).
+  - **Source:** `apps/mobile/assets/brand/icon-concept-a.svg`.
+- **Refine before exporting:** keep the shapes, tidy the details.
+  - Give the coral pin's hole a cream ring, so the two pins separate cleanly at small sizes.
+  - Keep the trail at most 20 % opacity, or drop it below 48 px.
+  - Keep everything inside Android's adaptive-icon safe zone: the central 66 % circle.
+- **Generate every asset from the SVG** with a script, `apps/mobile/scripts/make-icons.mjs` (uses `sharp`, already in the repo), so the next change is one command:
+  - `assets/images/icon.png`: 1024², cream background, both pins.
+  - `android-icon-foreground.png`: 1024², transparent, pins only, inside the safe zone. `android-icon-background.png`: solid cream.
+  - `android-icon-monochrome.png`: a single-colour silhouette of both pins, for Android 13 themed icons.
+  - `splash-icon.png`: the pins in cream on the green splash background, which already exists in `app.json`.
+  - `favicon.png`: 48² (with a 32² check), the pins only, no trail.
+  - Also a dark-mode splash variant for D2.
+- **Clean up:** delete the unused template images (`react-logo*`, `expo-*`, `logo-glow`, `tutorial-web`), checking nothing references them.
+- **Check:** the icon on a launcher with round, squircle and themed shapes, at 48 px; the favicon in a browser tab; the splash in light and dark.
+- **Ship:** the favicon reaches the web with the next deploy. The app icon and splash are native, so they come with this session's APK.
+
+**Ship:** migration `0020`, deploy API, **one new APK** (`./scripts/build-apk.sh`) with expo-video, expo-video-thumbnails, native dark mode, App Links and the new icon. Then OTA as usual.
 
 ---
 
