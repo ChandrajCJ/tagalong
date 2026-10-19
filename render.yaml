@@ -2,7 +2,7 @@
 # Render → New → Blueprint → pick this repo. It creates all three services and
 # asks for every value marked `sync: false` (the secrets; nothing secret lives here).
 #
-# Service names become addresses: tagalong-api.onrender.com and
+# Service names become addresses: tagalong-api-9twu.onrender.com and
 # tagalong.onrender.com. If Render says a name is taken, rename it here and
 # update the URLs below to match.
 
@@ -55,7 +55,7 @@ services:
       - key: MAIL_FROM
         sync: false
       - key: CORS_ORIGINS
-        value: https://tagalong.onrender.com
+        value: https://tagalong-u4wh.onrender.com
       # Bookings by email (optional): the Gmail inbox and its IMAP address.
       - key: IMPORT_ADDRESS
         sync: false
@@ -78,12 +78,12 @@ services:
     envVars:
       # Baked into the web app when it's built.
       - key: EXPO_PUBLIC_API_URL
-        value: https://tagalong-api.onrender.com
+        value: https://tagalong-api-9twu.onrender.com
       # The app adds /ws itself.
       - key: EXPO_PUBLIC_GATEWAY_URL
-        value: wss://tagalong-api.onrender.com
+        value: wss://tagalong-api-9twu.onrender.com
       - key: EXPO_PUBLIC_APP_URL
-        value: https://tagalong.onrender.com
+        value: https://tagalong-u4wh.onrender.com
 
   # Redis for live-update fan-out, caches, presence and the job queue.
   # Free: in memory only, so a restart empties it; nothing permanent lives here.

@@ -8,17 +8,17 @@
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tagalong-api.onrender.com",
-        "EXPO_PUBLIC_GATEWAY_URL": "wss://tagalong-api.onrender.com",
-        "EXPO_PUBLIC_APP_URL": "https://tagalong.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://tagalong-api-9twu.onrender.com",
+        "EXPO_PUBLIC_GATEWAY_URL": "wss://tagalong-api-9twu.onrender.com",
+        "EXPO_PUBLIC_APP_URL": "https://tagalong-u4wh.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://tagalong-api.onrender.com",
-        "EXPO_PUBLIC_GATEWAY_URL": "wss://tagalong-api.onrender.com",
-        "EXPO_PUBLIC_APP_URL": "https://tagalong.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://tagalong-api-9twu.onrender.com",
+        "EXPO_PUBLIC_GATEWAY_URL": "wss://tagalong-api-9twu.onrender.com",
+        "EXPO_PUBLIC_APP_URL": "https://tagalong-u4wh.onrender.com"
       }
     }
   }
