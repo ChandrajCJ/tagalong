@@ -5,6 +5,7 @@ import { MEDIA_QUEUE, NOTIFY_QUEUE, type NotifyJob, type ThumbnailJob } from '..
 import type { Storage } from '../lib/storage';
 import { imapMailbox, INBOX_QUEUE, processInbox } from './inbox';
 import { expoPushSender, processNotify } from './notify';
+import { PURGE_JOB, purgeDeletedTrips } from './purge';
 import { processThumbnail } from './thumbnail';
 
 export interface WorkerLog {
@@ -42,6 +43,11 @@ export const startWorkers = async ({ db, redis, connection, storage, log, imapUr
         log.info({ data: job.data }, 'Received ping from the API. The queue is working.');
         return { pong: true };
       }
+      if (job.name === PURGE_JOB) {
+        const result = await purgeDeletedTrips({ db, storage });
+        if (result.trips) log.info(result, 'Purged deleted trips');
+        return result;
+      }
       throw new Error(`Unknown system job: ${job.name}`);
     },
     { connection },
@@ -67,6 +73,11 @@ export const startWorkers = async ({ db, redis, connection, storage, log, imapUr
     },
     { connection, concurrency: 2 },
   );
+
+  // Deleted trips past their restore window go for good, once a day at 03:00 UTC.
+  const systemQueue = new Queue('system', { connection });
+  await systemQueue.upsertJobScheduler(PURGE_JOB, { pattern: '0 3 * * *' }, { name: PURGE_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
+  await systemQueue.close();
 
   // Forwarded booking emails: read the inbox every two minutes, one run at a time.
   const inboxOn = !!(imapUrl && importAddress);

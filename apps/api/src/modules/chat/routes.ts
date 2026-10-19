@@ -1,6 +1,7 @@
 import {
   AddPollOptionToPlanInput,
   CreatePollInput,
+  EditMessageInput,
   MarkReadInput,
   SendMessageInput,
   ToggleReactionInput,
@@ -56,6 +57,23 @@ export const chatRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
       originOf(request),
     );
     return reply.status(created ? 201 : 200).send(message);
+  });
+
+  app.patch('/messages/:messageId', async (request) => {
+    const { messageId } = parse(MessageParams, request.params);
+    const { body } = parse(EditMessageInput, request.body);
+    return chat.edit(messageId, request.user.sub, body, originOf(request));
+  });
+
+  app.delete('/messages/:messageId', async (request, reply) => {
+    const { messageId } = parse(MessageParams, request.params);
+    await chat.remove(messageId, request.user.sub, originOf(request));
+    return reply.status(204).send();
+  });
+
+  app.get('/trips/:id/unread', async (request) => {
+    const { id } = parse(TripParams, request.params);
+    return chat.unread(id, request.user.sub);
   });
 
   app.post('/messages/:messageId/reactions', async (request) => {

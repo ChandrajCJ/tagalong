@@ -9,7 +9,11 @@ interface Props {
   canReact: boolean;
   canAddToPlan: boolean;
   canReply: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   onReply: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   onReact: (emoji: string) => void;
   onAddToPlan: () => void;
   onAddExpense: () => void;
@@ -17,13 +21,17 @@ interface Props {
   onClose: () => void;
 }
 
-/** Long-press menu for a message: react, reply, add it to the plan or the money, or copy it. */
+/** Long-press menu for a message: react, reply, add it to the plan or the money, copy, edit or delete it. */
 export function MessageActions({
   message,
   canReact,
   canAddToPlan,
   canReply,
+  canEdit,
+  canDelete,
   onReply,
+  onEdit,
+  onDelete,
   onReact,
   onAddToPlan,
   onAddExpense,
@@ -67,6 +75,8 @@ export function MessageActions({
             </>
           ) : null}
           <Action icon="copy" label="Copy text" onPress={onCopy} />
+          {canEdit ? <Action icon="edit-2" label="Edit" onPress={onEdit} /> : null}
+          {canDelete ? <Action icon="trash-2" label="Delete" onPress={onDelete} destructive /> : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -77,15 +87,18 @@ function Action({
   icon,
   label,
   onPress,
+  destructive,
 }: {
   icon: React.ComponentProps<typeof Feather>['name'];
   label: string;
   onPress: () => void;
+  destructive?: boolean;
 }) {
+  const color = destructive ? colors.danger : colors.ink;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.action}>
-      <Feather name={icon} size={18} color={colors.ink} />
-      <Text style={styles.actionText}>{label}</Text>
+      <Feather name={icon} size={18} color={color} />
+      <Text style={[styles.actionText, { color }]}>{label}</Text>
     </Pressable>
   );
 }

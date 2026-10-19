@@ -32,9 +32,13 @@ import { PollComposer, type PollDraft } from '@/components/poll-composer';
 import { Avatar, Body, Button } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { CLIENT_ID } from '@/lib/client-id';
+import { confirmAction } from '@/lib/confirm';
 import {
+  applyDelete,
+  applyEdit,
   applyReaction,
   buildRows,
+  canEditMessage,
   mergeMessages,
   seenCount,
   timeOf,
@@ -69,6 +73,8 @@ export default function ChatTab() {
   const [typing, setTyping] = useState<Record<string, { name: string; until: number }>>({});
   const [actionsFor, setActionsFor] = useState<LocalMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<LocalMessage | null>(null);
+  // My own message being fixed: the composer holds its text until saved.
+  const [editing, setEditing] = useState<LocalMessage | null>(null);
   // A poll option on its way into the plan, waiting for "which day?".
   const [planning, setPlanning] = useState<{ message: LocalMessage; option: PollOption } | null>(null);
   const [planningBusy, setPlanningBusy] = useState(false);
@@ -166,6 +172,20 @@ export default function ChatTab() {
           return next;
         });
       }
+    } else if (event.type === 'message.updated') {
+      const parsed = ChatMessage.safeParse(event.payload);
+      if (!parsed.success || parsed.data.itemId) return;
+      setMessages((prev) => (prev ? applyEdit(prev, parsed.data) : prev));
+    } else if (event.type === 'message.deleted') {
+      const p = event.payload as { messageId: string; itemId?: string | null };
+      if (p.itemId) return;
+      setMessages((prev) => (prev ? applyDelete(prev, p.messageId) : prev));
+      // Someone (an owner) deleted the message I was editing.
+      if (editing?.id === p.messageId) {
+        setEditing(null);
+        setDraft('');
+      }
+      if (replyingTo?.id === p.messageId) setReplyingTo(null);
     } else if (event.type === 'reaction.changed') {
       // A reaction is applied as +1/-1, so our own would count twice: we
       // already applied it when the button was tapped.
@@ -242,8 +262,51 @@ export default function ChatTab() {
     return name === trip?.members.find((x) => x.userId === me)?.displayName ? 'You' : name;
   };
 
+  /** Saves an edit: shown straight away, put back if the server says no. */
+  const saveEdit = async (message: LocalMessage, body: string) => {
+    setEditing(null);
+    setDraft('');
+    if (body === message.body) return;
+    setMessages((prev) => (prev ? applyEdit(prev, { ...message, body, editedAt: new Date().toISOString() }) : prev));
+    try {
+      const saved = await request(`/messages/${message.id}`, { method: 'PATCH', body: { body }, schema: ChatMessage });
+      setMessages((prev) => (prev ? applyEdit(prev, saved) : prev));
+    } catch (e) {
+      setMessages((prev) => (prev ? applyEdit(prev, message) : prev));
+      say(e instanceof ApiError ? e.message : 'Couldn’t save your edit. Try again.');
+    }
+  };
+
+  const deleteMessage = async (message: LocalMessage) => {
+    setActionsFor(null);
+    const theirs = message.senderId !== me;
+    const ok = await confirmAction(
+      'Delete this message?',
+      theirs
+        ? `${message.senderName ?? 'Their'}’s message is removed for everyone in the chat.`
+        : 'It’s removed for everyone in the chat.',
+      'Delete',
+    );
+    if (!ok) return;
+    try {
+      await request(`/messages/${message.id}`, { method: 'DELETE' });
+      setMessages((prev) => (prev ? applyDelete(prev, message.id) : prev));
+    } catch (e) {
+      say(e instanceof ApiError ? e.message : 'Couldn’t delete that message. Try again.');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setDraft('');
+  };
+
   const send = () => {
     const body = draft.trim();
+    if (editing) {
+      if (body) void saveEdit(editing, body);
+      return;
+    }
     if (!body || !trip || !me) return;
     const mine = trip.members.find((m) => m.userId === me);
     const local: LocalMessage = {
@@ -259,6 +322,8 @@ export default function ChatTab() {
         : null,
       payload: null,
       createdAt: new Date().toISOString(),
+      editedAt: null,
+      deletedAt: null,
       reactions: [],
       poll: null,
       itemId: null,
@@ -382,7 +447,7 @@ export default function ChatTab() {
     [trip?.members],
   );
   const rows = useMemo(() => buildRows(messages ?? []), [messages]);
-  const myLatest = messages?.find((m) => m.senderId === me && m.kind === 'text' && !m.status);
+  const myLatest = messages?.find((m) => m.senderId === me && m.kind === 'text' && !m.status && !m.deletedAt);
   const typingNames = Object.values(typing).map((t) => t.name);
 
   if (!trip) return null;
@@ -396,6 +461,28 @@ export default function ChatTab() {
       return (
         <View style={styles.systemWrap}>
           <Text style={styles.system}>{m.body}</Text>
+        </View>
+      );
+    }
+    if (m.deletedAt) {
+      const mine = m.senderId === me;
+      return (
+        <View style={[styles.row, mine && styles.rowMine, item.firstInGroup && { marginTop: space.md }]}>
+          {!mine ? (
+            <View style={{ width: 30 }}>
+              {item.firstInGroup ? (
+                <Avatar name={m.senderName ?? '?'} color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)} size={28} />
+              ) : null}
+            </View>
+          ) : null}
+          <View style={[styles.bubbleCol, mine && { alignItems: 'flex-end' }]}>
+            {!mine && item.firstInGroup ? <Text style={styles.sender}>{m.senderName}</Text> : null}
+            <View style={[styles.bubble, styles.bubbleDeleted]}>
+              <Feather name="slash" size={13} color={colors.muted} />
+              <Text style={styles.deletedText}>{mine ? 'You deleted this message' : 'Message deleted'}</Text>
+            </View>
+            <Text style={styles.meta}>{timeOf(m.createdAt)}</Text>
+          </View>
         </View>
       );
     }
@@ -452,7 +539,7 @@ export default function ChatTab() {
                   {quotedName(m.replyTo.senderName)}
                 </Text>
                 <Text style={[styles.quoteBody, mine && { color: colors.onAccentMuted }]} numberOfLines={2}>
-                  {m.replyTo.deleted ? 'Message deleted' : m.replyTo.body}
+                  {m.replyTo.deleted ? 'Original message deleted' : m.replyTo.body}
                 </Text>
               </View>
             ) : null}
@@ -481,7 +568,7 @@ export default function ChatTab() {
               ? 'Sending…'
               : m.status === 'failed'
                 ? "Didn't send. Tap to try again"
-                : `${timeOf(m.createdAt)}${seen > 0 ? ` · Seen by ${seen}` : ''}`}
+                : `${timeOf(m.createdAt)}${m.editedAt ? ' · edited' : ''}${seen > 0 ? ` · Seen by ${seen}` : ''}`}
           </Text>
         </View>
       </View>
@@ -551,7 +638,7 @@ export default function ChatTab() {
           </View>
         ) : null}
 
-        {canPost && showHoldTip && (messages?.length ?? 0) > 0 && !replyingTo ? (
+        {canPost && showHoldTip && (messages?.length ?? 0) > 0 && !replyingTo && !editing ? (
           <View style={styles.tip}>
             <Feather name="info" size={14} color={colors.accentInk} />
             <Text style={styles.tipText}>Hold any message to reply, react, or add it to the plan or expenses.</Text>
@@ -569,7 +656,29 @@ export default function ChatTab() {
           </View>
         ) : null}
 
-        {canPost && replyingTo ? (
+        {canPost && editing ? (
+          <View style={styles.replyBar} accessibilityLiveRegion="polite">
+            <View style={styles.replyAccent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.replyLabel} numberOfLines={1}>
+                Editing message
+              </Text>
+              <Text style={styles.replyText} numberOfLines={1}>
+                {editing.body}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing"
+              onPress={cancelEdit}
+              style={styles.replyClose}
+            >
+              <Feather name="x" size={18} color={colors.muted} />
+            </Pressable>
+          </View>
+        ) : null}
+
+        {canPost && replyingTo && !editing ? (
           <View style={styles.replyBar} accessibilityLiveRegion="polite">
             <View style={styles.replyAccent} />
             <View style={{ flex: 1 }}>
@@ -615,12 +724,12 @@ export default function ChatTab() {
             />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Send"
+              accessibilityLabel={editing ? 'Save edit' : 'Send'}
               aria-disabled={!draft.trim()}
               onPress={send}
               style={[styles.send, !draft.trim() && { opacity: 0.4 }]}
             >
-              <Feather name="send" size={20} color="#FFFFFF" />
+              <Feather name={editing ? 'check' : 'send'} size={20} color="#FFFFFF" />
             </Pressable>
           </View>
         ) : (
@@ -647,7 +756,25 @@ export default function ChatTab() {
         canReact={!!actionsFor && !actionsFor.status}
         canAddToPlan={canPost && actionsFor?.kind === 'text'}
         canReply={canPost && !!actionsFor && actionsFor.kind !== 'system' && !actionsFor.status}
+        canEdit={canPost && !!actionsFor && canEditMessage(actionsFor, me)}
+        canDelete={
+          !!actionsFor &&
+          !actionsFor.status &&
+          actionsFor.kind !== 'system' &&
+          (actionsFor.senderId === me || trip.myRole === 'owner')
+        }
+        onEdit={() => {
+          const message = actionsFor;
+          setActionsFor(null);
+          if (!message) return;
+          setReplyingTo(null);
+          setEditing(message);
+          setDraft(message.body);
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
+        onDelete={() => actionsFor && void deleteMessage(actionsFor)}
         onReply={() => {
+          if (editing) cancelEdit();
           setReplyingTo(actionsFor);
           setActionsFor(null);
           setTimeout(() => inputRef.current?.focus(), 50);
@@ -714,6 +841,8 @@ const styles = StyleSheet.create({
   sender: { fontFamily: fonts.bold, fontSize: 12, color: colors.muted, marginLeft: 4 },
   bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   bubbleMine: { backgroundColor: colors.accent, borderBottomRightRadius: 6 },
+  bubbleDeleted: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.lineStrong, backgroundColor: 'transparent' },
+  deletedText: { fontFamily: fonts.body, fontStyle: 'italic', fontSize: 14, color: colors.muted },
   bubbleTheirs: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: 6 },
   body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 21, color: colors.ink },
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },

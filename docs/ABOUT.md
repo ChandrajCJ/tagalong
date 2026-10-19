@@ -76,6 +76,11 @@ This is the app from a traveller's point of view.
    days"), an **Explore** card, a **Get ready** card ("Packing 12/30 · 2
    to-dos left · 3 notes"), and a list of everything you can do here.
    **Edit** changes the trip's name, dates, destination or cover.
+   The **⋯** button archives the trip (it moves to "Archived" on your list,
+   for you only), and lets an owner **delete** it for everyone (type its name
+   to confirm; it can be restored from "Recently deleted" for 30 days) or
+   anyone else **leave** it. **Your trips** splits into upcoming, past and
+   archived, and each card says how many chat messages are new.
 
 ### Finding things to do: Explore
 9. **Explore Goa** lists places worth going to, by category: top sights, food
@@ -151,7 +156,9 @@ This is the app from a traveller's point of view.
 ### Talking: Chat
 23. A group chat with reactions, "Priya is typing…", "Seen by 3" and
     replies. Hold any message to **reply**, react, **add it to the plan**,
-    **add it as an expense**, or copy it.
+    **add it as an expense**, copy it, **edit** it (your own, for a day) or
+    **delete** it (your own; owners can delete anyone's). The Chat tab and the
+    app icon show how many messages you haven't read.
 24. Activity cards appear automatically ("Sam joined", "Priya added a
     flight", "Alex added Dinner · ₹1,800", "Palolem added to the plan from
     the poll"), so the chat doubles as a record of what happened.
@@ -249,6 +256,7 @@ requests.
 | Smarter places | Real places on plan items and stays, travel time between stops, routes on the map, "Shortest order" |
 | Getting ready | Packing lists (shared or each person) with starter suggestions, to-dos linked to plan items, trip and day notes |
 | Bookings from email | Forward, paste or read a ticket PDF; bookings found wait for review, then go in as a booking and a plan item |
+| Polish 1, part A | Archive trips; owners delete and restore them (purged after 30 days); edit and delete chat messages; unread counts on trips, the Chat tab and the app icon |
 
 ## 6. What's not done yet
 

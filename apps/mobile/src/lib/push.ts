@@ -65,6 +65,14 @@ export const registerForPush = (): Promise<PushStatus> => {
   return registered;
 };
 
+/** The number on the app icon: unread chat messages across all your trips. */
+export const setAppBadge = (count: number) => {
+  if (!pushSupported()) return;
+  void notifications()
+    .then((N) => N.setBadgeCountAsync(count))
+    .catch(() => undefined);
+};
+
 /** Forget registration on sign-out, so the next account registers its own. */
 export const resetPushRegistration = () => {
   registered = null;

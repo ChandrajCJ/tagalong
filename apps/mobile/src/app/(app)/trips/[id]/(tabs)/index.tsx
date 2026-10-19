@@ -4,10 +4,13 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActionMenu, type MenuAction } from '@/components/action-menu';
+import { DeleteTripSheet } from '@/components/delete-trip-sheet';
 import { Avatar, Body, Button, Label } from '@/components/ui';
 import { IconButton } from '@/components/icon-button';
 import { WeatherStrip } from '@/components/weather-strip';
-import { request } from '@/lib/api';
+import { ApiError, request } from '@/lib/api';
+import { confirmAction } from '@/lib/confirm';
 import { BOOKING_META, formatInZone, relativeFrom, routeOf, titleOf } from '@/lib/bookings';
 import { formatDateRange, tripCountdown } from '@/lib/format';
 import { useTripLists, useTripNotes } from '@/lib/lists';
@@ -20,6 +23,9 @@ type IconName = React.ComponentProps<typeof Feather>['name'];
 /** Trip overview, the hub (design: Trip.dc.html). */
 export default function TripOverview() {
   const { trip, error, reload } = useTrip();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [problem, setProblem] = useState<string>();
 
   // Pick up changes made on other screens, such as someone joining.
   useFocusEffect(
@@ -46,7 +52,70 @@ export default function TripOverview() {
 
   const countdown = tripCountdown(trip.startDate, trip.endDate);
   const canInvite = hasRole(trip.myRole, 'editor');
+  const isOwner = trip.myRole === 'owner';
   const base = `/trips/${trip.id}` as const;
+
+  const setArchived = async (archived: boolean) => {
+    try {
+      await request(`${base}/archive`, { method: archived ? 'POST' : 'DELETE' });
+      if (archived) router.replace('/trips');
+      else await reload();
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'That didn’t work. Try again.');
+    }
+  };
+
+  const leave = async () => {
+    if (!(await confirmAction(`Leave ${trip.name}?`, 'You’ll need a new invite to come back.', 'Leave'))) return;
+    try {
+      await request(`${base}/members/${trip.myUserId}`, { method: 'DELETE' });
+      router.replace('/trips');
+    } catch (e) {
+      setProblem(e instanceof ApiError ? e.message : 'Couldn’t leave the trip. Try again.');
+    }
+  };
+
+  const deleteTrip = async (): Promise<string | null> => {
+    try {
+      await request(base, { method: 'DELETE' });
+      setDeleting(false);
+      router.replace('/trips');
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Couldn’t delete the trip. Try again.';
+    }
+  };
+
+  const menu: MenuAction[] = [
+    trip.archived
+      ? {
+          icon: 'inbox',
+          label: 'Unarchive',
+          hint: 'Put it back with your other trips',
+          onPress: () => void setArchived(false),
+        }
+      : {
+          icon: 'archive',
+          label: 'Archive',
+          hint: 'Move it to Archived on your trips. Only you see this.',
+          onPress: () => void setArchived(true),
+        },
+    isOwner
+      ? {
+          icon: 'trash-2',
+          label: 'Delete trip',
+          hint: 'Removes it for everyone. You can restore it for 30 days.',
+          destructive: true,
+          onPress: () => setDeleting(true),
+        }
+      : {
+          icon: 'log-out',
+          label: 'Leave trip',
+          hint: 'You’ll need a new invite to come back',
+          destructive: true,
+          onPress: () => void leave(),
+        },
+  ];
 
   return (
     <View style={styles.screen}>
@@ -62,6 +131,7 @@ export default function TripOverview() {
                 <IconButton icon="user-plus" label="Invite people" onPress={() => router.push(`${base}/invite`)} />
               ) : null}
               <IconButton icon="users" label="People on this trip" onPress={() => router.push(`${base}/members`)} />
+              <IconButton icon="more-horizontal" label="More: archive, delete or leave" onPress={() => setMenuOpen(true)} />
             </View>
           </View>
           <View style={{ gap: 6 }}>
@@ -91,6 +161,18 @@ export default function TripOverview() {
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
+        {problem ? (
+          <Pressable accessibilityRole="button" accessibilityHint="Hides this message" onPress={() => setProblem(undefined)} style={styles.problem}>
+            <Body style={{ color: colors.coralInk }}>{problem}</Body>
+          </Pressable>
+        ) : null}
+        {trip.archived ? (
+          <View style={styles.archivedNote}>
+            <Feather name="archive" size={16} color={colors.muted} />
+            <Body style={{ flex: 1, fontSize: 13 }}>You archived this trip. It’s still here for everyone else.</Body>
+            <Button label="Unarchive" variant="ghost" onPress={() => void setArchived(false)} style={{ minHeight: 36 }} />
+          </View>
+        ) : null}
         <View style={styles.card}>
           <Text style={styles.countdown}>{countdown ?? 'No dates yet'}</Text>
           <Body>{trip.destination}</Body>
@@ -198,6 +280,14 @@ export default function TripOverview() {
           />
         </View>
       </ScrollView>
+
+      <ActionMenu visible={menuOpen} title={trip.name} actions={menu} onClose={() => setMenuOpen(false)} />
+      <DeleteTripSheet
+        visible={deleting}
+        tripName={trip.name}
+        onDelete={deleteTrip}
+        onClose={() => setDeleting(false)}
+      />
     </View>
   );
 }
@@ -352,6 +442,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   coverMeta: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   body: { padding: space.xl, gap: space.md },
+  problem: { padding: space.md, borderRadius: radius.lg, backgroundColor: colors.coralSoft },
+  archivedNote: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, padding: space.lg, gap: 2 },
   countdown: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
   list: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },

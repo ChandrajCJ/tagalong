@@ -15,9 +15,7 @@ export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
   const membersService = createMembersService(deps.db, deps.redis);
   app.addHook('preHandler', app.authenticate);
 
-  app.get('/trips', async (request) => ({
-    trips: await tripsService.listForUser(request.user.sub),
-  }));
+  app.get('/trips', async (request) => tripsService.listForUser(request.user.sub));
 
   app.post('/trips', async (request, reply) => {
     const input = parse(CreateTripInput, request.body);
@@ -34,6 +32,29 @@ export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
     const { id } = parse(TripParams, request.params);
     const input = parse(UpdateTripInput, request.body);
     return tripsService.update(id, request.user.sub, input, originOf(request));
+  });
+
+  app.delete('/trips/:id', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    await tripsService.remove(id, request.user.sub, originOf(request));
+    return reply.status(204).send();
+  });
+
+  app.post('/trips/:id/restore', async (request) => {
+    const { id } = parse(TripParams, request.params);
+    return tripsService.restore(id, request.user.sub);
+  });
+
+  app.post('/trips/:id/archive', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    await tripsService.setArchived(id, request.user.sub, true);
+    return reply.status(204).send();
+  });
+
+  app.delete('/trips/:id/archive', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    await tripsService.setArchived(id, request.user.sub, false);
+    return reply.status(204).send();
   });
 
   app.patch('/trips/:id/members/:userId', async (request) => {

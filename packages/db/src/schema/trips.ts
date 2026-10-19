@@ -66,6 +66,8 @@ export const tripMembers = tripsSchema.table(
     leftAt: timestamp('left_at', { withTimezone: true }),
     /** Set when an owner removed them, so an old invite link can't bring them back. */
     removedBy: uuid('removed_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Set when this person archived the trip. Only hides it from their own list. */
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
   },
   (t) => [
     primaryKey({ columns: [t.tripId, t.userId] }),

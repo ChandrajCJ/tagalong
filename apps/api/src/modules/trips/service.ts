@@ -1,9 +1,12 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { changeLog, expenses, tripMembers, trips, users, type Db } from '@tagalong/db';
 import {
   CreateTripInput,
   newId,
+  TRIP_RESTORE_DAYS,
   UpdateTripInput,
+  type DeletedTrip,
+  type MyTrips,
   type Trip,
   type TripLocation,
   type TripRole,
@@ -12,9 +15,10 @@ import {
 import type { Redis } from 'ioredis';
 import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
-import { badRequest, conflict } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Geo } from '../../lib/geo';
+import { postSystemMessage, unreadCounts } from '../chat/channel';
 
 type CreateTrip = z.output<typeof CreateTripInput>;
 type UpdateTrip = z.output<typeof UpdateTripInput>;
@@ -23,6 +27,12 @@ const activeMemberCount = sql<number>`(
   select count(*)::int from ${tripMembers} m
   where m.trip_id = ${trips.id} and m.left_at is null
 )`;
+
+const RESTORE_MS = TRIP_RESTORE_DAYS * 24 * 60 * 60 * 1000;
+
+/** Whether this person is still on the trip, deleted or not. */
+const memberOf = (tripId: string, userId: string) =>
+  and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt));
 
 export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
   /** The columns for a picked place, with its time zone looked up (best effort). */
@@ -36,7 +46,11 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
   });
 
   return {
-    async listForUser(userId: string): Promise<TripSummary[]> {
+    /**
+     * My trips, each with whether I archived it and how many chat messages I
+     * haven't read; plus, for owners, deleted trips that can still be restored.
+     */
+    async listForUser(userId: string): Promise<MyTrips> {
       const rows = await db
         .select({
           id: trips.id,
@@ -47,12 +61,106 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
           coverColor: trips.coverColor,
           myRole: tripMembers.role,
           memberCount: activeMemberCount,
+          archivedAt: tripMembers.archivedAt,
         })
         .from(tripMembers)
         .innerJoin(trips, eq(trips.id, tripMembers.tripId))
         .where(and(eq(tripMembers.userId, userId), isNull(tripMembers.leftAt), isNull(trips.deletedAt)))
         .orderBy(sql`${trips.startDate} asc nulls last`, desc(trips.createdAt));
-      return rows.map((r) => ({ ...r, myRole: r.myRole as TripRole }));
+      const unread = await unreadCounts(db, userId, rows.map((r) => r.id));
+      const summaries: TripSummary[] = rows.map(({ archivedAt, ...r }) => ({
+        ...r,
+        myRole: r.myRole as TripRole,
+        archived: archivedAt !== null,
+        unreadCount: unread.get(r.id) ?? 0,
+      }));
+
+      const deletedRows = await db
+        .select({
+          id: trips.id,
+          name: trips.name,
+          destination: trips.destination,
+          coverColor: trips.coverColor,
+          deletedAt: trips.deletedAt,
+        })
+        .from(tripMembers)
+        .innerJoin(trips, eq(trips.id, tripMembers.tripId))
+        .where(
+          and(
+            eq(tripMembers.userId, userId),
+            eq(tripMembers.role, 'owner'),
+            isNull(tripMembers.leftAt),
+            gt(trips.deletedAt, new Date(Date.now() - RESTORE_MS)),
+          ),
+        )
+        .orderBy(desc(trips.deletedAt));
+      const deleted: DeletedTrip[] = deletedRows.map((r) => ({
+        ...r,
+        deletedAt: r.deletedAt!.toISOString(),
+        purgeAt: new Date(r.deletedAt!.getTime() + RESTORE_MS).toISOString(),
+      }));
+      return { trips: summaries, deleted };
+    },
+
+    /** Hides the trip from my list only; everyone else still sees it as before. */
+    async setArchived(tripId: string, userId: string, archived: boolean) {
+      await requireTripRole(db, tripId, userId, 'viewer');
+      await db
+        .update(tripMembers)
+        .set({ archivedAt: archived ? sql`coalesce(${tripMembers.archivedAt}, now())` : null })
+        .where(memberOf(tripId, userId));
+    },
+
+    /**
+     * The owner deletes the trip for everyone. It disappears at once, but its
+     * rows and files stay for TRIP_RESTORE_DAYS so the owner can bring it back;
+     * after that the daily purge removes them.
+     */
+    async remove(tripId: string, userId: string, origin?: string) {
+      await requireTripRole(db, tripId, userId, 'owner');
+      await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(trips)
+          .set({ deletedAt: sql`now()`, version: sql`${trips.version} + 1` })
+          .where(and(eq(trips.id, tripId), isNull(trips.deletedAt)))
+          .returning({ id: trips.id });
+        if (!row) throw notFound('Trip not found');
+        await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'delete', changedBy: userId });
+        // Kept in the history, so a restored trip shows what happened.
+        await postSystemMessage(tx, tripId, userId, (name) => `${name} deleted the trip`, { event: 'trip_deleted' });
+      });
+      // Open screens leave the trip, and the gateway stops sending it.
+      if (redis) {
+        await publishTripEvent(redis, {
+          type: 'trip.deleted',
+          tripId,
+          entityId: tripId,
+          actorId: userId,
+          originClientId: origin,
+        });
+      }
+    },
+
+    /** Brings a deleted trip back for everyone, within TRIP_RESTORE_DAYS. Owners only. */
+    async restore(tripId: string, userId: string): Promise<Trip> {
+      const [row] = await db
+        .select({ role: tripMembers.role, deletedAt: trips.deletedAt })
+        .from(tripMembers)
+        .innerJoin(trips, eq(trips.id, tripMembers.tripId))
+        .where(and(memberOf(tripId, userId), isNotNull(trips.deletedAt)));
+      // Members who aren't owners shouldn't learn the trip still exists.
+      if (!row || row.role !== 'owner' || row.deletedAt!.getTime() < Date.now() - RESTORE_MS) {
+        throw notFound('Trip not found');
+      }
+      await db.transaction(async (tx) => {
+        await tx
+          .update(trips)
+          .set({ deletedAt: null, version: sql`${trips.version} + 1` })
+          .where(eq(trips.id, tripId));
+        await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'upsert', changedBy: userId });
+        await postSystemMessage(tx, tripId, userId, (name) => `${name} restored the trip`, { event: 'trip_restored' });
+      });
+      return this.get(tripId, userId);
     },
 
     async get(tripId: string, userId: string): Promise<Trip> {
@@ -74,11 +182,13 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
           longitude: trips.longitude,
           bounds: trips.bounds,
           countryCode: trips.countryCode,
+          archivedAt: tripMembers.archivedAt,
         })
         .from(trips)
+        .innerJoin(tripMembers, memberOf(tripId, userId))
         .where(eq(trips.id, tripId));
       if (!trip) throw new Error('Trip vanished after access check');
-      const { placeId, latitude, longitude, bounds, countryCode, ...rest } = trip;
+      const { placeId, latitude, longitude, bounds, countryCode, archivedAt, ...rest } = trip;
       const location =
         placeId && latitude !== null && longitude !== null
           ? { placeId, latitude, longitude, bounds: bounds ?? null, countryCode: countryCode?.trim() || null }
@@ -93,6 +203,7 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
 
       return {
         ...rest,
+        archived: archivedAt !== null,
         location,
         myRole,
         myUserId: userId,

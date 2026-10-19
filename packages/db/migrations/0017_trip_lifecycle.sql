@@ -1,0 +1,1 @@
+ALTER TABLE "trips"."trip_members" ADD COLUMN "archived_at" timestamp with time zone;

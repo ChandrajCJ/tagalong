@@ -1,4 +1,4 @@
-import type { ChatMessage, ReadState } from '@tagalong/shared';
+import { MESSAGE_EDIT_WINDOW_MS, type ChatMessage, type ReadState } from '@tagalong/shared';
 
 /** A message as the screen holds it: sending ones are shown before the server confirms. */
 export type LocalMessage = ChatMessage & { status?: 'sending' | 'failed' };
@@ -76,3 +76,32 @@ export const applyReaction = (
   }
   return { ...message, reactions: list.filter((r) => r.count > 0) };
 };
+
+/** Someone edited a message: take the new text, keep our own reactions and status. */
+export const applyEdit = (messages: LocalMessage[], edited: ChatMessage): LocalMessage[] =>
+  messages.map((m) =>
+    m.id === edited.id
+      ? { ...m, body: edited.body, editedAt: edited.editedAt }
+      : m.replyTo?.id === edited.id && !m.replyTo.deleted
+        ? { ...m, replyTo: { ...m.replyTo, body: edited.body.slice(0, 140) } }
+        : m,
+  );
+
+/** A message was deleted: it becomes a placeholder, and replies quoting it say so. */
+export const applyDelete = (messages: LocalMessage[], messageId: string): LocalMessage[] =>
+  messages.map((m) =>
+    m.id === messageId
+      ? { ...m, body: '', payload: null, poll: null, reactions: [], replyTo: null, deletedAt: m.deletedAt ?? new Date().toISOString() }
+      : m.replyTo?.id === messageId
+        ? { ...m, replyTo: { ...m.replyTo, body: '', deleted: true } }
+        : m,
+  );
+
+/** Whether I can still fix this message: my own text, sent, and under a day old. */
+export const canEditMessage = (m: LocalMessage, me: string | undefined, now = Date.now()) =>
+  !!me &&
+  m.senderId === me &&
+  m.kind === 'text' &&
+  !m.status &&
+  !m.deletedAt &&
+  now - new Date(m.createdAt).getTime() < MESSAGE_EDIT_WINDOW_MS;

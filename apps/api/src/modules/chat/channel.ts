@@ -1,5 +1,5 @@
-import { and, eq, inArray } from 'drizzle-orm';
-import { channels, messages, users, type Db, type Tx } from '@tagalong/db';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { channels, messages, readStates, tripMembers, users, type Db, type Tx } from '@tagalong/db';
 import { newId, type ChatMessage, type Poll } from '@tagalong/shared';
 
 type MessageRow = typeof messages.$inferSelect;
@@ -12,21 +12,59 @@ export const toMessage = (
   /** Set when the message belongs to a plan item's thread, not the main chat. */
   itemId: string | null = null,
   replyTo: ChatMessage['replyTo'] = null,
-): ChatMessage => ({
-  id: row.id,
-  tripId: row.tripId,
-  senderId: row.senderId,
-  senderName,
-  kind: row.kind as ChatMessage['kind'],
-  body: row.body,
-  replyToId: row.replyToId,
-  replyTo,
-  payload: (row.payload as Record<string, unknown> | null) ?? null,
-  createdAt: row.createdAt.toISOString(),
-  reactions,
-  poll,
-  itemId,
-});
+): ChatMessage => {
+  // A deleted message keeps its place in the conversation and nothing else.
+  const deleted = row.deletedAt !== null;
+  return {
+    id: row.id,
+    tripId: row.tripId,
+    senderId: row.senderId,
+    senderName,
+    kind: row.kind as ChatMessage['kind'],
+    body: deleted ? '' : row.body,
+    replyToId: row.replyToId,
+    replyTo: deleted ? null : replyTo,
+    payload: deleted ? null : ((row.payload as Record<string, unknown> | null) ?? null),
+    createdAt: row.createdAt.toISOString(),
+    editedAt: row.editedAt?.toISOString() ?? null,
+    deletedAt: row.deletedAt?.toISOString() ?? null,
+    reactions: deleted ? [] : reactions,
+    poll: deleted ? null : poll,
+    itemId,
+  };
+};
+
+/**
+ * How many main-chat messages each trip has that this person hasn't read:
+ * newer than their read marker (or than when they joined, if they never
+ * opened the chat), not theirs, and not deleted. Activity cards about their
+ * own doing don't count either. One grouped query for all the trips.
+ */
+export const unreadCounts = async (db: Db | Tx, userId: string, tripIds: string[]) => {
+  const counts = new Map<string, number>();
+  if (tripIds.length === 0) return counts;
+  const rows = await db
+    .select({ tripId: channels.tripId, count: sql<number>`count(*)::int` })
+    .from(channels)
+    .innerJoin(
+      tripMembers,
+      and(eq(tripMembers.tripId, channels.tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt)),
+    )
+    .leftJoin(readStates, and(eq(readStates.channelId, channels.id), eq(readStates.userId, userId)))
+    .innerJoin(
+      messages,
+      and(
+        eq(messages.channelId, channels.id),
+        isNull(messages.deletedAt),
+        sql`${messages.createdAt} > coalesce(${readStates.lastReadAt}, ${tripMembers.joinedAt})`,
+        sql`coalesce(${messages.senderId}::text, ${messages.payload}->>'actorId', '') <> ${userId}`,
+      ),
+    )
+    .where(and(inArray(channels.tripId, tripIds), eq(channels.kind, 'trip')))
+    .groupBy(channels.tripId);
+  for (const r of rows) counts.set(r.tripId, r.count);
+  return counts;
+};
 
 /** How much of the original a reply shows: enough to recognise it. */
 const QUOTE_LENGTH = 140;

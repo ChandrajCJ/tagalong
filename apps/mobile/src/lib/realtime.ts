@@ -159,3 +159,16 @@ export function useTripRealtime(tripId: string | undefined, handler: Listener) {
     return realtime.subscribe(tripId, (m) => latest.current(m));
   }, [tripId]);
 }
+
+/** The same for several trips at once, such as every card on the trips list. */
+export function useTripsRealtime(tripIds: string[], handler: (tripId: string, message: TripMessage) => void) {
+  const latest = useRef(handler);
+  latest.current = handler;
+  const key = [...tripIds].sort().join(',');
+
+  useEffect(() => {
+    if (!key) return;
+    const offs = key.split(',').map((tripId) => realtime.subscribe(tripId, (m) => latest.current(tripId, m)));
+    return () => offs.forEach((off) => off());
+  }, [key]);
+}

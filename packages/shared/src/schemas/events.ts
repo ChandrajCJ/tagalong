@@ -13,7 +13,13 @@ export const TRIP_EVENT_TYPES = [
   'member.updated',
   'member.left',
   'trip.updated',
+  /** The owner deleted the trip; open screens leave it. */
+  'trip.deleted',
   'message.created',
+  /** Someone edited their message; the payload is the message. */
+  'message.updated',
+  /** A message was deleted; the payload is { messageId }. */
+  'message.deleted',
   'reaction.changed',
   'read.updated',
   'idea.upserted',

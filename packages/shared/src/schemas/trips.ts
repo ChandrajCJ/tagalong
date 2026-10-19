@@ -62,10 +62,62 @@ export const TripSummary = z.object({
   coverColor: z.string(),
   myRole: z.enum(TRIP_ROLES),
   memberCount: z.number().int(),
+  /** I archived it: it sits under "Archived" in my list only. */
+  archived: z.boolean().default(false),
+  /** Main-chat messages from others since I last read it. */
+  unreadCount: z.number().int().default(0),
 });
 export type TripSummary = z.infer<typeof TripSummary>;
 
-export const Trip = TripSummary.extend({
+/** How long an owner has to restore a deleted trip before it's gone for good. */
+export const TRIP_RESTORE_DAYS = 30;
+
+/** A trip its owner deleted, still restorable until `purgeAt`. */
+export const DeletedTrip = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  destination: z.string(),
+  coverColor: z.string(),
+  deletedAt: z.string(),
+  purgeAt: z.string(),
+});
+export type DeletedTrip = z.infer<typeof DeletedTrip>;
+
+/** GET /trips: my trips, and the ones I deleted as an owner that can still come back. */
+export const MyTrips = z.object({
+  trips: z.array(TripSummary),
+  deleted: z.array(DeletedTrip).default([]),
+});
+export type MyTrips = z.infer<typeof MyTrips>;
+
+/**
+ * Splits my trips the way the home screen shows them. Past means it ended
+ * before `today` (YYYY-MM-DD, the phone's own date); archived trips go to
+ * the bottom whatever their dates.
+ */
+export const groupTrips = <T extends Pick<TripSummary, 'startDate' | 'endDate' | 'archived'>>(
+  trips: T[],
+  today: string,
+) => {
+  const upcoming: T[] = [];
+  const past: T[] = [];
+  const archived: T[] = [];
+  for (const trip of trips) {
+    const last = trip.endDate ?? trip.startDate;
+    if (trip.archived) archived.push(trip);
+    else if (last && last < today) past.push(trip);
+    else upcoming.push(trip);
+  }
+  // The trip that just ended first.
+  past.sort((a, b) => ((b.endDate ?? b.startDate)! < (a.endDate ?? a.startDate)! ? -1 : 1));
+  return { upcoming, past, archived };
+};
+
+/** Unread counts for one trip's tabs. */
+export const TripUnread = z.object({ chat: z.number().int() });
+export type TripUnread = z.infer<typeof TripUnread>;
+
+export const Trip = TripSummary.omit({ unreadCount: true }).extend({
   /** The signed-in user's id, so screens can tell which member is "you". */
   myUserId: z.string().uuid(),
   baseCurrency: z.string().length(3),

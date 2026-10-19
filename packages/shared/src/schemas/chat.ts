@@ -56,6 +56,10 @@ export const ChatMessage = z.object({
   /** For system messages: what happened, e.g. { event: 'member_joined', userId }. */
   payload: z.record(z.unknown()).nullable(),
   createdAt: z.string(),
+  /** Set once the sender edited it; the app says "edited". */
+  editedAt: z.string().nullable().default(null),
+  /** Set once it was deleted; the body and payload are gone, only the placeholder stays. */
+  deletedAt: z.string().nullable().default(null),
   reactions: z.array(MessageReaction),
   /** Only on poll messages. */
   poll: Poll.nullable(),
@@ -86,6 +90,14 @@ export const SendMessageInput = z.object({
   replyToId: z.string().uuid().optional(),
 });
 export type SendMessageInput = z.input<typeof SendMessageInput>;
+
+/** How long after sending a message its sender can still edit it. */
+export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export const EditMessageInput = z.object({
+  body: z.string().trim().min(1, 'Type a message').max(4000),
+});
+export type EditMessageInput = z.input<typeof EditMessageInput>;
 
 export const ToggleReactionInput = z.object({
   emoji: z.enum(REACTIONS),

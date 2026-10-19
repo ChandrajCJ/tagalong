@@ -1,6 +1,12 @@
 import { Trip } from '@tagalong/shared';
+import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Body, Button, Title } from '@/components/ui';
+import { colors, space } from '@/theme';
 import { ApiError, request } from './api';
+import { CLIENT_ID } from './client-id';
 import { useTripRealtime } from './realtime';
 
 interface TripValue {
@@ -15,6 +21,8 @@ const TripContext = createContext<TripValue | null>(null);
 export function TripProvider({ tripId, children }: { tripId: string; children: React.ReactNode }) {
   const [trip, setTrip] = useState<Trip>();
   const [error, setError] = useState<string>();
+  // The owner deleted the trip while we had it open.
+  const [deleted, setDeleted] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -26,13 +34,29 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   }, [tripId]);
 
   useEffect(() => {
+    setDeleted(false);
     void reload();
   }, [reload]);
 
   // Someone renamed the trip or changed its dates: every screen follows.
   useTripRealtime(tripId, (message) => {
-    if (message.kind === 'event' && message.event.type === 'trip.updated') void reload();
+    if (message.kind !== 'event') return;
+    if (message.event.type === 'trip.updated') void reload();
+    // Whoever deleted it already left; everyone else is told why it's gone.
+    if (message.event.type === 'trip.deleted' && message.event.originClientId !== CLIENT_ID) setDeleted(true);
   });
+
+  if (deleted) {
+    return (
+      <SafeAreaView style={styles.gone}>
+        <Title style={{ fontSize: 24, textAlign: 'center' }}>This trip was deleted</Title>
+        <Body style={{ textAlign: 'center' }}>
+          {trip ? `An owner deleted ${trip.name}, so it’s gone for everyone.` : 'An owner deleted it, so it’s gone for everyone.'}
+        </Body>
+        <Button label="Back to your trips" onPress={() => router.replace('/trips')} />
+      </SafeAreaView>
+    );
+  }
 
   return <TripContext.Provider value={{ trip, error, reload }}>{children}</TripContext.Provider>;
 }
@@ -42,3 +66,7 @@ export const useTrip = () => {
   if (!value) throw new Error('useTrip must be used inside TripProvider');
   return value;
 };
+
+const styles = StyleSheet.create({
+  gone: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl, backgroundColor: colors.bg },
+});

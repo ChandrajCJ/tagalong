@@ -53,7 +53,7 @@ import { PhotoViewer } from '@/components/photo-viewer';
 import { TextPrompt } from '@/components/text-prompt';
 import { Avatar, Body, Button, Label } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
-import { mergeMessages, timeOf, type LocalMessage } from '@/lib/chat';
+import { applyDelete, applyEdit, mergeMessages, timeOf, type LocalMessage } from '@/lib/chat';
 import { documentUrl, fileSize, typeLabel } from '@/lib/documents';
 import { personName, useTripLists } from '@/lib/lists';
 import { dayKeyOf, formatCost, ITEM_TYPE_META, planDays, shortDate } from '@/lib/plan';
@@ -177,6 +177,12 @@ export default function ItemDetail() {
       if (parsed.success && parsed.data.itemId === itemId) {
         setMessages((prev) => mergeMessages(prev, [parsed.data]));
       }
+    } else if (event.type === 'message.updated') {
+      const parsed = ChatMessage.safeParse(event.payload);
+      if (parsed.success && parsed.data.itemId === itemId) setMessages((prev) => applyEdit(prev, parsed.data));
+    } else if (event.type === 'message.deleted') {
+      const p = event.payload as { messageId: string; itemId?: string | null };
+      if (p.itemId === itemId) setMessages((prev) => applyDelete(prev, p.messageId));
     }
   });
 
@@ -352,6 +358,8 @@ export default function ItemDetail() {
       replyTo: null,
       payload: null,
       createdAt: new Date().toISOString(),
+      editedAt: null,
+      deletedAt: null,
       reactions: [],
       poll: null,
       itemId: item.id,
@@ -659,7 +667,15 @@ export default function ItemDetail() {
                       ]}
                     >
                       {!isMe ? <Text style={styles.sender}>{m.senderName}</Text> : null}
-                      <Text style={[styles.msgBody, isMe && { color: '#FFFFFF' }]}>{m.body}</Text>
+                      <Text
+                        style={[
+                          styles.msgBody,
+                          isMe && { color: '#FFFFFF' },
+                          m.deletedAt && { fontStyle: 'italic', opacity: 0.7 },
+                        ]}
+                      >
+                        {m.deletedAt ? 'Message deleted' : m.body}
+                      </Text>
                       <Text
                         style={[
                           styles.msgTime,
@@ -671,7 +687,7 @@ export default function ItemDetail() {
                           ? "Didn't send. Tap to try again"
                           : m.status === 'sending'
                             ? 'Sending…'
-                            : timeOf(m.createdAt)}
+                            : `${timeOf(m.createdAt)}${m.editedAt && !m.deletedAt ? ' · edited' : ''}`}
                       </Text>
                     </Pressable>
                   </View>

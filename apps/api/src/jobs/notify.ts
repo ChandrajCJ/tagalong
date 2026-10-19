@@ -74,7 +74,12 @@ export const processNotify = async (
     .from(tripMembers)
     .innerJoin(trips, eq(trips.id, tripMembers.tripId))
     .where(
-      and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt)),
+      and(
+        eq(tripMembers.tripId, tripId),
+        eq(tripMembers.userId, userId),
+        isNull(tripMembers.leftAt),
+        isNull(trips.deletedAt),
+      ),
     );
   if (!membership) return { skipped: 'not_member' };
 

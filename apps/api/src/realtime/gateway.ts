@@ -177,6 +177,14 @@ export const registerGateway = async (
         });
       }
     }
+
+    // The owner deleted the trip: nobody gets it any more.
+    if (event.type === 'trip.deleted') {
+      for (const conn of room) {
+        void leave(conn, event.tripId);
+        send(conn, { kind: 'error', code: 'deleted', message: 'This trip was deleted', tripId: event.tripId });
+      }
+    }
   });
 
   // Phones that vanish without closing (tunnels, airplane mode) get cleaned up.

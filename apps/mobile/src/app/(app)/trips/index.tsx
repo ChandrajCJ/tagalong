@@ -1,32 +1,40 @@
-import { TripSummary } from '@tagalong/shared';
+import Feather from '@expo/vector-icons/Feather';
+import { groupTrips, MyTrips, type DeletedTrip, type TripSummary } from '@tagalong/shared';
 import { Link, router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { z } from 'zod';
 import { IconButton } from '@/components/icon-button';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
+import { todayIso } from '@/lib/dates';
 import { formatDateRange, tripCountdown } from '@/lib/format';
-import { registerForPush } from '@/lib/push';
+import { registerForPush, setAppBadge } from '@/lib/push';
+import { useTripsRealtime } from '@/lib/realtime';
 import { youAre } from '@/lib/roles';
 import { colors, fonts, radius, space } from '@/theme';
 
-const TripList = z.object({ trips: z.array(TripSummary) });
+/** Changes that move the "new" counts or the list itself. */
+const LIST_EVENTS = new Set(['message.created', 'message.deleted', 'read.updated', 'trip.deleted', 'trip.updated']);
+
+type Row = { type: 'trip'; trip: TripSummary } | { type: 'deleted'; trip: DeletedTrip };
+type Section = { key: string; title: string; data: Row[]; toggle?: boolean };
 
 /** Your trips (design: Home.dc.html). */
 export default function Trips() {
-  const [trips, setTrips] = useState<TripSummary[] | null>(null);
+  const [data, setData] = useState<MyTrips | null>(null);
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const data = await request('/trips', { schema: TripList });
-      setTrips(data.trips);
+      const mine = await request('/trips', { schema: MyTrips });
+      setData(mine);
       setError(undefined);
+      setAppBadge(mine.trips.reduce((sum, t) => sum + t.unreadCount, 0));
       // Ask for notifications once there's a trip to be notified about.
-      if (data.trips.length > 0) void registerForPush();
+      if (mine.trips.length > 0) void registerForPush();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not load your trips');
     }
@@ -39,11 +47,54 @@ export default function Trips() {
     }, [load]),
   );
 
+  // New messages, reads and deleted trips change the list: refetch, a moment after a burst.
+  const reloadTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(reloadTimer.current), []);
+  useTripsRealtime(
+    (data?.trips ?? []).map((t) => t.id),
+    (_tripId, m) => {
+      if (m.kind === 'reconnected' || (m.kind === 'event' && LIST_EVENTS.has(m.event.type))) {
+        clearTimeout(reloadTimer.current);
+        reloadTimer.current = setTimeout(() => void load(), 400);
+      }
+    },
+  );
+
   const refresh = async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
   };
+
+  const restore = async (trip: DeletedTrip) => {
+    try {
+      await request(`/trips/${trip.id}/restore`, { method: 'POST' });
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not restore that trip');
+    }
+  };
+
+  const sections = useMemo<Section[]>(() => {
+    if (!data) return [];
+    const { upcoming, past, archived } = groupTrips(data.trips, todayIso());
+    const asRows = (trips: TripSummary[]): Row[] => trips.map((trip) => ({ type: 'trip', trip }));
+    return [
+      { key: 'upcoming', title: 'Upcoming and planning', data: asRows(upcoming) },
+      { key: 'past', title: 'Past trips', data: asRows(past) },
+      {
+        key: 'archived',
+        title: `Archived (${archived.length})`,
+        data: showArchived ? asRows(archived) : [],
+        toggle: archived.length > 0,
+      },
+      {
+        key: 'deleted',
+        title: 'Recently deleted',
+        data: data.deleted.map((trip): Row => ({ type: 'deleted', trip })),
+      },
+    ].filter((s) => s.data.length > 0 || s.toggle);
+  }, [data, showArchived]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -55,10 +106,11 @@ export default function Trips() {
         <IconButton icon="user" label="Your profile" onPress={() => router.push('/profile')} />
       </View>
 
-      <FlatList
-        data={trips ?? []}
-        keyExtractor={(t) => t.id}
+      <SectionList
+        sections={sections}
+        keyExtractor={(row) => `${row.type}-${row.trip.id}`}
         contentContainerStyle={styles.list}
+        stickySectionHeadersEnabled={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
         ListHeaderComponent={
           error ? (
@@ -66,19 +118,39 @@ export default function Trips() {
               <Body style={{ color: colors.coralInk }}>{error}</Body>
               <Button label="Try again" variant="outline" onPress={load} />
             </View>
-          ) : trips && trips.length > 0 ? (
-            <Label>Upcoming and planning</Label>
           ) : null
         }
         ListEmptyComponent={
-          trips && !error ? (
+          data && !error ? (
             <View style={styles.empty}>
               <Title style={{ fontSize: 24 }}>Start your first trip</Title>
               <Body>Create a trip, invite your friends and plan it together.</Body>
             </View>
           ) : null
         }
-        renderItem={({ item }) => <TripCard trip={item} />}
+        renderSectionHeader={({ section }) =>
+          section.toggle ? (
+            <Pressable
+              accessibilityRole="button"
+              aria-expanded={showArchived}
+              accessibilityHint={showArchived ? 'Hides archived trips' : 'Shows archived trips'}
+              onPress={() => setShowArchived((v) => !v)}
+              style={styles.sectionToggle}
+            >
+              <Label>{section.title}</Label>
+              <Feather name={showArchived ? 'chevron-up' : 'chevron-down'} size={16} color={colors.muted} />
+            </Pressable>
+          ) : (
+            <Label style={styles.sectionTitle}>{section.title}</Label>
+          )
+        }
+        renderItem={({ item }) =>
+          item.type === 'trip' ? (
+            <TripCard trip={item.trip} />
+          ) : (
+            <DeletedRow trip={item.trip} onRestore={() => void restore(item.trip)} />
+          )
+        }
       />
 
       <Button
@@ -94,17 +166,24 @@ export default function Trips() {
 function TripCard({ trip }: { trip: TripSummary }) {
   const countdown = tripCountdown(trip.startDate, trip.endDate);
   const people = trip.memberCount === 1 ? '1 person' : `${trip.memberCount} people`;
+  const unread = trip.unreadCount > 0 ? `${trip.unreadCount > 99 ? '99+' : trip.unreadCount} new` : null;
   return (
     <Link href={`/trips/${trip.id}`} asChild>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${trip.name}, ${formatDateRange(trip.startDate, trip.endDate)}`}
+        accessibilityLabel={`${trip.name}, ${formatDateRange(trip.startDate, trip.endDate)}${unread ? `, ${trip.unreadCount} new messages` : ''}`}
         // A plain style: Link asChild hands the Pressable its own style, so a
         // function style here would be dropped (the card lost its border).
-        style={styles.card}
+        style={[styles.card, trip.archived && { opacity: 0.8 }]}
       >
         <View style={[styles.cover, { backgroundColor: trip.coverColor }]}>
-          {countdown ? <Text style={styles.chip}>{countdown}</Text> : null}
+          {countdown ? <Text style={styles.chip}>{countdown}</Text> : <View />}
+          {unread ? (
+            <View style={styles.unread}>
+              <Feather name="message-square" size={12} color="#FFFFFF" />
+              <Text style={styles.unreadText}>{unread}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle}>{trip.name}</Text>
@@ -120,10 +199,31 @@ function TripCard({ trip }: { trip: TripSummary }) {
   );
 }
 
+/** A trip the owner deleted: gone for everyone, but it can still come back. */
+function DeletedRow({ trip, onRestore }: { trip: DeletedTrip; onRestore: () => void }) {
+  const daysLeft = Math.max(0, Math.ceil((new Date(trip.purgeAt).getTime() - Date.now()) / 86_400_000));
+  return (
+    <View style={styles.deleted}>
+      <View style={[styles.deletedSwatch, { backgroundColor: trip.coverColor }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.deletedTitle} numberOfLines={1}>
+          {trip.name}
+        </Text>
+        <Body style={{ fontSize: 13 }}>
+          {daysLeft === 1 ? 'Gone for good tomorrow' : `Gone for good in ${daysLeft} days`}
+        </Body>
+      </View>
+      <Button label="Restore" variant="outline" onPress={onRestore} style={{ minHeight: 40 }} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.xl, paddingTop: space.md },
   list: { padding: space.xl, paddingBottom: 120, gap: space.lg },
+  sectionTitle: { marginTop: space.sm },
+  sectionToggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 44, marginTop: space.sm },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 20,
@@ -136,11 +236,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cover: { height: 120, padding: space.md },
-  chip: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', color: colors.ink, fontFamily: fonts.bold, fontSize: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: 'hidden' },
+  cover: { height: 120, padding: space.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  chip: { backgroundColor: '#FFFFFF', color: colors.ink, fontFamily: fonts.bold, fontSize: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: 'hidden' },
+  unread: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.coral, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+  unreadText: { color: '#FFFFFF', fontFamily: fonts.bold, fontSize: 12 },
   cardBody: { padding: space.lg, gap: 4 },
   cardTitle: { fontFamily: fonts.display, fontSize: 21, color: colors.ink },
   meta: { fontFamily: fonts.bold, fontSize: 12, color: colors.accentInk, marginTop: 4 },
+  deleted: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  deletedSwatch: { width: 40, height: 40, borderRadius: 12, opacity: 0.6 },
+  deletedTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   empty: { paddingVertical: 60, gap: space.sm, alignItems: 'center' },
   errorBox: { gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.coralSoft },
   fab: { position: 'absolute', right: space.xl, bottom: 36 },

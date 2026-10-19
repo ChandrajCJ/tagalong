@@ -189,4 +189,24 @@ describe('realtime gateway', () => {
     ).toBe(false);
     samClient.ws.close();
   });
+
+  it('tells everyone on a deleted trip, then stops sending it', async () => {
+    const owner = await t.signIn('owner@example.com');
+    const tripId = await createTrip(t.app, owner.accessToken);
+    const sam = await joinTrip(t, tripId, owner.accessToken, 'sam@example.com');
+
+    const samClient = await connect(port, sam.accessToken);
+    samClient.ws.send(JSON.stringify({ op: 'subscribe', tripId }));
+    await waitFor(() => samClient.messages.find((m) => m.kind === 'subscribed'));
+
+    await t.app.inject({ method: 'DELETE', url: `/trips/${tripId}`, headers: bearer(owner.accessToken) });
+    await waitFor(() => samClient.messages.find((m) => m.kind === 'event' && m.event.type === 'trip.deleted'));
+    await waitFor(() => samClient.messages.find((m) => m.kind === 'error' && m.code === 'deleted'));
+
+    // Subscribing again is turned away like any trip you're not on.
+    samClient.ws.send(JSON.stringify({ op: 'subscribe', tripId }));
+    await new Promise((r) => setTimeout(r, 150));
+    expect(samClient.messages.filter((m) => m.kind === 'subscribed')).toHaveLength(1);
+    samClient.ws.close();
+  });
 });

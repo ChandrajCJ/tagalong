@@ -15,6 +15,7 @@ import {
 } from '@tagalong/db';
 import {
   CreatePollInput,
+  MESSAGE_EDIT_WINDOW_MS,
   newId,
   SendMessageInput,
   type ChatMessage,
@@ -30,7 +31,7 @@ import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
 import { endOfDay, toItem } from '../itinerary/service';
-import { itemChannelId, mainChannelId, postSystemMessage, quotesFor, toMessage } from './channel';
+import { itemChannelId, mainChannelId, postSystemMessage, quotesFor, toMessage, unreadCounts } from './channel';
 
 type SendMessage = z.output<typeof SendMessageInput>;
 type CreatePoll = z.output<typeof CreatePollInput>;
@@ -164,13 +165,22 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
     return poll;
   };
 
-  const loadMessage = async (messageId: string) => {
+  const loadMessage = async (messageId: string, { includeDeleted = false } = {}) => {
     const [row] = await db
       .select()
       .from(messages)
-      .where(and(eq(messages.id, messageId), isNull(messages.deletedAt)));
+      .where(and(eq(messages.id, messageId), includeDeleted ? undefined : isNull(messages.deletedAt)));
     if (!row) throw notFound('Message not found');
     return row;
+  };
+
+  /** The plan item whose thread a channel is, or null for the main chat. */
+  const itemOfChannel = async (channelId: string) => {
+    const [channel] = await db
+      .select({ itemId: channels.itemId })
+      .from(channels)
+      .where(eq(channels.id, channelId));
+    return channel?.itemId ?? null;
   };
 
   /** One page of a channel, newest first. Shared by the main chat and item threads. */
@@ -188,8 +198,8 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       .leftJoin(users, eq(users.id, messages.senderId))
       .where(
         and(
+          // Deleted messages stay as "Message deleted", so replies still make sense.
           eq(messages.channelId, channelId),
-          isNull(messages.deletedAt),
           cursor
             ? sql`(${messages.createdAt}, ${messages.id}) < (${cursor.at.toISOString()}::timestamptz, ${cursor.id}::uuid)`
             : undefined,
@@ -618,23 +628,95 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
 
     async markRead(tripId: string, userId: string, messageId: string, origin?: string) {
       await requireTripRole(db, tripId, userId, 'viewer');
-      const row = await loadMessage(messageId);
+      // The newest message on screen may be a deleted one; reading up to it still counts.
+      const row = await loadMessage(messageId, { includeDeleted: true });
       if (row.tripId !== tripId) throw notFound('Message not found');
       const lastReadAt = await advanceRead(row.channelId, userId, messageId, row.createdAt);
       // Say which conversation this was, so reading a thread doesn't move "Seen by" in the main chat.
-      const [channel] = await db
-        .select({ itemId: channels.itemId })
-        .from(channels)
-        .where(eq(channels.id, row.channelId));
       await publishTripEvent(redis, {
         type: 'read.updated',
         tripId,
         entityId: userId,
         actorId: userId,
-        payload: { userId, lastReadAt: lastReadAt.toISOString(), itemId: channel?.itemId ?? null },
+        payload: { userId, lastReadAt: lastReadAt.toISOString(), itemId: await itemOfChannel(row.channelId) },
         originClientId: origin,
       });
       return { lastReadAt: lastReadAt.toISOString() };
+    },
+
+    /** Main-chat messages I haven't read, for the Chat tab's badge. */
+    async unread(tripId: string, userId: string) {
+      await requireTripRole(db, tripId, userId, 'viewer');
+      return { chat: (await unreadCounts(db, userId, [tripId])).get(tripId) ?? 0 };
+    },
+
+    /**
+     * Fixes a typo: the sender only, text messages only, and only for a day
+     * after sending, so an old message can't quietly change meaning.
+     */
+    async edit(messageId: string, userId: string, body: string, origin?: string): Promise<ChatMessage> {
+      const row = await loadMessage(messageId);
+      await requireTripRole(db, row.tripId, userId, 'viewer');
+      if (row.senderId !== userId) throw forbidden('You can only edit your own messages');
+      if (row.kind !== 'text') throw badRequest('Only text messages can be edited');
+      if (Date.now() - row.createdAt.getTime() > MESSAGE_EDIT_WINDOW_MS) {
+        throw forbidden('Messages can only be edited for 24 hours after sending');
+      }
+
+      const [updated] = await db
+        .update(messages)
+        .set({ body, editedAt: new Date() })
+        .where(and(eq(messages.id, messageId), isNull(messages.deletedAt)))
+        .returning();
+      if (!updated) throw notFound('Message not found');
+
+      const [sender] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, userId));
+      const quotes = await quotesFor(db, [updated.replyToId]);
+      const message = toMessage(
+        updated,
+        sender?.name ?? null,
+        (await reactionsFor([messageId], userId)).get(messageId) ?? [],
+        null,
+        await itemOfChannel(updated.channelId),
+        updated.replyToId ? (quotes.get(updated.replyToId) ?? null) : null,
+      );
+      await publishTripEvent(redis, {
+        type: 'message.updated',
+        tripId: row.tripId,
+        entityId: messageId,
+        actorId: userId,
+        payload: message,
+        originClientId: origin,
+      });
+      return message;
+    },
+
+    /**
+     * Deletes a message for everyone. The sender can always delete their own,
+     * and a trip owner can delete anyone's. The text is wiped, not hidden; the
+     * message stays as "Message deleted" so the conversation still reads right.
+     */
+    async remove(messageId: string, userId: string, origin?: string) {
+      const row = await loadMessage(messageId, { includeDeleted: true });
+      const role = await requireTripRole(db, row.tripId, userId, 'viewer');
+      if (row.kind === 'system') throw forbidden('Activity cards can’t be deleted');
+      if (row.senderId !== userId && role !== 'owner') {
+        throw forbidden('Only the sender or a trip owner can delete this message');
+      }
+      if (row.deletedAt) return;
+
+      await db
+        .update(messages)
+        .set({ deletedAt: new Date(), body: '', payload: null })
+        .where(eq(messages.id, messageId));
+      await publishTripEvent(redis, {
+        type: 'message.deleted',
+        tripId: row.tripId,
+        entityId: messageId,
+        actorId: userId,
+        payload: { messageId, itemId: await itemOfChannel(row.channelId) },
+        originClientId: origin,
+      });
     },
   };
 };
