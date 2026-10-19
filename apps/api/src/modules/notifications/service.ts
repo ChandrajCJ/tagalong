@@ -15,11 +15,12 @@ type Row = typeof notificationPrefs.$inferSelect;
 type UpdateDefaults = z.output<typeof UpdateNotificationPrefsInput>;
 type UpdateTrip = z.output<typeof UpdateTripNotificationsInput>;
 
-const KINDS = ['chat', 'mentions', 'plan', 'money', 'todos', 'trip'] as const;
+/** The switches a person can turn on and off, per trip or as defaults. */
+type Kind = 'chat' | 'mentions' | 'plan' | 'money' | 'todos' | 'trip';
 
 /** Defaults, then the trip's own choices on top; anything never set is on. */
 const resolve = (defaults: Row | undefined, trip: Row | undefined): NotificationPrefs => {
-  const pick = <K extends (typeof KINDS)[number]>(k: K) => trip?.[k] ?? defaults?.[k] ?? DEFAULT_PREFS[k];
+  const pick = <K extends Kind>(k: K) => trip?.[k] ?? defaults?.[k] ?? DEFAULT_PREFS[k];
   const mutes = [defaults?.mutedUntil, trip?.mutedUntil].filter((d): d is Date => !!d);
   const latest = mutes.length ? new Date(Math.max(...mutes.map((d) => d.getTime()))) : null;
   return {
