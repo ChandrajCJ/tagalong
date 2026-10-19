@@ -19,7 +19,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.chandrajcj.tagalong"
+      "package": "com.chandrajcj.tagalong",
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "single",
@@ -51,6 +56,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0de1aa1d-890f-45cf-a533-2978608d6ed5"
+      }
+    },
+    "owner": "chandraj_n"
   }
 }
