@@ -58,7 +58,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "postinstall": "node scripts/copy-map-worker.mjs"
+    "postinstall": "node scripts/copy-map-worker.mjs",
+    "eas-build-pre-install": "node scripts/eas-google-services.mjs"
   },
   "private": true
 }
