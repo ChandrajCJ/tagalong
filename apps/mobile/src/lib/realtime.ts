@@ -112,6 +112,8 @@ class RealtimeClient {
         accepted = true;
         this.backoff = 1000;
       }
+      // Turned away: hang up now rather than wait for a proxy to time out.
+      if (parsed.kind === 'error' && parsed.code === 'unauthorized') ws.close();
       const tripId = tripOf(parsed);
       if (tripId) this.listeners.get(tripId)?.forEach((l) => l(parsed));
     };
