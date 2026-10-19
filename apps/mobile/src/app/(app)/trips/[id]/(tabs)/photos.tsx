@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { IconButton } from '@/components/icon-button';
 import { PhotoMap } from '@/components/photo-map';
 import { PhotoViewer } from '@/components/photo-viewer';
 import { Body, Button, Title } from '@/components/ui';
@@ -344,25 +345,14 @@ export default function PhotosTab() {
           </Body>
         </View>
         {flat.length > 0 && mode !== 'map' ? (
-          <Pressable
-            accessibilityRole="button"
+          <IconButton
+            icon={selected ? 'x' : 'check-square'}
+            label={selected ? 'Stop selecting' : 'Select photos'}
             onPress={() => setSelected(selected ? null : new Set())}
-            style={styles.selectButton}
-          >
-            <Text style={styles.selectText}>{selected ? 'Cancel' : 'Select'}</Text>
-          </Pressable>
+          />
         ) : null}
         {canAdd && flat.length > 0 && !selected ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Add photos"
-            disabled={!!progress}
-            onPress={pick}
-            style={[styles.addButton, progress && { opacity: 0.5 }]}
-          >
-            <Feather name="plus" size={18} color="#FFFFFF" />
-            <Text style={styles.addText}>Add</Text>
-          </Pressable>
+          <IconButton icon="plus" tone="solid" label="Add photos" disabled={!!progress} onPress={pick} iconSize={20} />
         ) : null}
       </View>
 
@@ -558,8 +548,6 @@ export default function PhotosTab() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm },
-  addButton: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 40, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.accent },
-  addText: { fontFamily: fonts.bold, fontSize: 14, color: '#FFFFFF' },
   banner: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm, marginHorizontal: space.xl, marginBottom: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
   bannerError: { backgroundColor: colors.coralSoft },
   bar: { width: '100%', height: 4, borderRadius: 2, backgroundColor: 'rgba(14,107,92,0.2)', overflow: 'hidden' },
@@ -576,8 +564,6 @@ const styles = StyleSheet.create({
   tile: { flex: 1, borderRadius: 4, backgroundColor: colors.line },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  selectButton: { minHeight: 40, paddingHorizontal: 14, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
-  selectText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
   check: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   selectBar: { gap: space.sm, padding: space.md, paddingHorizontal: space.xl, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },

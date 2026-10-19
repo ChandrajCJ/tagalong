@@ -501,8 +501,10 @@ export default function ChatTab() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+        // Android draws edge to edge now, so the window no longer shrinks for
+        // the keyboard: lift the composer with padding there too.
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {error ? (
           <View style={styles.center}>

@@ -2,7 +2,7 @@ import { AuthTokens, RequestCodeInput, VerifyCodeInput } from '@tagalong/shared'
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, Field, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
@@ -56,7 +56,7 @@ export default function SignIn() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.body}>
+      <KeyboardAvoidingView behavior="padding" style={styles.body}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back"

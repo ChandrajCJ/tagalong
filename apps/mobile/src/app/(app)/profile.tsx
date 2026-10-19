@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Me, UPI_ID } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
@@ -62,7 +62,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.close}>
             <Text style={styles.closeText}>Done</Text>

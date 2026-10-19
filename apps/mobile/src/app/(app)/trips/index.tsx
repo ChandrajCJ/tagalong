@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
+import { IconButton } from '@/components/icon-button';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { formatDateRange, tripCountdown } from '@/lib/format';
@@ -51,14 +52,7 @@ export default function Trips() {
           <Body>Welcome back</Body>
           <Title style={{ fontSize: 32 }}>Your trips</Title>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Your profile"
-          onPress={() => router.push('/profile')}
-          style={styles.avatar}
-        >
-          <Text style={styles.avatarText}>Profile</Text>
-        </Pressable>
+        <IconButton icon="user" label="Your profile" onPress={() => router.push('/profile')} />
       </View>
 
       <FlatList
@@ -127,10 +121,19 @@ function TripCard({ trip }: { trip: TripSummary }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.xl, paddingTop: space.md },
-  avatar: { minHeight: 44, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, justifyContent: 'center' },
-  avatarText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   list: { padding: space.xl, paddingBottom: 120, gap: space.lg },
-  card: { backgroundColor: colors.surface, borderRadius: 20, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.lineStrong,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
   cover: { height: 120, padding: space.md },
   chip: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', color: colors.ink, fontFamily: fonts.bold, fontSize: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: 'hidden' },
   cardBody: { padding: space.lg, gap: 4 },

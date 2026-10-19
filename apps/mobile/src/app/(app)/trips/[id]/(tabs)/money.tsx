@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { IconButton } from '@/components/icon-button';
 import { ExpenseSheet, type ExpenseFields, type SaveResult } from '@/components/expense-sheet';
 import { SettleSheet, type PendingPayment } from '@/components/settle-sheet';
 import { Avatar, Body, Button, Label, Title } from '@/components/ui';
@@ -287,15 +288,11 @@ export default function MoneyTab() {
       <View style={styles.header}>
         <Title>Money</Title>
         {data && data.expenses.length > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Export expenses as a spreadsheet"
+          <IconButton
+            icon="download"
+            label="Export expenses (CSV)"
             onPress={() => void exportCsv(trip.name, data.expenses, people, base)}
-            style={styles.exportButton}
-          >
-            <Feather name="download" size={16} color={colors.ink} />
-            <Text style={styles.exportText}>Export CSV</Text>
-          </Pressable>
+          />
         ) : null}
       </View>
 
@@ -559,8 +556,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
-  exportButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
-  exportText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   undo: { minHeight: 36, paddingHorizontal: 10, justifyContent: 'center' },
   undoText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   toast: { position: 'absolute', left: space.xl, right: space.xl, bottom: 90, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
