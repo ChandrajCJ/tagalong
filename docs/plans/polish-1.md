@@ -4,6 +4,12 @@ Status: approved plan. Everything stays free. Build it in four sessions, in orde
 - **OTA:** `./scripts/ota-update.sh "…"` for JavaScript-only changes.
 - **APK:** `./scripts/build-apk.sh` when native modules change. Only session D needs one.
 
+Sessions at a glance:
+- **A:** archive and delete trips · edit and delete messages · unread counts
+- **B:** chat photos and screenshots · @mentions · link previews · message info (delivered/read) · photo covers for trips
+- **C:** notifications you control · places for plan stops *and ideas* · fix Explore → Food & drink · reminders for timed stops
+- **D:** video · dark mode · invite links open the installed app (one new APK)
+
 Starting point:
 - Last migration: `0016_bookings_from_email`.
 - `chat.messages` already has `kind`, `payload jsonb`, `reply_to_id`, `edited_at` and `deleted_at`. `chat.read_states` holds `last_read_at` per user and channel.
@@ -83,7 +89,36 @@ Starting point:
 - **App:** a compact card under the bubble (image, title, site). It's skipped for links to our own app (invites).
 - **Tests:** OG/Twitter meta parsing; private IPs and redirects to them refused; timeout; size cap; non-HTML ignored; cache hit.
 
-**Ship:** migration `0018`, deploy API, OTA. The image picker is already in the APK.
+### B4. Message info: delivered and read
+- **What you see:** on your own messages, ticks like WhatsApp.
+  - ✓ sent (the server has it)
+  - ✓✓ **delivered** to every member
+  - ✓✓ in the accent colour, **read** by every member
+- **Message info sheet:** long-press → *Info* shows **Read by** (names and times), **Delivered to** and **Not delivered yet**.
+- **Delivered** means a member's app received it: live over the WebSocket (the app acks), or when it fetched messages after being offline.
+  - **DB:** `chat.read_states` gains `last_delivered_at`, kept monotonic.
+  - **API:** `POST /trips/:id/delivered {upTo}`, batched by the app at most every 2 s.
+  - **Event:** `delivery.updated`.
+- **Read** reuses `read_states.last_read_at`, already updated when chat is open.
+- **Who counts:** status is computed per message against members who were in the trip when it was sent (`trip_members.joined_at`). People who joined later aren't counted.
+- **Privacy:** *Profile → Privacy → Read receipts* (on by default). Turn it off and others can't see when you read their messages, and you can't see theirs. Same rule as WhatsApp. Delivery ticks stay.
+- **Tests:**
+  - Delivered and read only move forward.
+  - Info lists are correct as members join, leave or opt out.
+  - The opt-out hides the read state both ways.
+  - The ack batching endpoint is idempotent.
+
+### B5. A photo cover for each trip
+- **Choosing a cover:** next to the cover colours in *New trip* / *Edit trip*, add **Choose a photo**:
+  - **Upload** one (crop to 16:9 on the device, ≤ 1600 px wide, compressed).
+  - **Pick** from the trip's own album.
+  - Or take the **suggested photo of the destination** from Wikipedia, which is free with no key. The credit is kept and shown small on the cover.
+- **DB:** `trips.trips.cover_media_id` (nullable) and `cover_credit`. The colour stays as the fallback and as the tint behind the text.
+- **Display:** the trip cards and the overview header show the photo with a dark gradient, so the title stays readable. **Remove photo** goes back to the colour.
+- **Permissions:** editors and owners can change it; everyone sees it. The cover file is deleted when replaced or when the trip is purged.
+- **Tests:** permissions; cover must be trip media or a validated Wikipedia image URL; replace and delete clean up storage.
+
+**Ship:** migration `0018`, deploy API, OTA. The image picker and cropper are already in the APK (`allowsEditing`).
 
 ---
 
@@ -114,6 +149,22 @@ Starting point:
 - **Day header:** when ≥ 2 stops lack a place, show *"2 stops aren't on the map yet. Add places for travel times."*
 - **Never nag:** there's no prompt for stops of type "other" or for notes-only items.
 - **Smart guess:** if the text matches exactly one place result near the trip, offer it inline: "Is this *Fort Aguada*? Yes / Pick another".
+
+### C2b. Real places when adding an idea
+- **Same search as plan stops:** the idea sheet's "Where" uses the same `PlaceField` as plan stops, with places near the trip and Explore favourites first. Picking one saves `latitude`, `longitude` and `placeRef`. The `ideas` table already has them.
+- **What it unlocks:** the idea shows on the Plan map (as an outlined pin), "Directions" works, and moving it into the plan keeps the place.
+- **Duplicates:** an idea with the same `placeRef` as an existing one reuses it, so there are no duplicates (the API already dedupes Explore adds).
+
+### C2c. Explore → Food & drink comes back empty
+- **Cause:** found 19 Oct. Food, nightlife and shopping come only from Overpass, and Wikipedia rarely lists restaurants. For a region like Goa, the query covers the whole state. All three public Overpass servers time out or answer 500 on it, and the failure was shown as an empty list.
+- **Fixes:**
+  1. **Smaller questions:** for regions, query a few small boxes around the busiest spots (the top Wikipedia and Photon places), not the whole state.
+  2. **Fewer results:** cap the count (`out center 80`), and give the query a 15 s server timeout.
+  3. **Photon as a second source:** search by type, e.g. `osm_tag=amenity:restaurant`, `amenity:cafe`, `amenity:bar`, `shop:mall` and so on, inside the trip's box. It's free and keyless, and it already answers reliably from Render.
+  4. **Merge and dedupe** with `mergePlaces`, as for sights.
+  5. **Say so when it fails:** if every source fails, show *"Couldn't load places right now. Try again"* with a retry, never an empty list. Log the failures with the source name.
+  6. **Cache longer:** keep good answers for 7 days (as now). Retry partial answers in the background, rather than on the next visit.
+- **Tests:** the fake geo returning Overpass `null` still gives food from Photon; region box splitting; the error state when every source fails.
 
 ### C3. Reminders for timed stops
 - **Local notifications** scheduled on the phone (`expo-notifications`, already in the APK). They're free, and they work offline once scheduled.
@@ -150,13 +201,24 @@ Starting point:
 - **Native:** `app.json` `userInterfaceStyle: "automatic"`, a dark splash and the status bar *(native config, needs the APK)*.
 - **Checks:** contrast of text and accent colours on both palettes (WCAG AA), and screenshots of every tab in both.
 
-**Ship:** migration `0020`, deploy API, **one new APK** (`./scripts/build-apk.sh`) with expo-video, expo-video-thumbnails and native dark mode. Then OTA as usual.
+### D3. Invite links open the installed app
+- **Why it opens the web today:** Android only hands an `https://` link to an app that has proven it owns the website (**App Links**). We haven't set that up yet.
+- **Website side:** serve `https://tagalong-u4wh.onrender.com/.well-known/assetlinks.json`, from `apps/mobile/public/.well-known/` (copied by `expo export`, and served before Render's SPA rewrite).
+  - It holds the package `com.chandrajcj.tagalong` and the APK signing key's **SHA-256** fingerprint, from `eas credentials`: `65:DD:33:5C:…:39:FB`.
+- **App side:** `app.json` `android.intentFilters` with `autoVerify: true` for `https`, host `tagalong-u4wh.onrender.com`, path prefix `/invite`. Expo Router already routes `/invite/<token>` to the invite screen *(native config, needs the APK)*.
+- **Afterwards:**
+  - Tapping an invite link in WhatsApp opens the app straight onto the invite.
+  - Without the app, it still opens the website.
+- **Verify:** `adb shell pm get-app-links com.chandrajcj.tagalong` shows `verified`, or Android's *Open by default* settings show the domain as verified.
+- **Later, with a domain of our own:** the same file and filter for that host.
+
+**Ship:** migration `0020`, deploy API, **one new APK** (`./scripts/build-apk.sh`) with expo-video, expo-video-thumbnails, native dark mode and App Links. Then OTA as usual.
 
 ---
 
 ## Cross-cutting
 - **Docs:**
-  - ADRs: `021-trip-lifecycle.md` (archive vs delete, purge), `022-chat-media-and-previews.md` (SSRF rules), `023-notifications.md` (kinds, prefs, local reminders) and `024-dark-mode.md`.
+  - ADRs: `021-trip-lifecycle.md` (archive vs delete, purge), `022-chat-media-and-previews.md` (SSRF rules, read receipts and privacy), `023-notifications.md` (kinds, prefs, local reminders) and `024-dark-mode.md`.
   - Update `docs/ABOUT.md`.
 - **Free-tier care:**
   - Videos and chat images count against Supabase's 1 GB.
