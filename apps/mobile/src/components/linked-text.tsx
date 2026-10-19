@@ -14,25 +14,23 @@ const targetOf = (part: string) => {
   return clean.startsWith('www.') ? `https://${clean}` : clean;
 };
 
+/** The text with its links and phone numbers made tappable, to put inside a <Text>. */
+export const linkify = (text: string, linkStyle: TextStyle, keyPrefix = '') =>
+  text.split(LINK).map((part, i) => {
+    const target = i % 2 === 1 ? targetOf(part) : null;
+    if (!target) return part;
+    return (
+      <Text key={`${keyPrefix}${i}`} accessibilityRole="link" onPress={() => void Linking.openURL(target)} style={linkStyle}>
+        {part}
+      </Text>
+    );
+  });
+
 /** Plain text where links and phone numbers can be tapped. */
 export function LinkedText({ text, style }: { text: string; style?: TextStyle }) {
-  const parts = text.split(LINK);
   return (
     <Text style={style} selectable>
-      {parts.map((part, i) => {
-        const target = i % 2 === 1 ? targetOf(part) : null;
-        if (!target) return part;
-        return (
-          <Text
-            key={i}
-            accessibilityRole="link"
-            onPress={() => void Linking.openURL(target)}
-            style={{ color: colors.accent, fontFamily: fonts.medium, textDecorationLine: 'underline' }}
-          >
-            {part}
-          </Text>
-        );
-      })}
+      {linkify(text, { color: colors.accent, fontFamily: fonts.medium, textDecorationLine: 'underline' })}
     </Text>
   );
 }

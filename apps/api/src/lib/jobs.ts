@@ -10,6 +10,20 @@ export interface NotifyJob {
   userId: string;
 }
 
+/** Someone was @mentioned: tell them now, not in the next summary. */
+export interface MentionJob {
+  tripId: string;
+  messageId: string;
+  userId: string;
+}
+
+/** Fetching a link's title and picture runs apart from everything else: it waits on other people's servers. */
+export const PREVIEW_QUEUE = 'preview';
+
+export interface LinkPreviewJob {
+  messageId: string;
+}
+
 /** Image work gets its own queue, so a slow resize never holds up a push. */
 export const MEDIA_QUEUE = 'media';
 
@@ -20,13 +34,16 @@ export interface ThumbnailJob {
 /** Background work the API hands to the worker. Tests swap in a recorder. */
 export interface Jobs {
   notifyChat(tripId: string, userIds: string[]): Promise<void>;
+  notifyMention(tripId: string, messageId: string, userIds: string[]): Promise<void>;
   makeThumbnail(photoId: string): Promise<void>;
+  linkPreview(messageId: string): Promise<void>;
   close(): Promise<void>;
 }
 
 export const bullJobs = (redis: Redis): Jobs => {
-  const notify = new Queue<NotifyJob>(NOTIFY_QUEUE, { connection: redis });
+  const notify = new Queue<NotifyJob | MentionJob>(NOTIFY_QUEUE, { connection: redis });
   const media = new Queue<ThumbnailJob>(MEDIA_QUEUE, { connection: redis });
+  const preview = new Queue<LinkPreviewJob>(PREVIEW_QUEUE, { connection: redis });
   return {
     async notifyChat(tripId, userIds) {
       if (userIds.length === 0) return;
@@ -45,6 +62,24 @@ export const bullJobs = (redis: Redis): Jobs => {
         })),
       );
     },
+    async notifyMention(tripId, messageId, userIds) {
+      if (userIds.length === 0) return;
+      await notify.addBulk(
+        userIds.map((userId) => ({
+          name: 'mention',
+          data: { tripId, messageId, userId },
+          opts: { jobId: `mention-${messageId}-${userId}`, removeOnComplete: true, removeOnFail: true },
+        })),
+      );
+    },
+    async linkPreview(messageId) {
+      await preview.add(
+        'link-preview',
+        { messageId },
+        // An edit can change the link, so each try gets its own job.
+        { attempts: 2, backoff: { type: 'fixed', delay: 5_000 }, removeOnComplete: true, removeOnFail: 50 },
+      );
+    },
     async makeThumbnail(photoId) {
       await media.add(
         'thumbnail',
@@ -60,7 +95,7 @@ export const bullJobs = (redis: Redis): Jobs => {
       );
     },
     close: async () => {
-      await Promise.all([notify.close(), media.close()]);
+      await Promise.all([notify.close(), media.close(), preview.close()]);
     },
   };
 };

@@ -88,6 +88,7 @@ export const createPhotosService = (
       longitude: r.longitude,
       status: r.status as Photo['status'],
       caption: r.caption,
+      source: r.source as Photo['source'],
       version: r.version,
       createdAt: r.createdAt.toISOString(),
       favourites: fav.count,
@@ -121,6 +122,8 @@ export const createPhotosService = (
         .where(
           and(
             eq(photos.tripId, tripId),
+            // Chat photos and covers stay out of the album until someone adds them.
+            eq(photos.source, 'album'),
             isNull(photos.deletedAt),
             sql`(${photos.status} = 'ready' or ${photos.uploadedBy} = ${userId})`,
           ),
@@ -171,6 +174,7 @@ export const createPhotosService = (
         .where(
           and(
             eq(photos.tripId, item.tripId),
+            eq(photos.source, 'album'),
             eq(photos.status, 'ready'),
             isNull(photos.deletedAt),
             sql`${photos.takenAt} between ${window.from}::timestamp and ${window.to}::timestamp`,
@@ -248,6 +252,7 @@ export const createPhotosService = (
           latitude: input.latitude ?? null,
           longitude: input.longitude ?? null,
           caption: input.caption ?? null,
+          source: input.source,
           status: 'pending',
         })
         .returning();
@@ -297,16 +302,46 @@ export const createPhotosService = (
       });
 
       await jobs.makeThumbnail(photoId);
-      // No payload: each phone fetches its own signed copy.
+      // No payload: each phone fetches its own signed copy. Chat photos and
+      // covers aren't in the album, so albums have nothing to show yet.
+      if (ready.source === 'album') {
+        await publishTripEvent(redis, {
+          type: 'photo.upserted',
+          tripId: photo.tripId,
+          entityId: photoId,
+          actorId: userId,
+          version: ready.version,
+          originClientId: origin,
+        });
+      }
+      return toPhoto(ready, uploaderName);
+    },
+
+    /** "Add to album" on a photo sent in the chat: it joins the album for everyone. */
+    async addToAlbum(photoId: string, userId: string, origin?: string) {
+      const { photo, uploaderName } = await loadLive(photoId);
+      await requireTripRole(db, photo.tripId, userId, 'editor');
+      if (photo.status !== 'ready' || photo.source === 'cover') throw notFound('That photo is no longer here');
+      if (photo.source === 'album') return toPhoto(photo, uploaderName);
+
+      const row = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(photos)
+          .set({ source: 'album', version: sql`${photos.version} + 1` })
+          .where(eq(photos.id, photoId))
+          .returning();
+        await tx.insert(changeLog).values({ tripId: photo.tripId, entity: 'photo', entityId: photoId, op: 'upsert', changedBy: userId });
+        return updated!;
+      });
       await publishTripEvent(redis, {
         type: 'photo.upserted',
         tripId: photo.tripId,
         entityId: photoId,
         actorId: userId,
-        version: ready.version,
+        version: row.version,
         originClientId: origin,
       });
-      return toPhoto(ready, uploaderName);
+      return toPhoto(row, uploaderName);
     },
 
     /**
@@ -323,6 +358,7 @@ export const createPhotosService = (
             eq(photos.tripId, tripId),
             eq(photos.batchId, batchId),
             eq(photos.uploadedBy, userId),
+            eq(photos.source, 'album'),
             eq(photos.status, 'ready'),
             isNull(photos.deletedAt),
           ),

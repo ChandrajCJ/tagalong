@@ -41,6 +41,11 @@ export const photosRoutes = async (app: FastifyInstance, { deps }: { deps: Deps 
     return service.complete(photoId, request.user.sub, originOf(request));
   });
 
+  app.post('/photos/:photoId/album', async (request) => {
+    const { photoId } = parse(PhotoParams, request.params);
+    return service.addToAlbum(photoId, request.user.sub, originOf(request));
+  });
+
   app.get('/items/:itemId/photos', async (request) => {
     const { itemId } = parse(ItemParams, request.params);
     return service.forItem(itemId, request.user.sub);

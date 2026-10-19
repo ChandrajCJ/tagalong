@@ -1,7 +1,11 @@
 import { MESSAGE_EDIT_WINDOW_MS, type ChatMessage, type ReadState } from '@tagalong/shared';
 
 /** A message as the screen holds it: sending ones are shown before the server confirms. */
-export type LocalMessage = ChatMessage & { status?: 'sending' | 'failed' };
+export type LocalMessage = ChatMessage & {
+  status?: 'sending' | 'failed';
+  /** Photos still on this phone, shown while they upload. */
+  localUris?: string[];
+};
 
 export type ChatRow =
   | { type: 'message'; key: string; message: LocalMessage; firstInGroup: boolean }
@@ -52,9 +56,18 @@ export const mergeMessages = (current: LocalMessage[], incoming: LocalMessage[])
   );
 };
 
-/** How many other members have read up to this message. */
-export const seenCount = (message: ChatMessage, readStates: ReadState[], me: string) =>
-  readStates.filter((r) => r.userId !== me && r.lastReadAt >= message.createdAt).length;
+/** Applies someone's newer read or delivery marker; markers never move back. */
+export const mergeReadState = (states: ReadState[], update: Partial<ReadState> & { userId: string }): ReadState[] => {
+  const current = states.find((r) => r.userId === update.userId);
+  const later = (a: string | null | undefined, b: string | null | undefined) => (!a ? (b ?? null) : !b ? a : a > b ? a : b);
+  const next: ReadState = {
+    userId: update.userId,
+    lastReadAt: update.readHidden ? null : later(current?.lastReadAt, update.lastReadAt),
+    lastDeliveredAt: later(current?.lastDeliveredAt, update.lastDeliveredAt),
+    readHidden: update.readHidden ?? current?.readHidden ?? false,
+  };
+  return [...states.filter((r) => r.userId !== update.userId), next];
+};
 
 /** Applies someone else's reaction toggle to our copy of the message. */
 export const applyReaction = (
@@ -77,11 +90,14 @@ export const applyReaction = (
   return { ...message, reactions: list.filter((r) => r.count > 0) };
 };
 
-/** Someone edited a message: take the new text, keep our own reactions and status. */
+/**
+ * Someone edited a message, or its link preview arrived: take the new text
+ * and payload, keep our own reactions and status.
+ */
 export const applyEdit = (messages: LocalMessage[], edited: ChatMessage): LocalMessage[] =>
   messages.map((m) =>
     m.id === edited.id
-      ? { ...m, body: edited.body, editedAt: edited.editedAt }
+      ? { ...m, body: edited.body, editedAt: edited.editedAt, payload: edited.payload }
       : m.replyTo?.id === edited.id && !m.replyTo.deleted
         ? { ...m, replyTo: { ...m.replyTo, body: edited.body.slice(0, 140) } }
         : m,

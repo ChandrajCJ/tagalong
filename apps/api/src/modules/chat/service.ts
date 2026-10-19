@@ -1,9 +1,10 @@
-import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lte, ne, sql } from 'drizzle-orm';
 import {
   changeLog,
   channels,
   items,
   messages,
+  photos,
   pollOptions,
   pollVotes,
   polls,
@@ -18,7 +19,9 @@ import {
   MESSAGE_EDIT_WINDOW_MS,
   newId,
   SendMessageInput,
+  type ChatImage,
   type ChatMessage,
+  type MessageInfo,
   type MessagePage,
   type Poll,
   type ItineraryItem,
@@ -30,6 +33,8 @@ import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
+import { firstUrl } from '../../lib/link-preview';
+import type { Storage } from '../../lib/storage';
 import { endOfDay, toItem } from '../itinerary/service';
 import { itemChannelId, mainChannelId, postSystemMessage, quotesFor, toMessage, unreadCounts } from './channel';
 
@@ -46,7 +51,13 @@ const decodeCursor = (cursor: string) => {
   return { at, id };
 };
 
-export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
+type MessageRow = typeof messages.$inferSelect;
+
+/** The photo ids an image message carries. */
+const mediaIdsOf = (row: { kind: string; payload: unknown }) =>
+  row.kind === 'image' ? (((row.payload as { mediaIds?: string[] } | null)?.mediaIds ?? []) as string[]) : [];
+
+export const createChatService = (db: Db, redis: Redis, jobs: Jobs, storage: Storage, ttl: number) => {
   /** Reactions for these messages, grouped as the app shows them. */
   const reactionsFor = async (messageIds: string[], userId: string) => {
     const grouped = new Map<string, ChatMessage['reactions']>();
@@ -70,28 +81,142 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
     return grouped;
   };
 
-  const readStatesFor = async (channelId: string): Promise<ReadState[]> => {
-    const rows = await db
-      .select({ userId: readStates.userId, lastReadAt: readStates.lastReadAt })
-      .from(readStates)
-      .where(eq(readStates.channelId, channelId));
-    return rows.map((r) => ({ userId: r.userId, lastReadAt: r.lastReadAt.toISOString() }));
+  /** Whether this person shares when they've read messages (and so sees others'). */
+  const readReceiptsOn = async (userId: string) => {
+    const [row] = await db.select({ on: users.readReceipts }).from(users).where(eq(users.id, userId));
+    return row?.on ?? true;
   };
 
-  /** Moves someone's read marker forward (never back). */
+  /**
+   * How far everyone has received and read, as this viewer may see it. Read
+   * times are hidden for people with read receipts off, and from a viewer
+   * with theirs off; their own always shows.
+   */
+  const readStatesFor = async (channelId: string, viewerId: string): Promise<ReadState[]> => {
+    const viewerShares = await readReceiptsOn(viewerId);
+    const rows = await db
+      .select({
+        userId: readStates.userId,
+        lastReadAt: readStates.lastReadAt,
+        lastDeliveredAt: readStates.lastDeliveredAt,
+        shares: users.readReceipts,
+      })
+      .from(readStates)
+      .innerJoin(users, eq(users.id, readStates.userId))
+      .where(eq(readStates.channelId, channelId));
+    return rows.map((r) => {
+      const self = r.userId === viewerId;
+      const shown = self || (viewerShares && r.shares);
+      return {
+        userId: r.userId,
+        lastReadAt: shown ? (r.lastReadAt?.toISOString() ?? null) : null,
+        lastDeliveredAt: r.lastDeliveredAt?.toISOString() ?? null,
+        readHidden: !self && !r.shares,
+      };
+    });
+  };
+
+  /** Moves someone's read marker forward (never back). Reading also means it arrived. */
   const advanceRead = async (channelId: string, userId: string, messageId: string, at: Date) => {
     const [row] = await db
       .insert(readStates)
-      .values({ channelId, userId, lastReadMessageId: messageId, lastReadAt: at })
+      .values({ channelId, userId, lastReadMessageId: messageId, lastReadAt: at, lastDeliveredAt: at })
       .onConflictDoUpdate({
         target: [readStates.channelId, readStates.userId],
         set: {
-          lastReadMessageId: sql`case when excluded.last_read_at > ${readStates.lastReadAt} then excluded.last_read_message_id else ${readStates.lastReadMessageId} end`,
+          lastReadMessageId: sql`case when excluded.last_read_at > coalesce(${readStates.lastReadAt}, '-infinity') then excluded.last_read_message_id else ${readStates.lastReadMessageId} end`,
           lastReadAt: sql`greatest(${readStates.lastReadAt}, excluded.last_read_at)`,
+          lastDeliveredAt: sql`greatest(${readStates.lastDeliveredAt}, excluded.last_delivered_at)`,
         },
       })
-      .returning({ lastReadAt: readStates.lastReadAt });
-    return row!.lastReadAt;
+      .returning({ lastReadAt: readStates.lastReadAt, lastDeliveredAt: readStates.lastDeliveredAt });
+    return { lastReadAt: row!.lastReadAt!, lastDeliveredAt: row!.lastDeliveredAt! };
+  };
+
+  /**
+   * Moves someone's "received up to" marker forward. Returns the new marker
+   * and whether it moved, so a repeated ack announces nothing.
+   */
+  const advanceDelivered = async (channelId: string, userId: string, at: Date) => {
+    const [before] = await db
+      .select({ at: readStates.lastDeliveredAt })
+      .from(readStates)
+      .where(and(eq(readStates.channelId, channelId), eq(readStates.userId, userId)));
+    const [row] = await db
+      .insert(readStates)
+      .values({ channelId, userId, lastDeliveredAt: at })
+      .onConflictDoUpdate({
+        target: [readStates.channelId, readStates.userId],
+        set: { lastDeliveredAt: sql`greatest(${readStates.lastDeliveredAt}, excluded.last_delivered_at)` },
+      })
+      .returning({ lastDeliveredAt: readStates.lastDeliveredAt });
+    const now = row!.lastDeliveredAt!;
+    return { lastDeliveredAt: now, moved: !before?.at || now > before.at };
+  };
+
+  /** Signed links to the photos in these image messages, by message. */
+  const imagesFor = async (rows: MessageRow[]) => {
+    const byMessage = new Map<string, ChatImage[]>();
+    const ids = [...new Set(rows.filter((r) => !r.deletedAt).flatMap(mediaIdsOf))];
+    if (ids.length === 0) return byMessage;
+    const found = await db
+      .select()
+      .from(photos)
+      .where(and(inArray(photos.id, ids), isNull(photos.deletedAt), eq(photos.status, 'ready')));
+    const signed = new Map(
+      await Promise.all(
+        found.map(
+          async (p): Promise<[string, ChatImage]> => [
+            p.id,
+            {
+              id: p.id,
+              width: p.width,
+              height: p.height,
+              thumbUrl: p.thumbKey ? await storage.downloadUrl(p.thumbKey, `${p.id}.webp`, ttl) : null,
+              url: await storage.downloadUrl(p.storageKey, `${p.id}.jpg`, ttl),
+              inAlbum: p.source === 'album',
+            },
+          ],
+        ),
+      ),
+    );
+    for (const row of rows) {
+      const list = mediaIdsOf(row).flatMap((id) => (signed.has(id) ? [signed.get(id)!] : []));
+      if (list.length > 0) byMessage.set(row.id, list);
+    }
+    return byMessage;
+  };
+
+  /** The people mentioned who are on the trip now; anyone else, and the sender, are dropped. */
+  const validMentions = async (tripId: string, senderId: string, ids: string[]) => {
+    const wanted = [...new Set(ids)].filter((id) => id !== senderId);
+    if (wanted.length === 0) return [];
+    const rows = await db
+      .select({ userId: tripMembers.userId })
+      .from(tripMembers)
+      .where(and(eq(tripMembers.tripId, tripId), inArray(tripMembers.userId, wanted), isNull(tripMembers.leftAt)));
+    const members = new Set(rows.map((r) => r.userId));
+    return wanted.filter((id) => members.has(id));
+  };
+
+  /** Photos to send must be this person's own, uploaded to this trip, and finished. */
+  const checkMedia = async (tripId: string, userId: string, mediaIds: string[]) => {
+    const ids = [...new Set(mediaIds)];
+    const rows = await db
+      .select({ id: photos.id })
+      .from(photos)
+      .where(
+        and(
+          inArray(photos.id, ids),
+          eq(photos.tripId, tripId),
+          eq(photos.uploadedBy, userId),
+          eq(photos.status, 'ready'),
+          isNull(photos.deletedAt),
+          inArray(photos.source, ['chat', 'album']),
+        ),
+      );
+    if (rows.length !== ids.length) throw badRequest('Some of those photos haven’t finished uploading. Try again.');
+    return ids;
   };
 
   /** Polls attached to these messages, with their options and who voted. */
@@ -213,6 +338,7 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
     const grouped = await reactionsFor(ids, userId);
     const polled = await pollsFor(ids, userId);
     const quotes = await quotesFor(db, page.map((r) => r.message.replyToId));
+    const images = await imagesFor(page.map((r) => r.message));
     const last = page.at(-1);
     return {
       messages: page.map((r) =>
@@ -223,16 +349,17 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
           polled.get(r.message.id),
           itemId,
           r.message.replyToId ? (quotes.get(r.message.replyToId) ?? null) : null,
+          images.get(r.message.id),
         ),
       ),
       nextCursor: rows.length > limit && last ? encodeCursor(last.message) : null,
-      readStates: await readStatesFor(channelId),
+      readStates: await readStatesFor(channelId, userId),
     };
   };
 
   /**
-   * Writes a text message into a channel. Retrying with the same
-   * client-generated id returns the same message.
+   * Writes a message, with text, photos or both, into a channel. Retrying
+   * with the same client-generated id returns the same message.
    */
   const post = async (
     tripId: string,
@@ -254,6 +381,14 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       if (original?.channelId !== channelId) throw badRequest('That message isn’t in this chat');
     }
 
+    const mediaIds = input.mediaIds.length > 0 ? await checkMedia(tripId, userId, input.mediaIds) : [];
+    const mentions = await validMentions(tripId, userId, input.mentions);
+    const kind = mediaIds.length > 0 ? 'image' : 'text';
+    const payload = {
+      ...(mediaIds.length > 0 ? { mediaIds } : {}),
+      ...(mentions.length > 0 ? { mentions } : {}),
+    };
+
     const result = await db.transaction(async (tx) => {
       const [inserted] = await tx
         .insert(messages)
@@ -262,9 +397,10 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
           channelId,
           tripId,
           senderId: userId,
-          kind: 'text',
+          kind,
           body: input.body,
           replyToId: input.replyToId ?? null,
+          payload: Object.keys(payload).length > 0 ? payload : null,
           createdAt: now,
         })
         .onConflictDoNothing()
@@ -298,8 +434,13 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       null,
       itemId,
       result.row.replyToId ? (quotes.get(result.row.replyToId) ?? null) : null,
+      (await imagesFor([result.row])).get(result.row.id),
     );
     if (!result.created) return { message, created: false };
+
+    // Mentioned people hear about it now, not in the next summary.
+    await jobs.notifyMention(tripId, message.id, mentions);
+    if (kind === 'text' && firstUrl(input.body)) await jobs.linkPreview(message.id);
 
     // You've obviously read your own message.
     await advanceRead(channelId, userId, message.id, result.row.createdAt);
@@ -631,17 +772,93 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
       // The newest message on screen may be a deleted one; reading up to it still counts.
       const row = await loadMessage(messageId, { includeDeleted: true });
       if (row.tripId !== tripId) throw notFound('Message not found');
-      const lastReadAt = await advanceRead(row.channelId, userId, messageId, row.createdAt);
-      // Say which conversation this was, so reading a thread doesn't move "Seen by" in the main chat.
+      const { lastReadAt, lastDeliveredAt } = await advanceRead(row.channelId, userId, messageId, row.createdAt);
+      // Say which conversation this was, so reading a thread doesn't move the main chat's ticks.
+      // With read receipts off, others only learn that it arrived.
+      const shares = await readReceiptsOn(userId);
       await publishTripEvent(redis, {
         type: 'read.updated',
         tripId,
         entityId: userId,
         actorId: userId,
-        payload: { userId, lastReadAt: lastReadAt.toISOString(), itemId: await itemOfChannel(row.channelId) },
+        payload: {
+          userId,
+          lastReadAt: shares ? lastReadAt.toISOString() : null,
+          lastDeliveredAt: lastDeliveredAt.toISOString(),
+          readHidden: !shares,
+          itemId: await itemOfChannel(row.channelId),
+        },
         originClientId: origin,
       });
       return { lastReadAt: lastReadAt.toISOString() };
+    },
+
+    /**
+     * "My phone has received up to this message", whether over the live
+     * connection or by fetching after being offline. Repeats are harmless.
+     */
+    async markDelivered(tripId: string, userId: string, messageId: string, origin?: string) {
+      await requireTripRole(db, tripId, userId, 'viewer');
+      const row = await loadMessage(messageId, { includeDeleted: true });
+      if (row.tripId !== tripId) throw notFound('Message not found');
+      const { lastDeliveredAt, moved } = await advanceDelivered(row.channelId, userId, row.createdAt);
+      if (moved) {
+        await publishTripEvent(redis, {
+          type: 'delivery.updated',
+          tripId,
+          entityId: userId,
+          actorId: userId,
+          payload: { userId, lastDeliveredAt: lastDeliveredAt.toISOString(), itemId: await itemOfChannel(row.channelId) },
+          originClientId: origin,
+        });
+      }
+      return { lastDeliveredAt: lastDeliveredAt.toISOString() };
+    },
+
+    /**
+     * Who has received and read one of my messages. Only people on the trip
+     * when it was sent count; people who left since don't.
+     */
+    async info(messageId: string, userId: string): Promise<MessageInfo> {
+      const row = await loadMessage(messageId);
+      await requireTripRole(db, row.tripId, userId, 'viewer');
+      if (row.senderId !== userId) throw forbidden('Only the sender can see who has read a message');
+      const readsShown = await readReceiptsOn(userId);
+
+      const people = await db
+        .select({
+          userId: users.id,
+          displayName: users.displayName,
+          shares: users.readReceipts,
+          lastReadAt: readStates.lastReadAt,
+          lastDeliveredAt: readStates.lastDeliveredAt,
+        })
+        .from(tripMembers)
+        .innerJoin(users, eq(users.id, tripMembers.userId))
+        .leftJoin(readStates, and(eq(readStates.channelId, row.channelId), eq(readStates.userId, tripMembers.userId)))
+        .where(
+          and(
+            eq(tripMembers.tripId, row.tripId),
+            isNull(tripMembers.leftAt),
+            ne(tripMembers.userId, userId),
+            lte(tripMembers.joinedAt, row.createdAt),
+          ),
+        )
+        .orderBy(users.displayName);
+
+      const info: MessageInfo = { readBy: [], deliveredTo: [], notDelivered: [], readsShown };
+      const reached = (at: Date | null) => !!at && at >= row.createdAt;
+      for (const p of people) {
+        const person = { userId: p.userId, displayName: p.displayName };
+        if (readsShown && p.shares && reached(p.lastReadAt)) {
+          info.readBy.push({ ...person, at: p.lastReadAt!.toISOString() });
+        } else if (reached(p.lastDeliveredAt) || reached(p.lastReadAt)) {
+          info.deliveredTo.push({ ...person, at: reached(p.lastDeliveredAt) ? p.lastDeliveredAt!.toISOString() : null });
+        } else {
+          info.notDelivered.push(person);
+        }
+      }
+      return info;
     },
 
     /** Main-chat messages I haven't read, for the Chat tab's badge. */
@@ -654,7 +871,13 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
      * Fixes a typo: the sender only, text messages only, and only for a day
      * after sending, so an old message can't quietly change meaning.
      */
-    async edit(messageId: string, userId: string, body: string, origin?: string): Promise<ChatMessage> {
+    async edit(
+      messageId: string,
+      userId: string,
+      body: string,
+      mentionIds: string[] | undefined,
+      origin?: string,
+    ): Promise<ChatMessage> {
       const row = await loadMessage(messageId);
       await requireTripRole(db, row.tripId, userId, 'viewer');
       if (row.senderId !== userId) throw forbidden('You can only edit your own messages');
@@ -663,12 +886,27 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
         throw forbidden('Messages can only be edited for 24 hours after sending');
       }
 
+      // Mentions stay as they were unless the edit says who it mentions now.
+      const before = (row.payload as { mentions?: string[]; preview?: unknown } | null) ?? {};
+      const mentions = mentionIds === undefined ? (before.mentions ?? []) : await validMentions(row.tripId, userId, mentionIds);
+      // A different link needs a new preview; the old one would describe the wrong page.
+      const linkChanged = firstUrl(body) !== firstUrl(row.body);
+      const { preview } = before;
+      const rest = Object.fromEntries(Object.entries(before).filter(([k]) => k !== 'mentions' && k !== 'preview'));
+      const payload = {
+        ...rest,
+        ...(mentions.length > 0 ? { mentions } : {}),
+        ...(preview && !linkChanged ? { preview } : {}),
+      };
+
       const [updated] = await db
         .update(messages)
-        .set({ body, editedAt: new Date() })
+        .set({ body, editedAt: new Date(), payload: Object.keys(payload).length > 0 ? payload : null })
         .where(and(eq(messages.id, messageId), isNull(messages.deletedAt)))
         .returning();
       if (!updated) throw notFound('Message not found');
+      await jobs.notifyMention(row.tripId, messageId, mentions.filter((id) => !(before.mentions ?? []).includes(id)));
+      if (linkChanged && firstUrl(body)) await jobs.linkPreview(messageId);
 
       const [sender] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, userId));
       const quotes = await quotesFor(db, [updated.replyToId]);
@@ -709,6 +947,22 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs) => {
         .update(messages)
         .set({ deletedAt: new Date(), body: '', payload: null })
         .where(eq(messages.id, messageId));
+
+      // Photos sent only in the chat go with it; ones also in the album stay there.
+      const mediaIds = mediaIdsOf(row);
+      if (mediaIds.length > 0) {
+        const chatOnly = await db
+          .update(photos)
+          .set({ deletedAt: new Date(), version: sql`${photos.version} + 1` })
+          .where(and(inArray(photos.id, mediaIds), eq(photos.source, 'chat'), isNull(photos.deletedAt)))
+          .returning({ storageKey: photos.storageKey, thumbKey: photos.thumbKey });
+        await Promise.all(
+          chatOnly
+            .flatMap((p) => [p.storageKey, p.thumbKey])
+            .filter((k): k is string => !!k)
+            .map((k) => storage.remove(k).catch(() => {})),
+        );
+      }
       await publishTripEvent(redis, {
         type: 'message.deleted',
         tripId: row.tripId,

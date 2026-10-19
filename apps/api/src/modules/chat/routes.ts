@@ -2,6 +2,7 @@ import {
   AddPollOptionToPlanInput,
   CreatePollInput,
   EditMessageInput,
+  MarkDeliveredInput,
   MarkReadInput,
   SendMessageInput,
   ToggleReactionInput,
@@ -25,7 +26,7 @@ const PageQuery = z.object({
 });
 
 export const chatRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const chat = createChatService(deps.db, deps.redis, deps.jobs);
+  const chat = createChatService(deps.db, deps.redis, deps.jobs, deps.storage, deps.env.S3_URL_TTL_SEC);
   app.addHook('preHandler', app.authenticate);
 
   app.get('/trips/:id/messages', async (request) => {
@@ -61,8 +62,19 @@ export const chatRoutes = async (app: FastifyInstance, { deps }: { deps: Deps })
 
   app.patch('/messages/:messageId', async (request) => {
     const { messageId } = parse(MessageParams, request.params);
-    const { body } = parse(EditMessageInput, request.body);
-    return chat.edit(messageId, request.user.sub, body, originOf(request));
+    const { body, mentions } = parse(EditMessageInput, request.body);
+    return chat.edit(messageId, request.user.sub, body, mentions, originOf(request));
+  });
+
+  app.get('/messages/:messageId/info', async (request) => {
+    const { messageId } = parse(MessageParams, request.params);
+    return chat.info(messageId, request.user.sub);
+  });
+
+  app.post('/trips/:id/delivered', async (request) => {
+    const { id } = parse(TripParams, request.params);
+    const { upTo } = parse(MarkDeliveredInput, request.body);
+    return chat.markDelivered(id, request.user.sub, upTo, originOf(request));
   });
 
   app.delete('/messages/:messageId', async (request, reply) => {

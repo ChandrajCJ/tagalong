@@ -35,6 +35,17 @@ const workers = await startWorkers({
   imapUrl: env.IMPORT_IMAP_URL,
   importAddress: env.IMPORT_ADDRESS,
   authservId: env.IMPORT_AUTHSERV_ID,
+  ownHosts: (env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .flatMap((o) => {
+      try {
+        return [new URL(o).hostname];
+      } catch {
+        return [];
+      }
+    }),
 });
 
 const shutdown = async () => {

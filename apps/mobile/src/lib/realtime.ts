@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { GATEWAY_URL, getAccessToken, refreshAccessToken } from './api';
 import { CLIENT_ID } from './client-id';
+import { noteDelivered } from './delivery';
 
 /** What a screen hears about its trip. `reconnected` means: refetch, you may have missed things. */
 export type TripMessage = ServerMessage | { kind: 'reconnected' };
@@ -115,6 +116,11 @@ class RealtimeClient {
       // Turned away: hang up now rather than wait for a proxy to time out.
       if (parsed.kind === 'error' && parsed.code === 'unauthorized') ws.close();
       const tripId = tripOf(parsed);
+      // A message reached this phone: say so (batched), unless this phone sent it.
+      if (parsed.kind === 'event' && parsed.event.type === 'message.created' && parsed.event.originClientId !== CLIENT_ID) {
+        const m = parsed.event.payload as { id?: string; createdAt?: string } | undefined;
+        if (m?.id && m.createdAt) noteDelivered(parsed.event.tripId, { id: m.id, createdAt: m.createdAt });
+      }
       if (tripId) this.listeners.get(tripId)?.forEach((l) => l(parsed));
     };
 

@@ -140,6 +140,12 @@ describe('trip chat', () => {
     expect(back.json().lastReadAt).toBe(newer.createdAt);
 
     const { body } = await page(owner.accessToken, tripId);
-    expect(body.readStates).toContainEqual({ userId: sam.userId, lastReadAt: newer.createdAt });
+    // Reading also counts as having received it.
+    expect(body.readStates).toContainEqual({
+      userId: sam.userId,
+      lastReadAt: newer.createdAt,
+      lastDeliveredAt: newer.createdAt,
+      readHidden: false,
+    });
   });
 });

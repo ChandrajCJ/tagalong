@@ -29,6 +29,11 @@ export const users = identity.table(
     locale: text('locale'),
     timezone: text('timezone'),
     faceGroupingConsent: boolean('face_grouping_consent').notNull().default(false),
+    /**
+     * Whether others see when they've read a message. Off works both ways:
+     * they don't see anyone else's either.
+     */
+    readReceipts: boolean('read_receipts').notNull().default(true),
     ...timestamps(),
     ...softDelete(),
   },

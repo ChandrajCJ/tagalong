@@ -12,9 +12,11 @@ import {
   text,
   timestamp,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { id, softDelete, timestamps, version } from './columns';
 import { users } from './identity';
+import { photos } from './media';
 
 export const tripsSchema = pgSchema('trips');
 
@@ -37,6 +39,10 @@ export const trips = tripsSchema.table('trips', {
   countryCode: char('country_code', { length: 2 }),
   baseCurrency: char('base_currency', { length: 3 }).notNull().default('EUR'),
   coverColor: text('cover_color').notNull().default('#D8A47F'),
+  /** A photo on the cover; the colour stays as the fallback and the tint behind the title. */
+  coverMediaId: uuid('cover_media_id').references((): AnyPgColumn => photos.id, { onDelete: 'set null' }),
+  /** Who took the cover photo, when it came from Wikipedia ("Photo: Jane Doe, CC BY-SA"). */
+  coverCredit: text('cover_credit'),
   createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),

@@ -34,12 +34,38 @@ export const Poll = z.object({
 });
 export type Poll = z.infer<typeof Poll>;
 
+/** How many photos one chat message can carry. */
+export const MAX_CHAT_IMAGES = 10;
+
+/** A photo in a chat message, with short-lived links for this viewer. */
+export const ChatImage = z.object({
+  id: z.string().uuid(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+  /** Null until the worker has made it; show `url` meanwhile. */
+  thumbUrl: z.string().url().nullable(),
+  url: z.string().url().nullable(),
+  /** Also in the trip's album. */
+  inAlbum: z.boolean(),
+});
+export type ChatImage = z.infer<typeof ChatImage>;
+
+/** What a link in a message looks like, read from the page's own tags. */
+export const LinkPreview = z.object({
+  url: z.string().url(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
+  image: z.string().url().nullable(),
+  siteName: z.string().nullable(),
+});
+export type LinkPreview = z.infer<typeof LinkPreview>;
+
 export const ChatMessage = z.object({
   id: z.string().uuid(),
   tripId: z.string().uuid(),
   senderId: z.string().uuid().nullable(),
   senderName: z.string().nullable(),
-  kind: z.enum(['text', 'system', 'poll']),
+  kind: z.enum(['text', 'system', 'poll', 'image']),
   body: z.string(),
   replyToId: z.string().uuid().nullable(),
   /** A short preview of the message this answers, shown above the reply. */
@@ -63,15 +89,23 @@ export const ChatMessage = z.object({
   reactions: z.array(MessageReaction),
   /** Only on poll messages. */
   poll: Poll.nullable(),
+  /** Only on image messages; the body is the caption. */
+  images: z.array(ChatImage).default([]),
   /** The plan item whose thread this belongs to; null for the main chat. */
   itemId: z.string().uuid().nullable(),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 
-/** How far each member has read, for "Seen by". */
+/**
+ * How far each member has received and read, for the ticks. `lastReadAt` is
+ * null when read receipts are off, theirs or yours.
+ */
 export const ReadState = z.object({
   userId: z.string().uuid(),
-  lastReadAt: z.string(),
+  lastReadAt: z.string().nullable(),
+  lastDeliveredAt: z.string().nullable().default(null),
+  /** They turned read receipts off, so their reads aren't shown (or waited for). */
+  readHidden: z.boolean().default(false),
 });
 export type ReadState = z.infer<typeof ReadState>;
 
@@ -84,11 +118,21 @@ export const MessagePage = z.object({
 });
 export type MessagePage = z.infer<typeof MessagePage>;
 
-export const SendMessageInput = z.object({
-  id: z.string().uuid().optional(),
-  body: z.string().trim().min(1, 'Type a message').max(4000),
-  replyToId: z.string().uuid().optional(),
-});
+export const SendMessageInput = z
+  .object({
+    id: z.string().uuid().optional(),
+    /** The text, or the caption when there are photos. */
+    body: z.string().trim().max(4000).default(''),
+    replyToId: z.string().uuid().optional(),
+    /** Photos already uploaded to the trip (source "chat" or "album"). */
+    mediaIds: z
+      .array(z.string().uuid())
+      .max(MAX_CHAT_IMAGES, `A message can carry up to ${MAX_CHAT_IMAGES} photos`)
+      .default([]),
+    /** People @mentioned; anyone not on the trip is dropped. */
+    mentions: z.array(z.string().uuid()).max(50).default([]),
+  })
+  .refine((m) => m.body.length > 0 || m.mediaIds.length > 0, { message: 'Type a message', path: ['body'] });
 export type SendMessageInput = z.input<typeof SendMessageInput>;
 
 /** How long after sending a message its sender can still edit it. */
@@ -96,6 +140,8 @@ export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export const EditMessageInput = z.object({
   body: z.string().trim().min(1, 'Type a message').max(4000),
+  /** Who the edited text mentions; leave out to keep the original's. */
+  mentions: z.array(z.string().uuid()).max(50).optional(),
 });
 export type EditMessageInput = z.input<typeof EditMessageInput>;
 
@@ -106,6 +152,21 @@ export const ToggleReactionInput = z.object({
 export const MarkReadInput = z.object({
   messageId: z.string().uuid(),
 });
+
+/** "My phone has received up to this message." */
+export const MarkDeliveredInput = z.object({
+  upTo: z.string().uuid(),
+});
+
+/** Who has received and read one of my messages, for its Info sheet. */
+export const MessageInfo = z.object({
+  readBy: z.array(z.object({ userId: z.string().uuid(), displayName: z.string(), at: z.string() })),
+  deliveredTo: z.array(z.object({ userId: z.string().uuid(), displayName: z.string(), at: z.string().nullable() })),
+  notDelivered: z.array(z.object({ userId: z.string().uuid(), displayName: z.string() })),
+  /** False when your own read receipts are off: then nobody's reads are shown. */
+  readsShown: z.boolean(),
+});
+export type MessageInfo = z.infer<typeof MessageInfo>;
 
 export const CreatePollInput = z.object({
   id: z.string().uuid().optional(),

@@ -64,7 +64,7 @@ export const messages = chatSchema.table(
   },
   (t) => [
     index('messages_channel_recent_idx').on(t.channelId, t.createdAt.desc(), t.id.desc()),
-    check('messages_kind_check', sql.raw(`kind in ('text', 'system', 'poll')`)),
+    check('messages_kind_check', sql.raw(`kind in ('text', 'system', 'poll', 'image')`)),
     // One "Riya added 40 photos" card per upload batch, guaranteed by the
     // database rather than by timing: a double tap can't post two.
     uniqueIndex('messages_one_card_per_photo_batch')
@@ -158,7 +158,10 @@ export const readStates = chatSchema.table(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     lastReadMessageId: uuid('last_read_message_id'),
-    lastReadAt: timestamp('last_read_at', { withTimezone: true }).notNull(),
+    /** Null when their phone has received messages but they haven't opened the chat yet. */
+    lastReadAt: timestamp('last_read_at', { withTimezone: true }),
+    /** How far their phone has received, read or not. Only ever moves forward. */
+    lastDeliveredAt: timestamp('last_delivered_at', { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.channelId, t.userId] })],
 );

@@ -7,6 +7,7 @@ import {
   type PlaceScope,
   type RecommendationCategory,
 } from '@tagalong/shared';
+import { safeFetch } from './link-preview';
 
 /**
  * Open map data for destinations: OpenStreetMap search (Photon), places worth
@@ -22,7 +23,27 @@ export interface Geo {
   osmPlaces(bounds: Bounds, category: RecommendationCategory): Promise<GeoPlace[] | null>;
   weather(centre: Point, kind: 'forecast' | 'archive', from: string, to: string): Promise<GeoWeather>;
   timezoneAt(centre: Point): Promise<string | null>;
+  /** The lead photo of the destination's Wikipedia article, with its credit, for a trip cover. */
+  destinationPhoto(name: string): Promise<DestinationPhoto | null>;
+  /** Downloads a picture from Wikipedia's image server, through the guarded fetch. */
+  fetchImage(url: string): Promise<{ contentType: string; body: Buffer }>;
 }
+
+export interface DestinationPhoto {
+  url: string;
+  credit: string | null;
+  pageUrl: string | null;
+}
+
+/** Plain text from the bits of HTML Wikimedia puts in its metadata. */
+const stripTags = (html: string) =>
+  html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 
 export interface Point {
   latitude: number;
@@ -254,6 +275,53 @@ export const openGeo = (config: GeoConfig): Geo => {
           },
         ];
       });
+    },
+
+    async destinationPhoto(name) {
+      // "Lisbon, Portugal" → the article for Lisbon, and its lead image.
+      const search = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        generator: 'search',
+        gsrsearch: name,
+        gsrlimit: '1',
+        prop: 'pageimages',
+        piprop: 'name',
+      });
+      type Page = { pageid: number; title: string; pageimage?: string };
+      const found = await getJson<{ query?: { pages?: Record<string, Page> } }>(`${config.wikipediaApi}?${search}`);
+      const page = Object.values(found.query?.pages ?? {})[0];
+      if (!page?.pageimage) return null;
+
+      const info = new URLSearchParams({
+        action: 'query',
+        format: 'json',
+        titles: `File:${page.pageimage}`,
+        prop: 'imageinfo',
+        iiprop: 'url|extmetadata',
+        iiurlwidth: '1600',
+      });
+      type Meta = Record<string, { value?: string } | undefined>;
+      type FilePage = { imageinfo?: { thumburl?: string; url?: string; extmetadata?: Meta }[] };
+      const file = await getJson<{ query?: { pages?: Record<string, FilePage> } }>(`${config.wikipediaApi}?${info}`);
+      const image = Object.values(file.query?.pages ?? {})[0]?.imageinfo?.[0];
+      const url = image?.thumburl ?? image?.url;
+      // Only pictures we can show: Wikipedia's image server, as a photo (not a map or a logo in SVG).
+      if (!url || !/^https:\/\/upload\.wikimedia\.org\/.+\.(jpe?g|png|webp)$/i.test(url)) return null;
+      const artist = image?.extmetadata?.Artist?.value ? stripTags(image.extmetadata.Artist.value) : null;
+      const licence = image?.extmetadata?.LicenseShortName?.value ?? null;
+      const credit = [artist, licence].filter(Boolean).join(', ').slice(0, 300) || null;
+      return { url, credit: credit ? `Photo: ${credit}` : null, pageUrl: `https://en.wikipedia.org/?curid=${page.pageid}` };
+    },
+
+    async fetchImage(url) {
+      if (!/^https:\/\/upload\.wikimedia\.org\//.test(url)) throw new Error('Only Wikipedia images');
+      const { contentType, body } = await safeFetch(url, {
+        accept: ['image/jpeg', 'image/png', 'image/webp'],
+        maxBytes: 8 * 1024 * 1024,
+        timeoutMs: 15_000,
+      });
+      return { contentType, body };
     },
 
     async osmPlaces([west, south, east, north], category) {

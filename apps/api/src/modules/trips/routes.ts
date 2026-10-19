@@ -1,9 +1,10 @@
-import { CreateTripInput, UpdateMemberInput, UpdateTripInput } from '@tagalong/shared';
+import { CreateTripInput, SetCoverInput, UpdateMemberInput, UpdateTripInput } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
 import { originOf } from '../../lib/events';
 import { parse } from '../../lib/validate';
+import { createCoverService } from './cover';
 import { createMembersService } from './members';
 import { createTripsService } from './service';
 
@@ -11,8 +12,9 @@ const TripParams = z.object({ id: z.string().uuid() });
 const MemberParams = TripParams.extend({ userId: z.string().uuid() });
 
 export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
-  const tripsService = createTripsService(deps.db, deps.redis, deps.geo);
+  const tripsService = createTripsService(deps.db, deps.redis, deps.geo, deps.storage, deps.env.S3_URL_TTL_SEC);
   const membersService = createMembersService(deps.db, deps.redis);
+  const cover = createCoverService(deps.db, deps.redis, deps.storage, deps.jobs, deps.geo);
   app.addHook('preHandler', app.authenticate);
 
   app.get('/trips', async (request) => tripsService.listForUser(request.user.sub));
@@ -44,6 +46,23 @@ export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
     const { id } = parse(TripParams, request.params);
     return tripsService.restore(id, request.user.sub);
   });
+
+  app.put('/trips/:id/cover', async (request) => {
+    const { id } = parse(TripParams, request.params);
+    const input = parse(SetCoverInput, request.body);
+    await cover.set(id, request.user.sub, input);
+    return tripsService.get(id, request.user.sub);
+  });
+
+  app.delete('/trips/:id/cover', async (request) => {
+    const { id } = parse(TripParams, request.params);
+    await cover.remove(id, request.user.sub);
+    return tripsService.get(id, request.user.sub);
+  });
+
+  app.get('/trips/:id/cover-suggestion', async (request) => ({
+    suggestion: await cover.suggestion(parse(TripParams, request.params).id, request.user.sub),
+  }));
 
   app.post('/trips/:id/archive', async (request, reply) => {
     const { id } = parse(TripParams, request.params);

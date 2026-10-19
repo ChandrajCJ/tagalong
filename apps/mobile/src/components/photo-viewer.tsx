@@ -27,8 +27,8 @@ interface Props {
   startId: string | null;
   canDelete: (photo: Photo) => boolean;
   onDelete: (photo: Photo) => Promise<void>;
-  /** Hearts it, or takes the heart back. */
-  onFavourite: (photo: Photo) => void;
+  /** Hearts it, or takes the heart back. Left out where hearts don't apply, such as chat photos. */
+  onFavourite?: (photo: Photo) => void;
   onClose: () => void;
 }
 
@@ -143,7 +143,7 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
         </SafeAreaView>
 
         <SafeAreaView edges={['bottom']} style={styles.bottomBar} pointerEvents="box-none">
-          {current ? (
+          {current && onFavourite ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={current.favourited ? 'Remove your heart' : 'Heart this photo'}

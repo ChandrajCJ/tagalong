@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CoverPhotoPicker } from '@/components/cover-photo-picker';
 import { DateRangeField } from '@/components/date-range-picker';
 import { DestinationField } from '@/components/destination-field';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
@@ -124,6 +125,7 @@ export default function EditTrip() {
                 />
               ))}
             </View>
+            <CoverPhotoPicker trip={trip} onChanged={reload} />
           </View>
 
           <View style={{ gap: space.sm }}>

@@ -50,6 +50,8 @@ export const TripMember = z.object({
   role: z.enum(TRIP_ROLES),
   /** For paying them back through a UPI app. */
   upiId: z.string().nullable().default(null),
+  /** When they joined, so a message's ticks only wait for people who were there. */
+  joinedAt: z.string().nullable().default(null),
 });
 export type TripMember = z.infer<typeof TripMember>;
 
@@ -60,6 +62,10 @@ export const TripSummary = z.object({
   startDate: isoDate.nullable(),
   endDate: isoDate.nullable(),
   coverColor: z.string(),
+  /** A short-lived link to the cover photo, when there is one; the colour shows behind and without it. */
+  coverUrl: z.string().url().nullable().default(null),
+  /** Credit for a cover from Wikipedia, shown small on the photo. */
+  coverCredit: z.string().nullable().default(null),
   myRole: z.enum(TRIP_ROLES),
   memberCount: z.number().int(),
   /** I archived it: it sits under "Archived" in my list only. */
@@ -113,6 +119,31 @@ export const groupTrips = <T extends Pick<TripSummary, 'startDate' | 'endDate' |
   return { upcoming, past, archived };
 };
 
+/**
+ * Sets the cover photo: one of the trip's photos (uploaded as a cover, or
+ * picked from the album), or the destination's photo from Wikipedia.
+ */
+export const SetCoverInput = z.union([
+  z.object({ photoId: z.string().uuid() }),
+  z.object({
+    wikipediaUrl: z
+      .string()
+      .url()
+      .refine((u) => /^https:\/\/upload\.wikimedia\.org\//.test(u), 'Only photos from Wikipedia can be used'),
+    credit: z.string().trim().max(300).nullable().optional(),
+  }),
+]);
+export type SetCoverInput = z.input<typeof SetCoverInput>;
+
+/** The destination's photo on Wikipedia, offered as a cover. */
+export const CoverSuggestion = z.object({
+  url: z.string().url(),
+  credit: z.string().nullable(),
+  /** The article it came from, for the credit's link. */
+  pageUrl: z.string().url().nullable(),
+});
+export type CoverSuggestion = z.infer<typeof CoverSuggestion>;
+
 /** Unread counts for one trip's tabs. */
 export const TripUnread = z.object({ chat: z.number().int() });
 export type TripUnread = z.infer<typeof TripUnread>;
@@ -126,6 +157,8 @@ export const Trip = TripSummary.omit({ unreadCount: true }).extend({
   /** The destination's time zone, e.g. "Asia/Kolkata", once known. */
   timezone: z.string().nullable(),
   members: z.array(TripMember),
+  /** Which photo is on the cover, so Edit can show it and offer "Remove photo". */
+  coverPhotoId: z.string().uuid().nullable().default(null),
   version: z.number().int(),
 });
 export type Trip = z.infer<typeof Trip>;

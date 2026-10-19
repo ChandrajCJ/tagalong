@@ -145,6 +145,7 @@ export const createAuthService = (app: FastifyInstance, deps: Deps) => {
           displayName: users.displayName,
           homeCurrency: users.homeCurrency,
           upiId: users.upiId,
+          readReceipts: users.readReceipts,
         })
         .from(users)
         .where(and(eq(users.id, userId), isNull(users.deletedAt)))
@@ -154,7 +155,10 @@ export const createAuthService = (app: FastifyInstance, deps: Deps) => {
     },
 
     /** Changes your name or UPI ID; `upiId: null` removes it. */
-    async updateMe(userId: string, input: { displayName?: string; upiId?: string | null }): Promise<Me> {
+    async updateMe(
+      userId: string,
+      input: { displayName?: string; upiId?: string | null; readReceipts?: boolean },
+    ): Promise<Me> {
       const changes = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined));
       await db.update(users).set(changes).where(and(eq(users.id, userId), isNull(users.deletedAt)));
       return this.me(userId);

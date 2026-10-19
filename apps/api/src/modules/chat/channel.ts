@@ -12,6 +12,8 @@ export const toMessage = (
   /** Set when the message belongs to a plan item's thread, not the main chat. */
   itemId: string | null = null,
   replyTo: ChatMessage['replyTo'] = null,
+  /** Signed links to the photos of an image message. */
+  images: ChatMessage['images'] = [],
 ): ChatMessage => {
   // A deleted message keeps its place in the conversation and nothing else.
   const deleted = row.deletedAt !== null;
@@ -30,6 +32,7 @@ export const toMessage = (
     deletedAt: row.deletedAt?.toISOString() ?? null,
     reactions: deleted ? [] : reactions,
     poll: deleted ? null : poll,
+    images: deleted ? [] : images,
     itemId,
   };
 };

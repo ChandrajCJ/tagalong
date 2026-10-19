@@ -18,6 +18,10 @@ export const localDateTime = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, 'Use a local date and time like 2026-06-12T18:30:00');
 
+/** Where a photo was added: the album, a chat message, or the trip's cover. */
+export const PHOTO_SOURCES = ['album', 'chat', 'cover'] as const;
+export type PhotoSource = (typeof PHOTO_SOURCES)[number];
+
 export const Photo = z.object({
   id: z.string().uuid(),
   tripId: z.string().uuid(),
@@ -33,6 +37,7 @@ export const Photo = z.object({
   longitude: z.number().nullable(),
   status: z.enum(['pending', 'ready']),
   caption: z.string().nullable(),
+  source: z.enum(PHOTO_SOURCES).default('album'),
   version: z.number().int(),
   createdAt: z.string(),
   /** How many people hearted it, and whether this person did. */
@@ -65,6 +70,8 @@ export const CreatePhotoInput = z
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
     caption: z.string().trim().max(500).nullable().optional(),
+    /** Chat and cover photos stay out of the album. */
+    source: z.enum(PHOTO_SOURCES).default('album'),
   })
   .refine((p) => (p.latitude == null) === (p.longitude == null), {
     message: 'A location needs both latitude and longitude',

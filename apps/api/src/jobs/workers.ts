@@ -1,10 +1,19 @@
 import type { Db } from '@tagalong/db';
 import { Queue, Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
-import { MEDIA_QUEUE, NOTIFY_QUEUE, type NotifyJob, type ThumbnailJob } from '../lib/jobs';
+import {
+  MEDIA_QUEUE,
+  NOTIFY_QUEUE,
+  PREVIEW_QUEUE,
+  type LinkPreviewJob,
+  type MentionJob,
+  type NotifyJob,
+  type ThumbnailJob,
+} from '../lib/jobs';
 import type { Storage } from '../lib/storage';
 import { imapMailbox, INBOX_QUEUE, processInbox } from './inbox';
-import { expoPushSender, processNotify } from './notify';
+import { expoPushSender, processMention, processNotify } from './notify';
+import { processLinkPreview } from './preview';
 import { PURGE_JOB, purgeDeletedTrips } from './purge';
 import { processThumbnail } from './thumbnail';
 
@@ -26,6 +35,8 @@ export interface WorkerDeps {
   imapUrl?: string;
   importAddress?: string;
   authservId: string;
+  /** The app's own web addresses: links to them (invites) get no preview card. */
+  ownHosts?: string[];
 }
 
 /**
@@ -34,7 +45,17 @@ export interface WorkerDeps {
  * its own process (apps/worker) or inside the API's (src/all.ts) on a host
  * with only one free server.
  */
-export const startWorkers = async ({ db, redis, connection, storage, log, imapUrl, importAddress, authservId }: WorkerDeps) => {
+export const startWorkers = async ({
+  db,
+  redis,
+  connection,
+  storage,
+  log,
+  imapUrl,
+  importAddress,
+  authservId,
+  ownHosts,
+}: WorkerDeps) => {
   // One queue per workload keeps slow jobs (video, AI) from blocking fast ones (push).
   const system = new Worker(
     'system',
@@ -53,14 +74,30 @@ export const startWorkers = async ({ db, redis, connection, storage, log, imapUr
     { connection },
   );
 
-  const notify = new Worker<NotifyJob>(
+  const notify = new Worker<NotifyJob | MentionJob>(
     NOTIFY_QUEUE,
     async (job) => {
+      if (job.name === 'mention') {
+        const result = await processMention({ db, push: expoPushSender }, job.data as MentionJob);
+        log.info({ ...job.data, result }, 'Mention notification');
+        return result;
+      }
       const result = await processNotify({ db, redis, push: expoPushSender }, job.data);
       log.info({ ...job.data, result }, 'Chat notification');
       return result;
     },
     { connection, concurrency: 5 },
+  );
+
+  // Link previews wait on other people's servers, so they get their own lane.
+  const preview = new Worker<LinkPreviewJob>(
+    PREVIEW_QUEUE,
+    async (job) => {
+      const result = await processLinkPreview({ db, redis, ownHosts }, job.data);
+      log.info({ ...job.data, result: 'added' in result ? 'added' : result.skipped }, 'Link preview');
+      return result;
+    },
+    { connection, concurrency: 3 },
   );
 
   // Resizing is CPU-bound: two at a time keeps the machine responsive.
@@ -111,19 +148,19 @@ export const startWorkers = async ({ db, redis, connection, storage, log, imapUr
     await queue.close();
   }
 
-  for (const worker of [system, notify, media, ...(inbox ? [inbox] : [])]) {
+  for (const worker of [system, notify, media, preview, ...(inbox ? [inbox] : [])]) {
     worker.on('failed', (job, err) => log.error({ queue: worker.name, job: job?.name, err }, 'Job failed'));
   }
   log.info(
     {},
     inboxOn
-      ? 'Worker started, listening on queues "system", "notify", "media" and "inbox"'
-      : 'Worker started, listening on queues "system", "notify" and "media" (bookings by email is off: IMPORT_IMAP_URL is unset)',
+      ? 'Worker started, listening on queues "system", "notify", "media", "preview" and "inbox"'
+      : 'Worker started, listening on queues "system", "notify", "media" and "preview" (bookings by email is off: IMPORT_IMAP_URL is unset)',
   );
 
   return {
     close: async () => {
-      await Promise.all([system.close(), notify.close(), media.close(), inbox?.close()]);
+      await Promise.all([system.close(), notify.close(), media.close(), preview.close(), inbox?.close()]);
     },
   };
 };

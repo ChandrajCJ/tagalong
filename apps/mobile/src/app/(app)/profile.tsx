@@ -2,7 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Me, UPI_ID } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
@@ -18,6 +18,18 @@ export default function ProfileScreen() {
   const [errors, setErrors] = useState<{ name?: string; upi?: string }>({});
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
+
+  /** Saved straight away, like a phone's own settings. */
+  const setReadReceipts = async (on: boolean) => {
+    if (!me) return;
+    setMe({ ...me, readReceipts: on });
+    try {
+      setMe(await request('/me', { method: 'PATCH', body: { readReceipts: on }, schema: Me }));
+    } catch {
+      setMe({ ...me, readReceipts: !on });
+      setNotice('Couldn’t change that. Try again.');
+    }
+  };
 
   useEffect(() => {
     request('/me', { schema: Me })
@@ -113,6 +125,26 @@ export default function ProfileScreen() {
           <Button label="Save" onPress={save} loading={busy} disabled={!me} />
 
           <View style={{ gap: space.sm, marginTop: space.xl }}>
+            <Label>Privacy</Label>
+            <View style={styles.setting}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.settingTitle}>Read receipts</Text>
+                <Body style={{ fontSize: 13 }}>
+                  Others see when you’ve read their messages (✓✓ in green). Turn it off and you won’t see when they’ve
+                  read yours either. “Delivered” ticks always show.
+                </Body>
+              </View>
+              <Switch
+                accessibilityLabel="Read receipts"
+                value={me?.readReceipts ?? true}
+                disabled={!me}
+                onValueChange={(on) => void setReadReceipts(on)}
+                trackColor={{ true: colors.accent, false: colors.lineStrong }}
+              />
+            </View>
+          </View>
+
+          <View style={{ gap: space.sm, marginTop: space.xl }}>
             <Label>Account</Label>
             <Button label="Sign out" variant="outline" onPress={confirmSignOut} />
           </View>
@@ -127,5 +159,7 @@ const styles = StyleSheet.create({
   body: { padding: space.xl, gap: space.lg },
   close: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   closeText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  setting: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  settingTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   notice: { flexDirection: 'row', gap: space.sm, alignItems: 'center', padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
 });

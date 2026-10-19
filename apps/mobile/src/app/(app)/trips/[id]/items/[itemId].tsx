@@ -362,6 +362,7 @@ export default function ItemDetail() {
       deletedAt: null,
       reactions: [],
       poll: null,
+      images: [],
       itemId: item.id,
       status: 'sending',
     };

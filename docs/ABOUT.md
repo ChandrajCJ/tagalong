@@ -58,7 +58,7 @@ This is the app from a traveller's point of view.
    one, and the trip gets weather, a map and things to do, and its currency
    switches to the local one (still changeable).
 4. Add dates (optional, and changeable later), a name (optional) and a cover
-   colour. Tap **Create trip**.
+   colour, or a cover photo. Tap **Create trip**.
 
 ### Bringing friends in
 5. Tap **Invite**. Make an **editor** link for people who'll help plan, and a
@@ -75,7 +75,9 @@ This is the app from a traveller's point of view.
    beyond that), the **next booking** ("Flight 6E 2134 · Thu 08:15 · in 2
    days"), an **Explore** card, a **Get ready** card ("Packing 12/30 · 2
    to-dos left · 3 notes"), and a list of everything you can do here.
-   **Edit** changes the trip's name, dates, destination or cover.
+   **Edit** changes the trip's name, dates, destination or cover: a colour,
+   or a photo you upload, pick from the album, or the destination's photo
+   from Wikipedia.
    The **⋯** button archives the trip (it moves to "Archived" on your list,
    for you only), and lets an owner **delete** it for everyone (type its name
    to confirm; it can be restored from "Recently deleted" for 30 days) or
@@ -154,8 +156,11 @@ This is the app from a traveller's point of view.
    Nothing is added by itself. A return trip shows up as two flights.
 
 ### Talking: Chat
-23. A group chat with reactions, "Priya is typing…", "Seen by 3" and
-    replies. Hold any message to **reply**, react, **add it to the plan**,
+23. A group chat with reactions, "Priya is typing…", ticks (✓ sent, ✓✓
+    delivered, green ✓✓ read by everyone, with **Info** for who) and
+    replies. Send **photos and screenshots** (📎; they stay out of the album
+    unless you add them), **@mention** someone (they're told straight away),
+    and links show a preview card. Hold any message to **reply**, react, **add it to the plan**,
     **add it as an expense**, copy it, **edit** it (your own, for a day) or
     **delete** it (your own; owners can delete anyone's). The Chat tab and the
     app icon show how many messages you haven't read.
@@ -257,6 +262,7 @@ requests.
 | Getting ready | Packing lists (shared or each person) with starter suggestions, to-dos linked to plan items, trip and day notes |
 | Bookings from email | Forward, paste or read a ticket PDF; bookings found wait for review, then go in as a booking and a plan item |
 | Polish 1, part A | Archive trips; owners delete and restore them (purged after 30 days); edit and delete chat messages; unread counts on trips, the Chat tab and the app icon |
+| Polish 1, part B | Photos and screenshots in chat, @mentions, link previews, delivered and read ticks with an Info sheet and a read-receipts setting, trip cover photos |
 
 ## 6. What's not done yet
 

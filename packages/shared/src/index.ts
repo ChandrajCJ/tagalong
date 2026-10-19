@@ -26,3 +26,4 @@ export * from './booking-plan';
 export * from './money';
 export * from './geo';
 export * from './weather';
+export * from './messages';

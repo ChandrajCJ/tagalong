@@ -11,6 +11,12 @@ interface Props {
   canReply: boolean;
   canEdit: boolean;
   canDelete: boolean;
+  /** On my own sent messages: who has received and read it. */
+  canInfo: boolean;
+  /** On a photo message whose photos aren't all in the album yet. */
+  canAddToAlbum: boolean;
+  onInfo: () => void;
+  onAddToAlbum: () => void;
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -29,6 +35,10 @@ export function MessageActions({
   canReply,
   canEdit,
   canDelete,
+  canInfo,
+  canAddToAlbum,
+  onInfo,
+  onAddToAlbum,
   onReply,
   onEdit,
   onDelete,
@@ -43,9 +53,9 @@ export function MessageActions({
       <Pressable accessibilityLabel="Close" style={styles.backdrop} onPress={onClose}>
         {/* Swallow presses inside the sheet so they don't close it. */}
         <Pressable style={styles.sheet} onPress={() => {}}>
-          {message ? (
+          {message && (message.body || message.images.length > 0) ? (
             <Text style={styles.preview} numberOfLines={3}>
-              {message.body}
+              {message.body || (message.images.length === 1 ? 'Photo' : `${message.images.length} photos`)}
             </Text>
           ) : null}
           {canReact ? (
@@ -74,7 +84,9 @@ export function MessageActions({
               <Action icon="credit-card" label="Add as expense" onPress={onAddExpense} />
             </>
           ) : null}
-          <Action icon="copy" label="Copy text" onPress={onCopy} />
+          {canAddToAlbum ? <Action icon="image" label="Add to album" onPress={onAddToAlbum} /> : null}
+          {message?.body ? <Action icon="copy" label="Copy text" onPress={onCopy} /> : null}
+          {canInfo ? <Action icon="info" label="Info" onPress={onInfo} /> : null}
           {canEdit ? <Action icon="edit-2" label="Edit" onPress={onEdit} /> : null}
           {canDelete ? <Action icon="trash-2" label="Delete" onPress={onDelete} destructive /> : null}
         </Pressable>

@@ -22,6 +22,8 @@ export const TRIP_EVENT_TYPES = [
   'message.deleted',
   'reaction.changed',
   'read.updated',
+  /** Someone's phone received messages up to a point; the payload is { userId, lastDeliveredAt }. */
+  'delivery.updated',
   'idea.upserted',
   'idea.deleted',
   'idea.voted',

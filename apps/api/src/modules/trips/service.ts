@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
-import { changeLog, expenses, tripMembers, trips, users, type Db } from '@tagalong/db';
+import { changeLog, expenses, photos, tripMembers, trips, users, type Db } from '@tagalong/db';
 import {
   CreateTripInput,
   newId,
@@ -18,6 +18,7 @@ import { requireTripRole } from '../../lib/access';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Geo } from '../../lib/geo';
+import type { Storage } from '../../lib/storage';
 import { postSystemMessage, unreadCounts } from '../chat/channel';
 
 type CreateTrip = z.output<typeof CreateTripInput>;
@@ -34,7 +35,14 @@ const RESTORE_MS = TRIP_RESTORE_DAYS * 24 * 60 * 60 * 1000;
 const memberOf = (tripId: string, userId: string) =>
   and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt));
 
-export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
+/** The cover photo's file, while that photo is still there. */
+const coverJoin = and(eq(photos.id, trips.coverMediaId), isNull(photos.deletedAt), eq(photos.status, 'ready'));
+
+export const createTripsService = (db: Db, redis?: Redis, geo?: Geo, storage?: Storage, ttl = 600) => {
+  /** A short-lived link to the cover, or null for a colour-only cover. */
+  const coverUrl = async (key: string | null) =>
+    key && storage ? storage.downloadUrl(key, 'cover.jpg', ttl) : null;
+
   /** The columns for a picked place, with its time zone looked up (best effort). */
   const locationColumns = async (location: TripLocation) => ({
     placeId: location.placeId,
@@ -59,21 +67,28 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
           startDate: trips.startDate,
           endDate: trips.endDate,
           coverColor: trips.coverColor,
+          coverCredit: trips.coverCredit,
+          coverKey: photos.storageKey,
           myRole: tripMembers.role,
           memberCount: activeMemberCount,
           archivedAt: tripMembers.archivedAt,
         })
         .from(tripMembers)
         .innerJoin(trips, eq(trips.id, tripMembers.tripId))
+        .leftJoin(photos, coverJoin)
         .where(and(eq(tripMembers.userId, userId), isNull(tripMembers.leftAt), isNull(trips.deletedAt)))
         .orderBy(sql`${trips.startDate} asc nulls last`, desc(trips.createdAt));
       const unread = await unreadCounts(db, userId, rows.map((r) => r.id));
-      const summaries: TripSummary[] = rows.map(({ archivedAt, ...r }) => ({
-        ...r,
-        myRole: r.myRole as TripRole,
-        archived: archivedAt !== null,
-        unreadCount: unread.get(r.id) ?? 0,
-      }));
+      const summaries: TripSummary[] = await Promise.all(
+        rows.map(async ({ archivedAt, coverKey, ...r }) => ({
+          ...r,
+          coverUrl: await coverUrl(coverKey),
+          coverCredit: coverKey ? r.coverCredit : null,
+          myRole: r.myRole as TripRole,
+          archived: archivedAt !== null,
+          unreadCount: unread.get(r.id) ?? 0,
+        })),
+      );
 
       const deletedRows = await db
         .select({
@@ -183,19 +198,30 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
           bounds: trips.bounds,
           countryCode: trips.countryCode,
           archivedAt: tripMembers.archivedAt,
+          coverCredit: trips.coverCredit,
+          coverPhotoId: photos.id,
+          coverKey: photos.storageKey,
         })
         .from(trips)
         .innerJoin(tripMembers, memberOf(tripId, userId))
+        .leftJoin(photos, coverJoin)
         .where(eq(trips.id, tripId));
       if (!trip) throw new Error('Trip vanished after access check');
-      const { placeId, latitude, longitude, bounds, countryCode, archivedAt, ...rest } = trip;
+      const { placeId, latitude, longitude, bounds, countryCode, archivedAt, coverKey, coverCredit, coverPhotoId, ...rest } =
+        trip;
       const location =
         placeId && latitude !== null && longitude !== null
           ? { placeId, latitude, longitude, bounds: bounds ?? null, countryCode: countryCode?.trim() || null }
           : null;
 
       const members = await db
-        .select({ userId: users.id, displayName: users.displayName, role: tripMembers.role, upiId: users.upiId })
+        .select({
+          userId: users.id,
+          displayName: users.displayName,
+          role: tripMembers.role,
+          upiId: users.upiId,
+          joinedAt: tripMembers.joinedAt,
+        })
         .from(tripMembers)
         .innerJoin(users, eq(users.id, tripMembers.userId))
         .where(and(eq(tripMembers.tripId, tripId), isNull(tripMembers.leftAt)))
@@ -204,10 +230,13 @@ export const createTripsService = (db: Db, redis?: Redis, geo?: Geo) => {
       return {
         ...rest,
         archived: archivedAt !== null,
+        coverPhotoId: coverKey ? coverPhotoId : null,
+        coverUrl: await coverUrl(coverKey),
+        coverCredit: coverKey ? coverCredit : null,
         location,
         myRole,
         myUserId: userId,
-        members: members.map((m) => ({ ...m, role: m.role as TripRole })),
+        members: members.map((m) => ({ ...m, role: m.role as TripRole, joinedAt: m.joinedAt.toISOString() })),
       };
     },
 

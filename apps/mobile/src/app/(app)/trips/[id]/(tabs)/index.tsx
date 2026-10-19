@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActionMenu, type MenuAction } from '@/components/action-menu';
+import { CoverImage } from '@/components/cover-image';
 import { DeleteTripSheet } from '@/components/delete-trip-sheet';
 import { Avatar, Body, Button, Label } from '@/components/ui';
 import { IconButton } from '@/components/icon-button';
@@ -53,6 +54,8 @@ export default function TripOverview() {
   const countdown = tripCountdown(trip.startDate, trip.endDate);
   const canInvite = hasRole(trip.myRole, 'editor');
   const isOwner = trip.myRole === 'owner';
+  // On a photo the title is white, over the photo's darkened bottom.
+  const onPhoto = !!trip.coverUrl;
   const base = `/trips/${trip.id}` as const;
 
   const setArchived = async (archived: boolean) => {
@@ -119,7 +122,13 @@ export default function TripOverview() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.cover, { backgroundColor: trip.coverColor }]}>
+      <CoverImage
+        color={trip.coverColor}
+        uri={trip.coverUrl}
+        cacheKey={`cover-${trip.id}`}
+        credit={trip.coverCredit}
+        style={styles.cover}
+      >
         <SafeAreaView edges={['top']} style={styles.coverInner}>
           <View style={styles.coverTop}>
             <IconButton icon="chevron-left" iconSize={20} label="Back to your trips" tipAlign="left" onPress={() => router.replace('/trips')} />
@@ -135,7 +144,7 @@ export default function TripOverview() {
             </View>
           </View>
           <View style={{ gap: 6 }}>
-            <Text accessibilityRole="header" style={styles.title}>
+            <Text accessibilityRole="header" style={[styles.title, onPhoto && styles.onPhoto]}>
               {trip.name}
             </Text>
             <Pressable
@@ -151,14 +160,14 @@ export default function TripOverview() {
                   </View>
                 ))}
               </View>
-              <Text style={styles.coverMeta}>
+              <Text style={[styles.coverMeta, onPhoto && styles.onPhoto]}>
                 {formatDateRange(trip.startDate, trip.endDate)} · {trip.memberCount}{' '}
                 {trip.memberCount === 1 ? 'traveler' : 'travelers'}
               </Text>
             </Pressable>
           </View>
         </SafeAreaView>
-      </View>
+      </CoverImage>
 
       <ScrollView contentContainerStyle={styles.body}>
         {problem ? (
@@ -440,6 +449,7 @@ const styles = StyleSheet.create({
   exploreTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   title: { fontFamily: fonts.display, fontSize: 30, color: colors.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onPhoto: { color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 6 },
   coverMeta: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   body: { padding: space.xl, gap: space.md },
   problem: { padding: space.md, borderRadius: radius.lg, backgroundColor: colors.coralSoft },

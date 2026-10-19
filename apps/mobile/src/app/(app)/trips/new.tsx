@@ -1,8 +1,12 @@
 import { CreateTripInput, currencyForCountry, newId, Trip, type PlaceResult } from '@tagalong/shared';
+import Feather from '@expo/vector-icons/Feather';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CoverImage } from '@/components/cover-image';
+import { pickCoverPhoto, uploadCover } from '@/components/cover-photo-picker';
 import { DateRangeField } from '@/components/date-range-picker';
 import { DestinationField } from '@/components/destination-field';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
@@ -32,6 +36,9 @@ export default function NewTrip() {
     if (local && !currencyTouched) setCurrency(local);
   };
   const [coverColor, setCoverColor] = useState<string>(coverColors[0]);
+  // A cover photo picked before the trip exists: uploaded right after it's created.
+  const [coverPhoto, setCoverPhoto] = useState<ImagePickerAsset | null>(null);
+  const [coverProblem, setCoverProblem] = useState<string>();
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
@@ -67,6 +74,8 @@ export default function NewTrip() {
     setBusy(true);
     try {
       const trip = await request('/trips', { method: 'POST', body: parsed.data, schema: Trip });
+      // The trip is made either way; a photo that fails can be added again from Edit.
+      if (coverPhoto) await uploadCover(trip.id, coverPhoto).catch(() => undefined);
       router.replace(`/trips/${trip.id}`);
     } catch (e) {
       setErrors({ form: e instanceof ApiError ? e.message : 'Could not create the trip' });
@@ -133,6 +142,27 @@ export default function NewTrip() {
                 />
               ))}
             </View>
+            {coverPhoto ? <CoverImage color={coverColor} uri={coverPhoto.uri} style={styles.preview} /> : null}
+            <View style={styles.row}>
+              <Button
+                label={coverPhoto ? 'Change photo' : 'Choose a photo'}
+                variant="outline"
+                icon={<Feather name="image" size={16} color={colors.ink} />}
+                onPress={async () => {
+                  const picked = await pickCoverPhoto();
+                  if (typeof picked === 'string') return setCoverProblem(picked);
+                  setCoverProblem(undefined);
+                  if (picked) setCoverPhoto(picked);
+                }}
+                style={{ minHeight: 40 }}
+              />
+              {coverPhoto ? (
+                <Button label="Remove photo" variant="ghost" onPress={() => setCoverPhoto(null)} style={{ minHeight: 40 }} />
+              ) : null}
+            </View>
+            <Body style={{ fontSize: 12 }}>
+              {coverProblem ?? 'Optional. Later, in Edit, you can also pick one from the album or use a photo of the destination.'}
+            </Body>
           </View>
 
           <View style={{ gap: space.sm }}>
@@ -176,6 +206,7 @@ const styles = StyleSheet.create({
   close: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   row: { flexDirection: 'row', gap: space.md },
   swatch: { width: 52, height: 52, borderRadius: radius.md },
+  preview: { height: 120, borderRadius: radius.lg },
   swatchOn: { borderWidth: 3, borderColor: colors.ink },
   pill: { minHeight: 44, paddingHorizontal: space.lg, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface, justifyContent: 'center' },
   pillOn: { backgroundColor: colors.ink, borderColor: colors.ink },

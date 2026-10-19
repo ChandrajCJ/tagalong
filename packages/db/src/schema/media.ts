@@ -51,6 +51,11 @@ export const photos = mediaSchema.table(
     longitude: doublePrecision('longitude'),
     status: text('status').notNull().default('pending'),
     caption: text('caption'),
+    /**
+     * Where it was added: the trip's album, a chat message (kept out of the
+     * album unless someone adds it), or the trip's cover photo.
+     */
+    source: text('source').notNull().default('album'),
     version: version(),
     ...timestamps(),
     ...softDelete(),
@@ -59,6 +64,7 @@ export const photos = mediaSchema.table(
     index('photos_trip_taken_idx').on(t.tripId, t.takenAt),
     index('photos_batch_idx').on(t.batchId),
     check('photos_status_check', sql.raw(`status in ('pending', 'ready')`)),
+    check('photos_source_check', sql.raw(`source in ('album', 'chat', 'cover')`)),
     // The server only stores what every phone and browser can show. iPhones'
     // HEIC is converted on the phone before upload.
     check(

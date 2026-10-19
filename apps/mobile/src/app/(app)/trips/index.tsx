@@ -4,6 +4,7 @@ import { Link, router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CoverImage } from '@/components/cover-image';
 import { IconButton } from '@/components/icon-button';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
@@ -176,7 +177,7 @@ function TripCard({ trip }: { trip: TripSummary }) {
         // function style here would be dropped (the card lost its border).
         style={[styles.card, trip.archived && { opacity: 0.8 }]}
       >
-        <View style={[styles.cover, { backgroundColor: trip.coverColor }]}>
+        <CoverImage color={trip.coverColor} uri={trip.coverUrl} cacheKey={`cover-${trip.id}`} credit={trip.coverCredit} style={styles.cover}>
           {countdown ? <Text style={styles.chip}>{countdown}</Text> : <View />}
           {unread ? (
             <View style={styles.unread}>
@@ -184,7 +185,7 @@ function TripCard({ trip }: { trip: TripSummary }) {
               <Text style={styles.unreadText}>{unread}</Text>
             </View>
           ) : null}
-        </View>
+        </CoverImage>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle}>{trip.name}</Text>
           <Body>

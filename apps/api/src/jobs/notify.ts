@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import {
   channels,
   devices,
@@ -10,7 +10,7 @@ import {
   type Db,
 } from '@tagalong/db';
 import type { Redis } from 'ioredis';
-import type { NotifyJob } from '../lib/jobs';
+import type { MentionJob, NotifyJob } from '../lib/jobs';
 import { ONLINE_WINDOW_MS, onlineKey } from '../lib/presence';
 
 export interface PushMessage {
@@ -50,6 +50,10 @@ export type NotifyResult =
   | { sent: number };
 
 const preview = (text: string) => (text.length > 120 ? `${text.slice(0, 117)}…` : text);
+
+/** What a push says a message was: its text, or the photo it carried. */
+const describe = (m: { kind: string; body: string }) =>
+  m.kind === 'image' ? (m.body ? `📷 ${preview(m.body)}` : '📷 Photo') : preview(m.body);
 
 /** "Priya", "Priya and Sam", "Priya, Sam and Alex". */
 const joinNames = (names: string[]) =>
@@ -95,16 +99,16 @@ export const processNotify = async (
     .where(and(eq(readStates.channelId, channel.id), eq(readStates.userId, userId)));
 
   const unread = await db
-    .select({ body: messages.body, sender: users.displayName })
+    .select({ body: messages.body, kind: messages.kind, sender: users.displayName })
     .from(messages)
     .innerJoin(users, eq(users.id, messages.senderId))
     .where(
       and(
         eq(messages.channelId, channel.id),
-        eq(messages.kind, 'text'),
+        inArray(messages.kind, ['text', 'image']),
         isNull(messages.deletedAt),
         ne(messages.senderId, userId),
-        read ? gt(messages.createdAt, read.at) : undefined,
+        read?.at ? gt(messages.createdAt, read.at) : undefined,
       ),
     )
     .orderBy(desc(messages.createdAt))
@@ -120,7 +124,7 @@ export const processNotify = async (
   const senders = [...new Set(unread.map((m) => m.sender))];
   const body =
     unread.length === 1
-      ? `${unread[0]!.sender}: ${preview(unread[0]!.body)}`
+      ? `${unread[0]!.sender}: ${describe(unread[0]!)}`
       : `${joinNames(senders.slice(0, 3))}${senders.length > 3 ? ' and others' : ''}: ${unread.length} new messages`;
 
   const tickets = await push.send(
@@ -133,7 +137,12 @@ export const processNotify = async (
     })),
   );
 
-  // Phones that uninstalled the app: stop sending to them.
+  await forgetDeadTokens(db, tokens, tickets);
+  return { sent: tokens.length };
+};
+
+/** Phones that uninstalled the app stop getting pushes. */
+const forgetDeadTokens = async (db: Db, tokens: { id: string }[], tickets: PushTicket[]) => {
   await Promise.all(
     tickets.map((ticket, i) =>
       ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
@@ -141,5 +150,49 @@ export const processNotify = async (
         : null,
     ),
   );
+};
+
+export type MentionResult = { skipped: 'gone' | 'not_member' | 'no_device' } | { sent: number };
+
+/**
+ * "Priya mentioned you: …", sent straight away. Unlike the chat summary it
+ * goes even while they have the app open: being asked something directly
+ * shouldn't wait.
+ */
+export const processMention = async (
+  deps: { db: Db; push: PushSender },
+  { tripId, messageId, userId }: MentionJob,
+): Promise<MentionResult> => {
+  const { db, push } = deps;
+  const [message] = await db
+    .select({ body: messages.body, kind: messages.kind, sender: users.displayName, tripName: trips.name })
+    .from(messages)
+    .innerJoin(users, eq(users.id, messages.senderId))
+    .innerJoin(trips, eq(trips.id, messages.tripId))
+    .where(and(eq(messages.id, messageId), isNull(messages.deletedAt), isNull(trips.deletedAt)));
+  if (!message) return { skipped: 'gone' };
+
+  const [member] = await db
+    .select({ userId: tripMembers.userId })
+    .from(tripMembers)
+    .where(and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt)));
+  if (!member) return { skipped: 'not_member' };
+
+  const tokens = await db
+    .select({ id: devices.id, token: devices.pushToken })
+    .from(devices)
+    .where(and(eq(devices.userId, userId), isNotNull(devices.pushToken)));
+  if (tokens.length === 0) return { skipped: 'no_device' };
+
+  const tickets = await push.send(
+    tokens.map((t) => ({
+      to: t.token!,
+      title: message.tripName,
+      body: `${message.sender} mentioned you: ${describe(message)}`,
+      data: { url: `/trips/${tripId}/chat` },
+      sound: 'default',
+    })),
+  );
+  await forgetDeadTokens(db, tokens, tickets);
   return { sent: tokens.length };
 };

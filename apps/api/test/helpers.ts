@@ -76,6 +76,10 @@ export const useTestApp = () => {
     notified: { tripId: string; userId: string }[];
     /** Photos the API asked the worker to make thumbnails for. */
     thumbnails: string[];
+    /** Immediate pushes asked for because someone was @mentioned. */
+    mentioned: { tripId: string; messageId: string; userId: string }[];
+    /** Messages the API asked the worker to fetch a link preview for. */
+    previews: string[];
     /** The fake storage's contents, so tests can play the worker's part. */
     storage: Storage;
     signIn: (email: string) => Promise<AuthTokens>;
@@ -97,7 +101,15 @@ export const useTestApp = () => {
     const { mailer, codes } = captureMailer();
     const notified: { tripId: string; userId: string }[] = [];
     const thumbnails: string[] = [];
+    const mentioned: { tripId: string; messageId: string; userId: string }[] = [];
+    const previews: string[] = [];
     const jobs: Jobs = {
+      async notifyMention(tripId, messageId, userIds) {
+        mentioned.push(...userIds.map((userId) => ({ tripId, messageId, userId })));
+      },
+      async linkPreview(messageId) {
+        previews.push(messageId);
+      },
       async notifyChat(tripId, userIds) {
         notified.push(...userIds.map((userId) => ({ tripId, userId })));
       },
@@ -126,6 +138,8 @@ export const useTestApp = () => {
     ctx.notified = notified;
     ctx.putObject = putObject;
     ctx.thumbnails = thumbnails;
+    ctx.mentioned = mentioned;
+    ctx.previews = previews;
     ctx.storage = storage;
     ctx.fx = fx;
     ctx.geo = geo;
@@ -155,6 +169,8 @@ export const useTestApp = () => {
     ctx.codes.clear();
     ctx.notified.length = 0;
     ctx.thumbnails.length = 0;
+    ctx.mentioned.length = 0;
+    ctx.previews.length = 0;
     ctx.fx.clear();
     ctx.geo.reset();
     ctx.routing.reset();
@@ -214,6 +230,9 @@ export type FakeGeo = Geo & {
     osm: Awaited<ReturnType<Geo['osmPlaces']>>;
     weather: Awaited<ReturnType<Geo['weather']>>;
     timezone: string | null;
+    photo: Awaited<ReturnType<Geo['destinationPhoto']>>;
+    /** What a Wikipedia image download returns. */
+    image: { contentType: string; body: Buffer } | null;
   };
   calls: string[];
   /** Every search, with how it was asked. */
@@ -228,6 +247,8 @@ export const fakeGeo = (): FakeGeo => {
     osm: [],
     weather: { timezone: 'Asia/Kolkata', days: [] },
     timezone: 'Asia/Kolkata',
+    photo: null,
+    image: null,
   });
   const geo: FakeGeo = {
     answers: fresh(),
@@ -259,6 +280,15 @@ export const fakeGeo = (): FakeGeo => {
     async timezoneAt() {
       geo.calls.push('timezone');
       return geo.answers.timezone;
+    },
+    async destinationPhoto(name) {
+      geo.calls.push(`photo:${name}`);
+      return geo.answers.photo;
+    },
+    async fetchImage(url) {
+      geo.calls.push(`image:${url}`);
+      if (!geo.answers.image) throw new Error('No image');
+      return geo.answers.image;
     },
   };
   return geo;

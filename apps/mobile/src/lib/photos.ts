@@ -1,4 +1,4 @@
-import { newId, parseExif, Photo, PhotoUpload, type PhotoFacts } from '@tagalong/shared';
+import { newId, parseExif, Photo, PhotoUpload, type PhotoFacts, type PhotoSource } from '@tagalong/shared';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -82,7 +82,7 @@ const libraryFacts = async (assetId: string): Promise<Partial<PhotoFacts>> => {
  * just to save data: iPhones shoot HEIC, which the server's image library
  * can't read, so without this an iPhone photo would never get a thumbnail.
  */
-const prepare = async (asset: ImagePickerAsset): Promise<Prepared> => {
+const prepare = async (asset: ImagePickerAsset, maxEdge = MAX_EDGE): Promise<Prepared> => {
   // Read the EXIF before converting: re-encoding drops it.
   const exif = parseExif(asset.exif as Record<string, unknown> | null | undefined);
   const needsLibrary = exif.latitude === null || exif.takenAt === null;
@@ -96,8 +96,8 @@ const prepare = async (asset: ImagePickerAsset): Promise<Prepared> => {
 
   const context = ImageManipulator.manipulate(asset.uri);
   const longest = Math.max(asset.width, asset.height);
-  if (longest > MAX_EDGE) {
-    context.resize(asset.width >= asset.height ? { width: MAX_EDGE } : { height: MAX_EDGE });
+  if (longest > maxEdge) {
+    context.resize(asset.width >= asset.height ? { width: maxEdge } : { height: maxEdge });
   }
   const rendered = await context.renderAsync();
   const saved = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG });
@@ -107,16 +107,34 @@ const prepare = async (asset: ImagePickerAsset): Promise<Prepared> => {
 };
 
 /** Link, bytes, confirm: the same three steps as documents. */
-const sendOne = async (tripId: string, batchId: string, asset: ImagePickerAsset, id: string) => {
-  const { uri, size, width, height, facts } = await prepare(asset);
+const sendOne = async (
+  tripId: string,
+  batchId: string,
+  asset: ImagePickerAsset,
+  id: string,
+  source: PhotoSource = 'album',
+  maxEdge = MAX_EDGE,
+) => {
+  const { uri, size, width, height, facts } = await prepare(asset, maxEdge);
   const { uploadUrl } = await request(`/trips/${tripId}/photos`, {
     method: 'POST',
-    body: { id, batchId, contentType: 'image/jpeg', sizeBytes: size, width, height, ...facts },
+    body: { id, batchId, contentType: 'image/jpeg', sizeBytes: size, width, height, source, ...facts },
     schema: PhotoUpload,
   });
   await putFile(uploadUrl, uri, 'image/jpeg');
   return request(`/photos/${id}/complete`, { method: 'POST', schema: Photo });
 };
+
+/**
+ * One photo for somewhere other than a plain album pick: the chat (kept out
+ * of the album unless asked) or the trip's cover (smaller, 1600 px wide).
+ */
+export const uploadPhoto = (
+  tripId: string,
+  asset: ImagePickerAsset,
+  source: PhotoSource,
+  { id = newId(), batchId = newId() }: { id?: string; batchId?: string } = {},
+) => sendOne(tripId, batchId, asset, id, source, source === 'cover' ? 1600 : MAX_EDGE);
 
 export interface UploadProgress {
   total: number;

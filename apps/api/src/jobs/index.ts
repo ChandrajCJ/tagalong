@@ -1,6 +1,7 @@
 // Job processors the worker runs. They live with the API so they share its
 // database code and tests.
-export { expoPushSender, processNotify, type PushSender } from './notify';
+export { expoPushSender, processMention, processNotify, type PushSender } from './notify';
+export { processLinkPreview, type PreviewResult } from './preview';
 export { PURGE_JOB, purgeDeletedTrips, type PurgeResult } from './purge';
 export { processThumbnail, THUMB_SIZE, type ThumbnailResult } from './thumbnail';
 export { MEDIA_QUEUE, NOTIFY_QUEUE, type NotifyJob, type ThumbnailJob } from '../lib/jobs';

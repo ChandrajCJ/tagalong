@@ -30,6 +30,8 @@ export const Me = z.object({
   displayName: z.string(),
   homeCurrency: z.string().length(3),
   upiId: z.string().nullable(),
+  /** Others see when you've read their messages (and you see theirs). */
+  readReceipts: z.boolean().default(true),
 });
 export type Me = z.infer<typeof Me>;
 
@@ -44,6 +46,9 @@ export const UpdateMeInput = z
   .object({
     displayName: z.string().trim().min(1, 'Enter your name').max(60).optional(),
     upiId: UPI_ID.nullable().optional(),
+    readReceipts: z.boolean().optional(),
   })
-  .refine((v) => v.displayName !== undefined || v.upiId !== undefined, { message: 'Nothing to change' });
+  .refine((v) => v.displayName !== undefined || v.upiId !== undefined || v.readReceipts !== undefined, {
+    message: 'Nothing to change',
+  });
 export type UpdateMeInput = z.input<typeof UpdateMeInput>;
