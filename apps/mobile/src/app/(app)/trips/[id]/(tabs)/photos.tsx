@@ -25,9 +25,11 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActionMenu } from '@/components/action-menu';
 import { IconButton } from '@/components/icon-button';
 import { PhotoMap } from '@/components/photo-map';
 import { PhotoViewer } from '@/components/photo-viewer';
+import { VideoBadge } from '@/components/video-badge';
 import { Body, Button, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { groupByDay, savePhotos, uploadBatch, type UploadProgress } from '@/lib/photos';
@@ -55,6 +57,7 @@ export default function PhotosTab() {
   const [photos, setPhotos] = useState<Photo[] | null>(null);
   const [error, setError] = useState<string>();
   const [progress, setProgress] = useState<UploadProgress | null>(null);
+  const [adding, setAdding] = useState(false);
   const [lastFailed, setLastFailed] = useState<UploadProgress['failed']>([]);
   const [mode, setMode] = useState<Mode>('days');
   // Select mode: tap photos to pick them, then download or delete them together.
@@ -220,7 +223,10 @@ export default function PhotosTab() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
+      // A minute at most, so the free storage lasts; the phone compresses where it can.
+      videoMaxDuration: 60,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
       allowsMultipleSelection: true,
       selectionLimit: MAX_PHOTOS_PER_BATCH,
       // When and where it was taken come from here; the upload drops it.
@@ -229,6 +235,19 @@ export default function PhotosTab() {
       // Hand back a JPEG rather than HEIC where the phone can.
       preferredAssetRepresentationMode:
         ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
+    if (result.canceled) return;
+    await send(result.assets.map((asset) => ({ asset })));
+  };
+
+  /** Up to a minute, straight from the camera. */
+  const record = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return setError('Allow camera access to record a video.');
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['videos'],
+      videoMaxDuration: 60,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
     });
     if (result.canceled) return;
     await send(result.assets.map((asset) => ({ asset })));
@@ -302,7 +321,7 @@ export default function PhotosTab() {
           key={photo.id}
           accessibilityRole={selected ? 'checkbox' : 'imagebutton'}
           aria-checked={selected ? selected.has(photo.id) : undefined}
-          accessibilityLabel={`Photo by ${photo.uploaderName ?? 'someone'}`}
+          accessibilityLabel={`${photo.kind === 'video' ? 'Video' : 'Photo'} by ${photo.uploaderName ?? 'someone'}`}
           accessibilityHint={selected ? undefined : 'Hold to select several'}
           onPress={() =>
             selected ? toggle(photo) : setViewing({ photos: mode === 'favourites' ? favourites : flat, startId: photo.id })
@@ -323,6 +342,7 @@ export default function PhotosTab() {
             transition={120}
             style={styles.tile}
           />
+          {photo.kind === 'video' ? <VideoBadge durationMs={photo.durationMs} /> : null}
           {selected ? (
             <View style={[styles.check, selected.has(photo.id) && styles.checkOn]}>
               {selected.has(photo.id) ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
@@ -352,7 +372,14 @@ export default function PhotosTab() {
           />
         ) : null}
         {canAdd && flat.length > 0 && !selected ? (
-          <IconButton icon="plus" tone="solid" label="Add photos" disabled={!!progress} onPress={pick} iconSize={20} />
+          <IconButton
+            icon="plus"
+            tone="solid"
+            label="Add photos or videos"
+            disabled={!!progress}
+            onPress={() => (Platform.OS === 'web' ? void pick() : setAdding(true))}
+            iconSize={20}
+          />
         ) : null}
       </View>
 
@@ -442,7 +469,7 @@ export default function PhotosTab() {
             Add yours and everyone&apos;s land here, sorted by day and on a map. Nobody has to send them round.
           </Body>
           {canAdd ? (
-            <Button label="Add photos" onPress={pick} />
+            <Button label="Add photos" onPress={() => (Platform.OS === 'web' ? void pick() : setAdding(true))} />
           ) : (
             <Body style={{ textAlign: 'center', fontSize: 13 }}>{VIEWER_NOTE}</Body>
           )}
@@ -540,6 +567,15 @@ export default function PhotosTab() {
         }}
         onFavourite={(photo) => void favourite(photo)}
         onClose={() => setViewing(null)}
+      />
+      <ActionMenu
+        visible={adding}
+        title="Add to the album"
+        onClose={() => setAdding(false)}
+        actions={[
+          { icon: 'image', label: 'Photos and videos', hint: 'Videos up to a minute and 50 MB', onPress: () => void pick() },
+          { icon: 'video', label: 'Record a video', hint: 'Up to a minute', onPress: () => void record() },
+        ]}
       />
     </SafeAreaView>
   );

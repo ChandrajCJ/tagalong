@@ -1,6 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import type { Photo } from '@tagalong/shared';
 import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -110,8 +111,11 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          renderItem={({ item }) => (
+          renderItem={({ item, index: i }) => (
             <View style={{ width, height, justifyContent: 'center' }}>
+              {item.kind === 'video' && item.url ? (
+                <VideoPage url={item.url} active={i === index} width={width} height={height} />
+              ) : (
               <Image
                 accessibilityLabel={`Photo by ${item.uploaderName ?? 'someone'}, ${takenLabel(item.takenAt)}`}
                 // Cached by id, not by URL: the signed link changes every time it's fetched.
@@ -121,6 +125,7 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
                 transition={150}
                 style={{ width, height }}
               />
+              )}
             </View>
           )}
         />
@@ -160,7 +165,7 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
           {current ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Save photo to your phone"
+              accessibilityLabel={current.kind === 'video' ? 'Save video to your phone' : 'Save photo to your phone'}
               onPress={async () => {
                 setSaveLabel('Saving…');
                 const { saved } = await savePhotos([current]);
@@ -187,6 +192,18 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
       </View>
     </Modal>
   );
+}
+
+/** A video in the viewer: plays when it's the one on screen, pauses when swiped away. */
+function VideoPage({ url, active, width, height }: { url: string; active: boolean; width: number; height: number }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = false;
+  });
+  useEffect(() => {
+    if (active) player.play();
+    else player.pause();
+  }, [active, player]);
+  return <VideoView player={player} nativeControls contentFit="contain" style={{ width, height }} />;
 }
 
 const styles = StyleSheet.create({

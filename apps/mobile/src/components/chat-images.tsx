@@ -1,7 +1,9 @@
 import type { ChatImage, LinkPreview } from '@tagalong/shared';
 import { Image } from 'expo-image';
+import Feather from '@expo/vector-icons/Feather';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts, radius } from '@/theme';
+import { VideoBadge } from './video-badge';
 
 const GRID = 220;
 const GAP = 3;
@@ -48,6 +50,7 @@ function Tile(props: { image: ChatImage; width: number; height: number; onOpen: 
         transition={120}
         style={[styles.tile, { width, height }]}
       />
+      {image.kind === 'video' && more === 0 ? <VideoBadge durationMs={image.durationMs} /> : null}
       {more > 0 ? (
         <View style={styles.more}>
           <Text style={styles.moreText}>+{more}</Text>
@@ -57,13 +60,21 @@ function Tile(props: { image: ChatImage; width: number; height: number; onOpen: 
   );
 }
 
-/** Photos picked but not sent yet, still on this phone: shown while they upload. */
-export function PendingImages({ uris }: { uris: string[] }) {
+/** Photos and videos picked but not sent yet, still on this phone: shown while they upload. */
+export function PendingImages({ items }: { items: { uri: string; video: boolean }[] }) {
+  const cell = { width: (GRID - GAP) / 2, height: (GRID - GAP) / 2 };
   return (
     <View style={styles.grid}>
-      {uris.slice(0, 4).map((uri) => (
-        <Image key={uri} source={{ uri }} contentFit="cover" style={[styles.tile, { width: (GRID - GAP) / 2, height: (GRID - GAP) / 2, opacity: 0.6 }]} />
-      ))}
+      {items.slice(0, 4).map(({ uri, video }) =>
+        // A video on the phone has no picture to show until its poster is made: a dark tile says what it is.
+        video ? (
+          <View key={uri} style={[styles.tile, cell, styles.pendingVideo]}>
+            <Feather name="video" size={22} color="#FFFFFF" />
+          </View>
+        ) : (
+          <Image key={uri} source={{ uri }} contentFit="cover" style={[styles.tile, cell, { opacity: 0.6 }]} />
+        ),
+      )}
     </View>
   );
 }
@@ -102,6 +113,7 @@ export function LinkPreviewCard({ preview, mine }: { preview: LinkPreview; mine:
 const styles = StyleSheet.create({
   grid: { width: GRID, flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   tile: { borderRadius: 12, backgroundColor: colors.line },
+  pendingVideo: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A2925' },
   more: { ...StyleSheet.absoluteFill, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
   moreText: { fontFamily: fonts.bold, fontSize: 22, color: '#FFFFFF' },
   card: { width: GRID, marginTop: 6, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.line },

@@ -99,6 +99,7 @@ export const createCoverService = (db: Db, redis: Redis, storage: Storage, jobs:
               eq(photos.id, input.photoId),
               eq(photos.tripId, tripId),
               eq(photos.status, 'ready'),
+              eq(photos.kind, 'photo'),
               isNull(photos.deletedAt),
               // A photo sent in the chat is someone's message, not a cover, until it's in the album.
               ne(photos.source, 'chat'),

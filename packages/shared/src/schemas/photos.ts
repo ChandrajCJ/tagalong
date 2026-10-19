@@ -6,6 +6,13 @@ import { z } from 'zod';
  * image library can't read it.
  */
 export const PHOTO_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+/** Videos as phones and browsers record them. */
+export const VIDEO_CONTENT_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'] as const;
+export const MEDIA_CONTENT_TYPES = [...PHOTO_CONTENT_TYPES, ...VIDEO_CONTENT_TYPES] as const;
+
+/** A minute and 50 MB at most per video: the free storage's per-file cap, so 1 GB lasts. */
+export const MAX_VIDEO_MS = 60_000;
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 /** The phone resizes before upload, so real photos are far smaller than this. */
 export const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
@@ -28,7 +35,10 @@ export const Photo = z.object({
   uploadedBy: z.string().uuid(),
   uploaderName: z.string().nullable(),
   batchId: z.string().uuid(),
-  contentType: z.enum(PHOTO_CONTENT_TYPES),
+  contentType: z.enum(MEDIA_CONTENT_TYPES),
+  /** A photo, or a short video (its thumbnail is the poster frame). */
+  kind: z.enum(['photo', 'video']).default('photo'),
+  durationMs: z.number().int().nullable().default(null),
   sizeBytes: z.number().int().nullable(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
@@ -60,10 +70,13 @@ export const CreatePhotoInput = z
   .object({
     id: z.string().uuid().optional(),
     batchId: z.string().uuid(),
-    contentType: z.enum(PHOTO_CONTENT_TYPES, {
-      errorMap: () => ({ message: 'Photos need to be JPEG, PNG or WebP' }),
+    contentType: z.enum(MEDIA_CONTENT_TYPES, {
+      errorMap: () => ({ message: 'Photos need to be JPEG, PNG or WebP, and videos MP4, MOV or WebM' }),
     }),
-    sizeBytes: z.number().int().positive().max(MAX_PHOTO_BYTES, 'Photos need to be 25 MB or smaller'),
+    kind: z.enum(['photo', 'video']).default('photo'),
+    /** How long a video is; required for videos. */
+    durationMs: z.number().int().positive().nullable().optional(),
+    sizeBytes: z.number().int().positive().max(MAX_VIDEO_BYTES, 'That’s too big: videos can be up to 50 MB, photos 25 MB'),
     width: z.number().int().positive().max(20_000).optional(),
     height: z.number().int().positive().max(20_000).optional(),
     takenAt: localDateTime.nullable().optional(),
@@ -76,12 +89,26 @@ export const CreatePhotoInput = z
   .refine((p) => (p.latitude == null) === (p.longitude == null), {
     message: 'A location needs both latitude and longitude',
     path: ['latitude'],
+  })
+  .refine((p) => (p.kind === 'video') === (VIDEO_CONTENT_TYPES as readonly string[]).includes(p.contentType), {
+    message: 'That file type doesn’t match',
+    path: ['contentType'],
+  })
+  .refine((p) => p.kind === 'video' || p.sizeBytes <= MAX_PHOTO_BYTES, {
+    message: 'Photos need to be 25 MB or smaller',
+    path: ['sizeBytes'],
+  })
+  .refine((p) => p.kind === 'photo' || (p.durationMs != null && p.durationMs <= MAX_VIDEO_MS), {
+    message: 'Videos can be up to a minute long',
+    path: ['durationMs'],
   });
 export type CreatePhotoInput = z.input<typeof CreatePhotoInput>;
 
 export const PhotoUpload = z.object({
   photo: Photo,
   uploadUrl: z.string().url(),
+  /** For a video: where to send its poster frame (a JPEG), which becomes its thumbnail. */
+  posterUploadUrl: z.string().url().nullable().default(null),
   expiresIn: z.number().int(),
 });
 export type PhotoUpload = z.infer<typeof PhotoUpload>;

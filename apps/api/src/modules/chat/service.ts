@@ -34,6 +34,7 @@ import { badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Jobs } from '../../lib/jobs';
 import { firstUrl } from '../../lib/link-preview';
+import { EXTENSIONS } from '../photos/service';
 import type { Storage } from '../../lib/storage';
 import { endOfDay, toItem } from '../itinerary/service';
 import { itemChannelId, mainChannelId, postSystemMessage, quotesFor, toMessage, unreadCounts } from './channel';
@@ -172,9 +173,13 @@ export const createChatService = (db: Db, redis: Redis, jobs: Jobs, storage: Sto
               id: p.id,
               width: p.width,
               height: p.height,
-              thumbUrl: p.thumbKey ? await storage.downloadUrl(p.thumbKey, `${p.id}.webp`, ttl) : null,
-              url: await storage.downloadUrl(p.storageKey, `${p.id}.jpg`, ttl),
+              thumbUrl: p.thumbKey
+                ? await storage.downloadUrl(p.thumbKey, p.kind === 'video' ? `${p.id}-poster.jpg` : `${p.id}.webp`, ttl)
+                : null,
+              url: await storage.downloadUrl(p.storageKey, `${p.id}.${EXTENSIONS[p.contentType as keyof typeof EXTENSIONS] ?? 'jpg'}`, ttl),
               inAlbum: p.source === 'album',
+              kind: p.kind as ChatImage['kind'],
+              durationMs: p.durationMs,
             },
           ],
         ),

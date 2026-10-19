@@ -1,12 +1,23 @@
-import { newId, parseExif, Photo, PhotoUpload, type PhotoFacts, type PhotoSource } from '@tagalong/shared';
+import {
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_MS,
+  newId,
+  parseExif,
+  Photo,
+  PhotoUpload,
+  VIDEO_CONTENT_TYPES,
+  type PhotoFacts,
+  type PhotoSource,
+} from '@tagalong/shared';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { PermissionsAndroid, Platform } from 'react-native';
-import { request } from './api';
+import { ApiError, request } from './api';
 import { MONTH_NAMES, parseIso } from './dates';
 import { weekdayOf } from './plan';
 import { localFileSize, putFile } from './upload';
+import { videoDurationMs, videoPoster } from './video-poster';
 
 /** Sharp on any phone screen, and roughly five times less data than the original. */
 const MAX_EDGE = 2560;
@@ -106,6 +117,50 @@ const prepare = async (asset: ImagePickerAsset, maxEdge = MAX_EDGE): Promise<Pre
   return { uri: saved.uri, size, width: saved.width, height: saved.height, facts };
 };
 
+/** "video/mp4" for a picked video, from what the picker says or the file's name. */
+const videoTypeOf = (asset: ImagePickerAsset): (typeof VIDEO_CONTENT_TYPES)[number] => {
+  const told = asset.mimeType as (typeof VIDEO_CONTENT_TYPES)[number] | undefined;
+  if (told && VIDEO_CONTENT_TYPES.includes(told)) return told;
+  return /\.mov$/i.test(asset.uri) ? 'video/quicktime' : /\.webm$/i.test(asset.uri) ? 'video/webm' : 'video/mp4';
+};
+
+/**
+ * Checks a picked video fits (a minute, 50 MB), so nobody waits for an upload
+ * the server would refuse. Returns its length and size.
+ */
+export const checkVideo = async (asset: ImagePickerAsset) => {
+  const durationMs = Math.round(asset.duration ?? 0) || (await videoDurationMs(asset.uri));
+  if (durationMs > MAX_VIDEO_MS) throw new ApiError(0, 'video_too_long', 'Videos can be up to a minute long. Trim it first.');
+  const size = await localFileSize(asset.uri);
+  if (size > MAX_VIDEO_BYTES) throw new ApiError(0, 'video_too_big', 'Videos can be up to 50 MB. Try a shorter clip.');
+  return { durationMs: Math.max(durationMs, 1), size };
+};
+
+/** A video: its bytes as they are, plus a poster frame made here, which becomes its thumbnail. */
+const sendVideo = async (tripId: string, batchId: string, asset: ImagePickerAsset, id: string, source: PhotoSource) => {
+  const { durationMs, size } = await checkVideo(asset);
+  const poster = await videoPoster(asset.uri);
+  const contentType = videoTypeOf(asset);
+  const { uploadUrl, posterUploadUrl } = await request(`/trips/${tripId}/photos`, {
+    method: 'POST',
+    body: {
+      id,
+      batchId,
+      kind: 'video',
+      contentType,
+      sizeBytes: size,
+      durationMs,
+      width: asset.width || poster.width,
+      height: asset.height || poster.height,
+      source,
+    },
+    schema: PhotoUpload,
+  });
+  await putFile(uploadUrl, asset.uri, contentType);
+  if (posterUploadUrl) await putFile(posterUploadUrl, poster.uri, 'image/jpeg');
+  return request(`/photos/${id}/complete`, { method: 'POST', schema: Photo });
+};
+
 /** Link, bytes, confirm: the same three steps as documents. */
 const sendOne = async (
   tripId: string,
@@ -115,6 +170,7 @@ const sendOne = async (
   source: PhotoSource = 'album',
   maxEdge = MAX_EDGE,
 ) => {
+  if (asset.type === 'video') return sendVideo(tripId, batchId, asset, id, source);
   const { uri, size, width, height, facts } = await prepare(asset, maxEdge);
   const { uploadUrl } = await request(`/trips/${tripId}/photos`, {
     method: 'POST',
@@ -250,6 +306,11 @@ export const dateSpan = (from: string | null, to: string | null) => {
   return `${a} – ${dayLabel(to.slice(0, 10))}`;
 };
 
+const extensionOf = (photo: Photo) =>
+  ({ 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'image/png': 'png', 'image/webp': 'webp' })[
+    photo.contentType as string
+  ] ?? 'jpg';
+
 /**
  * Saves full-size copies of photos to this phone's gallery, or downloads them
  * in a browser. Returns how many made it.
@@ -272,12 +333,12 @@ export const savePhotos = async (
         const href = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = href;
-        a.download = `tagalong-${photo.id}.jpg`;
+        a.download = `tagalong-${photo.id}.${extensionOf(photo)}`;
         a.click();
         URL.revokeObjectURL(href);
       } else {
         const FileSystem = await import('expo-file-system/legacy');
-        const target = `${FileSystem.cacheDirectory}tagalong-${photo.id}.jpg`;
+        const target = `${FileSystem.cacheDirectory}tagalong-${photo.id}.${extensionOf(photo)}`;
         const { uri } = await FileSystem.downloadAsync(photo.url, target);
         await MediaLibrary.saveToLibraryAsync(uri);
       }

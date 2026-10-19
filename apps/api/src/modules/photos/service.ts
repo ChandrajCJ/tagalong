@@ -22,10 +22,13 @@ const isUniqueViolation = (e: unknown): boolean => {
   return err?.code === '23505' || err?.cause?.code === '23505';
 };
 
-const EXTENSIONS: Record<Photo['contentType'], string> = {
+export const EXTENSIONS: Record<Photo['contentType'], string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
 };
 
 /** Postgres hands back "2026-06-12 18:30:00"; the app speaks "2026-06-12T18:30:00". */
@@ -70,7 +73,7 @@ export const createPhotosService = (
   const toPhoto = async (r: Row, uploaderName: string | null, fav: Fav = NO_FAVS): Promise<Photo> => {
     const ready = r.status === 'ready';
     const [thumbUrl, url] = await Promise.all([
-      ready && r.thumbKey ? storage.downloadUrl(r.thumbKey, `${r.id}.webp`, ttl) : null,
+      ready && r.thumbKey ? storage.downloadUrl(r.thumbKey, r.kind === 'video' ? `${r.id}-poster.jpg` : `${r.id}.webp`, ttl) : null,
       ready ? storage.downloadUrl(r.storageKey, `${r.id}.${EXTENSIONS[r.contentType as Photo['contentType']]}`, ttl) : null,
     ]);
     return {
@@ -80,6 +83,8 @@ export const createPhotosService = (
       uploaderName,
       batchId: r.batchId,
       contentType: r.contentType as Photo['contentType'],
+      kind: r.kind as Photo['kind'],
+      durationMs: r.durationMs,
       sizeBytes: r.sizeBytes,
       width: r.width,
       height: r.height,
@@ -231,11 +236,15 @@ export const createPhotosService = (
         return {
           photo: await toPhoto(existing, null),
           uploadUrl: await storage.uploadUrl(existing.storageKey, existing.contentType, ttl),
+          posterUploadUrl:
+            existing.kind === 'video' && existing.thumbKey ? await storage.uploadUrl(existing.thumbKey, 'image/jpeg', ttl) : null,
           expiresIn: ttl,
         };
       }
 
       const storageKey = `trips/${tripId}/photos/${id}/original.${EXTENSIONS[input.contentType]}`;
+      // The free server never decodes video: the phone sends the poster frame, which is the thumbnail.
+      const posterKey = input.kind === 'video' ? `trips/${tripId}/photos/${id}/poster.jpg` : null;
       const [row] = await db
         .insert(photos)
         .values({
@@ -253,6 +262,9 @@ export const createPhotosService = (
           longitude: input.longitude ?? null,
           caption: input.caption ?? null,
           source: input.source,
+          kind: input.kind,
+          durationMs: input.kind === 'video' ? (input.durationMs ?? null) : null,
+          thumbKey: posterKey,
           status: 'pending',
         })
         .returning();
@@ -260,6 +272,7 @@ export const createPhotosService = (
       return {
         photo: await toPhoto(row!, null),
         uploadUrl: await storage.uploadUrl(storageKey, input.contentType, ttl),
+        posterUploadUrl: posterKey ? await storage.uploadUrl(posterKey, 'image/jpeg', ttl) : null,
         expiresIn: ttl,
       };
     },
@@ -284,6 +297,10 @@ export const createPhotosService = (
       if (photo.sizeBytes !== null && size !== photo.sizeBytes) {
         throw badRequest('The photo only partly arrived. Try again.', 'upload_incomplete');
       }
+      // A video shows as its poster everywhere, so it isn't ready without one.
+      if (photo.kind === 'video' && (!photo.thumbKey || (await storage.sizeOf(photo.thumbKey)) === null)) {
+        throw badRequest('The video’s preview didn’t arrive. Try again.', 'poster_missing');
+      }
 
       const ready = await db.transaction(async (tx) => {
         const [row] = await tx
@@ -301,7 +318,7 @@ export const createPhotosService = (
         return row!;
       });
 
-      await jobs.makeThumbnail(photoId);
+      if (ready.kind === 'photo') await jobs.makeThumbnail(photoId);
       // No payload: each phone fetches its own signed copy. Chat photos and
       // covers aren't in the album, so albums have nothing to show yet.
       if (ready.source === 'album') {

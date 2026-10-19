@@ -31,6 +31,8 @@
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-updates": "~57.0.26",
+    "expo-video": "~57.0.5",
+    "expo-video-thumbnails": "~57.0.2",
     "expo-web-browser": "~57.0.3",
     "maplibre-gl": "^6.13.0",
     "react": "19.2.3",

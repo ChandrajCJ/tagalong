@@ -56,6 +56,9 @@ export const photos = mediaSchema.table(
      * album unless someone adds it), or the trip's cover photo.
      */
     source: text('source').notNull().default('album'),
+    /** A photo, or a short video whose poster frame the phone uploads as its thumbnail. */
+    kind: text('kind').notNull().default('photo'),
+    durationMs: integer('duration_ms'),
     version: version(),
     ...timestamps(),
     ...softDelete(),
@@ -69,8 +72,13 @@ export const photos = mediaSchema.table(
     // HEIC is converted on the phone before upload.
     check(
       'photos_content_type_check',
-      sql.raw(`content_type in ('image/jpeg', 'image/png', 'image/webp')`),
+      sql.raw(
+        `content_type in ('image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm')`,
+      ),
     ),
+    check('photos_kind_check', sql.raw(`kind in ('photo', 'video')`)),
+    // At most a minute, so the free storage lasts.
+    check('photos_video_check', sql.raw(`kind = 'photo' or (duration_ms is not null and duration_ms <= 60000)`)),
     // A location is both coordinates or neither, and inside the globe.
     check(
       'photos_location_check',

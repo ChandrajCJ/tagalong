@@ -434,7 +434,7 @@ export default function ChatTab() {
       images: [],
       itemId: null,
       status: 'sending',
-      localUris: attachments.map((a) => a.uri),
+      localUris: attachments.map((a) => ({ uri: a.uri, video: a.type === 'video' })),
     };
     setDraft('');
     setReplyingTo(null);
@@ -670,7 +670,7 @@ export default function ChatTab() {
             {m.images.length > 0 ? (
               <ChatImageGrid images={m.images} onOpen={(startId) => setViewing({ photos: asViewerPhotos(m), startId })} />
             ) : m.localUris?.length ? (
-              <PendingImages uris={m.localUris} />
+              <PendingImages items={m.localUris} />
             ) : null}
             {m.body ? (
               <MessageBody
@@ -869,7 +869,7 @@ export default function ChatTab() {
             <View style={styles.attachRow}>
               {attachments.map((a) => (
                 <View key={a.key}>
-                  <PendingImages uris={[a.uri]} />
+                  <PendingImages items={[{ uri: a.uri, video: a.type === 'video' }]} />
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Remove this photo"
@@ -1022,7 +1022,7 @@ export default function ChatTab() {
         title="Add photos"
         onClose={() => setAttachMenu(false)}
         actions={[
-          { icon: 'image', label: 'Photos', hint: `Up to ${MAX_CHAT_IMAGES} from your gallery`, onPress: () => void attach('library') },
+          { icon: 'image', label: 'Photos and videos', hint: `Up to ${MAX_CHAT_IMAGES}; videos up to a minute`, onPress: () => void attach('library') },
           ...(Platform.OS !== 'web'
             ? [{ icon: 'camera' as const, label: 'Camera', hint: 'Take one now', onPress: () => void attach('camera') }]
             : [{ icon: 'clipboard' as const, label: 'Paste a screenshot', hint: 'Copy it, then press Ctrl+V or ⌘V in the chat', onPress: () => say('Press Ctrl+V or ⌘V to paste') }]),

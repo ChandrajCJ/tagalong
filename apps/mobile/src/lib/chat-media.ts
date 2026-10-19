@@ -12,7 +12,9 @@ export const pickFromLibrary = async (room: number): Promise<PickedImage[] | str
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) return 'Allow photo access to send photos.';
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
+    mediaTypes: ['images', 'videos'],
+    videoMaxDuration: 60,
+    videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
     allowsMultipleSelection: true,
     selectionLimit: Math.max(1, Math.min(room, MAX_CHAT_IMAGES)),
     exif: true,
@@ -68,7 +70,9 @@ export const asViewerPhotos = (message: ChatMessage): Photo[] =>
       uploadedBy: message.senderId ?? image.id,
       uploaderName: message.senderName,
       batchId: image.id,
-      contentType: 'image/jpeg',
+      contentType: image.kind === 'video' ? 'video/mp4' : 'image/jpeg',
+      kind: image.kind,
+      durationMs: image.durationMs,
       sizeBytes: null,
       width: image.width,
       height: image.height,

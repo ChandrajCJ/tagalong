@@ -47,6 +47,9 @@ export const ChatImage = z.object({
   url: z.string().url().nullable(),
   /** Also in the trip's album. */
   inAlbum: z.boolean(),
+  /** A video plays in the viewer; its thumbnail is the poster frame. */
+  kind: z.enum(['photo', 'video']).default('photo'),
+  durationMs: z.number().int().nullable().default(null),
 });
 export type ChatImage = z.infer<typeof ChatImage>;
 

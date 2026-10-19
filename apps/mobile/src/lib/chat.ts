@@ -4,7 +4,7 @@ import { MESSAGE_EDIT_WINDOW_MS, type ChatMessage, type ReadState } from '@tagal
 export type LocalMessage = ChatMessage & {
   status?: 'sending' | 'failed';
   /** Photos still on this phone, shown while they upload. */
-  localUris?: string[];
+  localUris?: { uri: string; video: boolean }[];
 };
 
 export type ChatRow =
