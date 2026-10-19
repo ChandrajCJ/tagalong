@@ -90,8 +90,12 @@ class RealtimeClient {
     const ws = new WebSocket(`${GATEWAY_URL}/ws?${query}`);
     this.ws = ws;
 
+    // Accepted once the gateway says "ready": opening only means a proxy answered.
+    let accepted = false;
+    let opened = false;
+
     ws.onopen = () => {
-      this.backoff = 1000;
+      opened = true;
       for (const tripId of this.listeners.keys()) this.send({ op: 'subscribe', tripId });
       if (this.everConnected) this.broadcast({ kind: 'reconnected' });
       this.everConnected = true;
@@ -104,6 +108,10 @@ class RealtimeClient {
       } catch {
         return;
       }
+      if (parsed.kind === 'ready') {
+        accepted = true;
+        this.backoff = 1000;
+      }
       const tripId = tripOf(parsed);
       if (tripId) this.listeners.get(tripId)?.forEach((l) => l(parsed));
     };
@@ -112,8 +120,9 @@ class RealtimeClient {
       if (this.ws !== ws) return;
       this.ws = null;
       if (!this.running) return;
-      // 4401: our access token expired. Refresh it, then try again.
-      if (e.code === 4401) await refreshAccessToken().catch(() => false);
+      // Turned away (4401), or opened but never accepted: some proxies drop the
+      // close code, so treat both as an expired access token. Refresh, then retry.
+      if (e.code === 4401 || (opened && !accepted)) await refreshAccessToken().catch(() => false);
       this.scheduleRetry();
     };
   }

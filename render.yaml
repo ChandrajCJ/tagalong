@@ -2,9 +2,9 @@
 # Render → New → Blueprint → pick this repo. It creates all three services and
 # asks for every value marked `sync: false` (the secrets; nothing secret lives here).
 #
-# Service names become addresses: tagalong-api-9twu.onrender.com and
-# tagalong.onrender.com. If Render says a name is taken, rename it here and
-# update the URLs below to match.
+# Render adds a suffix when a name is taken, so our addresses are
+# tagalong-api-9twu.onrender.com (API) and tagalong-u4wh.onrender.com (web app).
+# The URLs below, CORS_ORIGINS and apps/mobile/eas.json must match them.
 
 services:
   # API + live updates (/ws) + background jobs, all in one process (src/all.ts),

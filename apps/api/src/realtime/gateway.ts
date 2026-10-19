@@ -81,6 +81,18 @@ export const registerGateway = async (
     if (conn.socket.readyState === conn.socket.OPEN) conn.socket.send(JSON.stringify(message));
   };
 
+  /**
+   * Turns away a socket whose sign-in didn't check out. Some proxies (Render's)
+   * don't pass custom close codes on, so say it in a message first, and don't
+   * wait for a goodbye that may never come back through them.
+   */
+  const reject = (socket: WebSocket) => {
+    const message: ServerMessage = { kind: 'error', code: 'unauthorized', message: 'Sign in again' };
+    if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+    socket.close(4401, 'unauthorized');
+    setTimeout(() => socket.terminate(), 1000).unref();
+  };
+
   const join = async (conn: Conn, tripId: string) => {
     let room = rooms.get(tripId);
     if (!room) rooms.set(tripId, (room = new Set()));
@@ -198,7 +210,7 @@ export const registerGateway = async (
         try {
           claims = app.jwt.verify<AccessClaims>(request.query.token ?? '');
         } catch {
-          socket.close(4401, 'unauthorized');
+          reject(socket);
           return null;
         }
         const [user] = await db
@@ -206,7 +218,7 @@ export const registerGateway = async (
           .from(users)
           .where(eq(users.id, claims.sub));
         if (!user) {
-          socket.close(4401, 'unauthorized');
+          reject(socket);
           return null;
         }
         const requested = request.query.clientId;

@@ -56,6 +56,8 @@ describe('realtime gateway', () => {
   it('closes connections without a valid sign-in', async () => {
     const client = await connect(port, 'not-a-token');
     expect(await client.closed).toBe(4401);
+    // Said in a message too, for proxies that drop custom close codes.
+    expect(client.messages).toContainEqual(expect.objectContaining({ kind: 'error', code: 'unauthorized' }));
   });
 
   it("won't subscribe a non-member to a trip", async () => {
