@@ -76,11 +76,9 @@ services:
       - path: /.well-known/assetlinks.json
         name: Content-Type
         value: application/json
+    # Real files (assetlinks.json, the map worker) are served as themselves:
+    # Render only applies rewrites when no file matches the path.
     routes:
-      # Served as the file itself, before the catch-all below sends everything to the app.
-      - type: rewrite
-        source: /.well-known/assetlinks.json
-        destination: /.well-known/assetlinks.json
       - type: rewrite
         source: /*
         destination: /index.html
