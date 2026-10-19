@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { hasRole, listsSummary, NextUp } from '@tagalong/shared';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Body, Button, Label } from '@/components/ui';
@@ -52,15 +52,15 @@ export default function TripOverview() {
       <View style={[styles.cover, { backgroundColor: trip.coverColor }]}>
         <SafeAreaView edges={['top']} style={styles.coverInner}>
           <View style={styles.coverTop}>
-            <RoundButton icon="chevron-left" label="Back to your trips" onPress={() => router.replace('/trips')} />
+            <RoundButton icon="chevron-left" label="Back to your trips" tipAlign="left" onPress={() => router.replace('/trips')} />
             <View style={{ flexDirection: 'row', gap: space.sm }}>
               {canInvite ? (
-                <RoundButton icon="edit-2" label="Edit" onPress={() => router.push(`${base}/edit`)} />
+                <RoundButton icon="edit-2" label="Edit trip" onPress={() => router.push(`${base}/edit`)} />
               ) : null}
               {canInvite ? (
-                <RoundButton icon="user-plus" label="Invite" onPress={() => router.push(`${base}/invite`)} />
+                <RoundButton icon="user-plus" label="Invite people" onPress={() => router.push(`${base}/invite`)} />
               ) : null}
-              <RoundButton icon="users" label="People" onPress={() => router.push(`${base}/members`)} />
+              <RoundButton icon="users" label="People on this trip" onPress={() => router.push(`${base}/members`)} />
             </View>
           </View>
           <View style={{ gap: 6 }}>
@@ -310,18 +310,55 @@ function GetReadyCard() {
   );
 }
 
-function RoundButton({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
-  const iconOnly = icon === 'chevron-left';
+/**
+ * A round icon button. Its name shows as a tooltip on hover (web) or a long
+ * press (phones), and screen readers read it as the button's label.
+ */
+function RoundButton({
+  icon,
+  label,
+  onPress,
+  tipAlign = 'right',
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  /** Which edge the tooltip lines up with, so it stays on screen. */
+  tipAlign?: 'left' | 'right';
+}) {
+  const [tip, setTip] = useState(false);
+  const hideLater = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (hideLater.current) clearTimeout(hideLater.current);
+  }, []);
+  const showBriefly = () => {
+    setTip(true);
+    if (hideLater.current) clearTimeout(hideLater.current);
+    hideLater.current = setTimeout(() => setTip(false), 1500);
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={[styles.round, !iconOnly && styles.roundLabelled]}
-    >
-      <Feather name={icon} size={iconOnly ? 20 : 16} color={colors.ink} />
-      {iconOnly ? null : <Text style={styles.roundText}>{label}</Text>}
-    </Pressable>
+    <View style={styles.roundWrap}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onPress}
+        onLongPress={showBriefly}
+        onHoverIn={() => setTip(true)}
+        onHoverOut={() => setTip(false)}
+        onFocus={() => setTip(true)}
+        onBlur={() => setTip(false)}
+        style={styles.round}
+      >
+        <Feather name={icon} size={icon === 'chevron-left' ? 20 : 17} color={colors.ink} />
+      </Pressable>
+      {tip ? (
+        <View pointerEvents="none" style={[styles.tooltip, tipAlign === 'left' ? { left: 0 } : { right: 0 }]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Text style={styles.tooltipText} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -363,8 +400,17 @@ const styles = StyleSheet.create({
   explore: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   exploreIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
   exploreTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
-  roundLabelled: { width: 'auto', flexDirection: 'row', gap: 6, paddingHorizontal: 12 },
-  roundText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
+  roundWrap: { position: 'relative', zIndex: 2 },
+  tooltip: {
+    position: 'absolute',
+    top: '100%',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: colors.ink,
+  },
+  tooltipText: { fontFamily: fonts.medium, fontSize: 12, color: '#FFFFFF' },
   title: { fontFamily: fonts.display, fontSize: 30, color: colors.ink },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   coverMeta: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
