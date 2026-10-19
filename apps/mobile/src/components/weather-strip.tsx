@@ -77,5 +77,5 @@ const styles = StyleSheet.create({
   weekday: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   max: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   min: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
-  rain: { fontFamily: fonts.bold, fontSize: 11, color: '#3F6E8C' },
+  rain: { fontFamily: fonts.bold, fontSize: 11, color: colors.rain },
 });

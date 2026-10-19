@@ -214,13 +214,13 @@ export default function TripOverview() {
             style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
           >
             <View style={styles.exploreIcon}>
-              <Feather name="compass" size={22} color="#FFFFFF" />
+              <Feather name="compass" size={22} color={colors.onFill} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.exploreTitle}>Explore {trip.destination.split(',')[0]}</Text>
               <Body style={{ fontSize: 13 }}>Sights, food, beaches and more nearby. Add favourites to Ideas.</Body>
             </View>
-            <Feather name="chevron-right" size={18} color="#8C867B" />
+            <Feather name="chevron-right" size={18} color={colors.faint} />
           </Pressable>
         ) : canInvite ? (
           <Pressable
@@ -229,13 +229,13 @@ export default function TripOverview() {
             style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
           >
             <View style={[styles.exploreIcon, { backgroundColor: colors.coral }]}>
-              <Feather name="map-pin" size={22} color="#FFFFFF" />
+              <Feather name="map-pin" size={22} color={colors.onFill} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.exploreTitle}>Put {trip.destination.split(',')[0]} on the map</Text>
               <Body style={{ fontSize: 13 }}>Pick the destination from the suggestions to get weather and places to go.</Body>
             </View>
-            <Feather name="chevron-right" size={18} color="#8C867B" />
+            <Feather name="chevron-right" size={18} color={colors.faint} />
           </Pressable>
         ) : null}
 
@@ -360,7 +360,7 @@ function NextUpCard({ tripId }: { tripId: string }) {
         style={({ pressed }) => [styles.nextUp, pressed && { opacity: 0.8 }]}
       >
         <View style={styles.nextIcon}>
-          <Feather name={meta.icon} size={20} color="#FFFFFF" />
+          <Feather name={meta.icon} size={20} color={colors.onFill} />
         </View>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.nextTitle} numberOfLines={1}>
@@ -402,8 +402,8 @@ function GetReadyCard() {
       onPress={() => router.push(`/trips/${trip.id}/lists`)}
       style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
     >
-      <View style={[styles.exploreIcon, { backgroundColor: '#5B4E86' }]}>
-        <Feather name="check-square" size={22} color="#FFFFFF" />
+      <View style={[styles.exploreIcon, { backgroundColor: colors.violet }]}>
+        <Feather name="check-square" size={22} color={colors.onFill} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.exploreTitle}>Get ready</Text>
@@ -411,7 +411,7 @@ function GetReadyCard() {
           {parts.length > 0 ? parts.join(' · ') : 'Packing list, to-dos and notes like Wi-Fi codes and emergency numbers.'}
         </Body>
       </View>
-      <Feather name="chevron-right" size={18} color="#8C867B" />
+      <Feather name="chevron-right" size={18} color={colors.faint} />
     </Pressable>
   );
 }
@@ -439,7 +439,7 @@ function ActionRow(props: {
         <Text style={styles.actionTitle}>{props.title}</Text>
         <Body style={{ fontSize: 13 }}>{props.subtitle}</Body>
       </View>
-      <Feather name="chevron-right" size={18} color="#8C867B" />
+      <Feather name="chevron-right" size={18} color={colors.faint} />
     </Pressable>
   );
 }
@@ -453,10 +453,10 @@ const styles = StyleSheet.create({
   explore: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   exploreIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent },
   exploreTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
-  title: { fontFamily: fonts.display, fontSize: 30, color: colors.ink },
+  title: { fontFamily: fonts.display, fontSize: 30, color: colors.onCover },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  onPhoto: { color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 6 },
-  coverMeta: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
+  onPhoto: { color: colors.onPhoto, textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 6 },
+  coverMeta: { fontFamily: fonts.medium, fontSize: 14, color: colors.onCover },
   body: { padding: space.xl, gap: space.md },
   problem: { padding: space.md, borderRadius: radius.lg, backgroundColor: colors.coralSoft },
   archivedNote: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
@@ -464,12 +464,12 @@ const styles = StyleSheet.create({
   countdown: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
   list: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
   action: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md },
-  divider: { borderBottomWidth: 1, borderBottomColor: '#EFEAE2' },
+  divider: { borderBottomWidth: 1, borderBottomColor: colors.divider },
   actionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   actionTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   nextUp: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderRadius: radius.lg, backgroundColor: colors.accent },
-  nextIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
-  nextTitle: { fontFamily: fonts.bold, fontSize: 16, color: '#FFFFFF' },
+  nextIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.onFillWash, alignItems: 'center', justifyContent: 'center' },
+  nextTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.onFill },
   nextWhen: { fontFamily: fonts.medium, fontSize: 13, color: colors.onAccentMuted },
-  nextDetail: { fontFamily: fonts.bold, fontSize: 13, letterSpacing: 0.5, color: '#FFFFFF' },
+  nextDetail: { fontFamily: fonts.bold, fontSize: 13, letterSpacing: 0.5, color: colors.onFill },
 });

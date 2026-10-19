@@ -98,7 +98,7 @@ export function CoverPhotoPicker({ trip, onChanged }: { trip: Trip; onChanged: (
         credit={trip.coverCredit}
         style={styles.preview}
       >
-        {busy ? <ActivityIndicator color="#FFFFFF" style={{ flex: 1 }} /> : null}
+        {busy ? <ActivityIndicator color={colors.onPhoto} style={{ flex: 1 }} /> : null}
       </CoverImage>
       <View style={styles.row}>
         <Button

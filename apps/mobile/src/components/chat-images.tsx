@@ -69,7 +69,7 @@ export function PendingImages({ items }: { items: { uri: string; video: boolean 
         // A video on the phone has no picture to show until its poster is made: a dark tile says what it is.
         video ? (
           <View key={uri} style={[styles.tile, cell, styles.pendingVideo]}>
-            <Feather name="video" size={22} color="#FFFFFF" />
+            <Feather name="video" size={22} color={colors.onPhoto} />
           </View>
         ) : (
           <Image key={uri} source={{ uri }} contentFit="cover" style={[styles.tile, cell, { opacity: 0.6 }]} />
@@ -96,7 +96,7 @@ export function LinkPreviewCard({ preview, mine }: { preview: LinkPreview; mine:
           </Text>
         ) : null}
         {preview.title ? (
-          <Text style={[styles.title, mine && { color: '#FFFFFF' }]} numberOfLines={2}>
+          <Text style={[styles.title, mine && { color: colors.onFill }]} numberOfLines={2}>
             {preview.title}
           </Text>
         ) : null}
@@ -113,11 +113,11 @@ export function LinkPreviewCard({ preview, mine }: { preview: LinkPreview; mine:
 const styles = StyleSheet.create({
   grid: { width: GRID, flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
   tile: { borderRadius: 12, backgroundColor: colors.line },
-  pendingVideo: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#2A2925' },
+  pendingVideo: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mediaPlaceholder },
   more: { ...StyleSheet.absoluteFill, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
-  moreText: { fontFamily: fonts.bold, fontSize: 22, color: '#FFFFFF' },
+  moreText: { fontFamily: fonts.bold, fontSize: 22, color: colors.onPhoto },
   card: { width: GRID, marginTop: 6, borderRadius: radius.md, overflow: 'hidden', backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.line },
-  cardMine: { backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'transparent' },
+  cardMine: { backgroundColor: colors.onFillWash, borderColor: 'transparent' },
   cardImage: { width: GRID, height: GRID / 1.91 },
   cardText: { padding: 8, gap: 2 },
   site: { fontFamily: fonts.bold, fontSize: 11, color: colors.muted, textTransform: 'uppercase' },

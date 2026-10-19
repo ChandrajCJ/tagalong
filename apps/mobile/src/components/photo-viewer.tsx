@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { savePhotos } from '@/lib/photos';
-import { fonts, space } from '@/theme';
+import { colors, fonts, space } from '@/theme';
 
 interface Props {
   photos: Photo[];
@@ -132,7 +132,7 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
 
         <SafeAreaView edges={['top']} style={styles.topBar} pointerEvents="box-none">
           <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={styles.iconButton}>
-            <Feather name="x" size={24} color="#FFFFFF" />
+            <Feather name="x" size={24} color={colors.onPhoto} />
           </Pressable>
           {current ? (
             <View style={{ flex: 1 }}>
@@ -156,7 +156,7 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
               onPress={() => onFavourite(current)}
               style={styles.action}
             >
-              <Feather name="heart" size={20} color={current.favourited ? '#FF6B6B' : '#FFFFFF'} />
+              <Feather name="heart" size={20} color={current.favourited ? colors.heart : colors.onPhoto} />
               <Text style={styles.actionText}>
                 {current.favourites > 0 ? current.favourites : 'Heart'}
               </Text>
@@ -174,17 +174,17 @@ export function PhotoViewer({ photos, startId, canDelete, onDelete, onFavourite,
               }}
               style={styles.action}
             >
-              <Feather name={saveLabel === 'Saved' ? 'check' : 'download'} size={20} color="#FFFFFF" />
+              <Feather name={saveLabel === 'Saved' ? 'check' : 'download'} size={20} color={colors.onPhoto} />
               <Text style={styles.actionText}>{saveLabel}</Text>
             </Pressable>
           ) : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Share photo" onPress={share} style={styles.action}>
-            <Feather name="share" size={20} color="#FFFFFF" />
+            <Feather name="share" size={20} color={colors.onPhoto} />
             <Text style={styles.actionText}>Share</Text>
           </Pressable>
           {current && canDelete(current) ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Delete photo" onPress={confirmDelete} style={styles.action}>
-              <Feather name="trash-2" size={20} color="#FFFFFF" />
+              <Feather name="trash-2" size={20} color={colors.onPhoto} />
               <Text style={styles.actionText}>Delete</Text>
             </Pressable>
           ) : null}
@@ -207,13 +207,13 @@ function VideoPage({ url, active, width, height }: { url: string; active: boolea
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000000' },
+  screen: { flex: 1, backgroundColor: colors.photoBg },
   topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.sm, paddingBottom: space.sm, backgroundColor: 'rgba(0,0,0,0.35)' },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  who: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
-  when: { fontFamily: fonts.body, fontSize: 12, color: '#D9D9D9' },
-  count: { fontFamily: fonts.medium, fontSize: 13, color: '#D9D9D9', paddingHorizontal: space.md },
+  who: { fontFamily: fonts.bold, fontSize: 15, color: colors.onPhoto },
+  when: { fontFamily: fonts.body, fontSize: 12, color: colors.onPhotoMuted },
+  count: { fontFamily: fonts.medium, fontSize: 13, color: colors.onPhotoMuted, paddingHorizontal: space.md },
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: space.xxl, paddingTop: space.md, backgroundColor: 'rgba(0,0,0,0.35)' },
   action: { alignItems: 'center', gap: 4, minWidth: 64, minHeight: 44, paddingVertical: space.xs },
-  actionText: { fontFamily: fonts.medium, fontSize: 12, color: '#FFFFFF' },
+  actionText: { fontFamily: fonts.medium, fontSize: 12, color: colors.onPhoto },
 });

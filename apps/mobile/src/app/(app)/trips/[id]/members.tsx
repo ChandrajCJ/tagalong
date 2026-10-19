@@ -111,7 +111,7 @@ export default function Members() {
                 <Text style={[styles.role, m.role === 'owner' && { color: colors.accentInk }]}>
                   {ROLE_LABEL[m.role]}
                 </Text>
-                {canManage ? <Feather name="more-horizontal" size={18} color="#8C867B" /> : null}
+                {canManage ? <Feather name="more-horizontal" size={18} color={colors.faint} /> : null}
               </Pressable>
             );
           })}
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   back: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   list: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 60 },
-  divider: { borderTopWidth: 1, borderTopColor: '#EFEAE2' },
+  divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   name: { flex: 1, fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   you: { fontFamily: fonts.body, color: colors.muted },
   role: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },

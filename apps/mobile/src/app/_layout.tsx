@@ -3,13 +3,16 @@ import { Fraunces_600SemiBold, useFonts } from '@expo-google-fonts/fraunces';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { UpdateBanner } from '@/components/update-banner';
 import { SessionProvider, useSession } from '@/lib/session';
-import { colors } from '@/theme';
+import { colors, scheme } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
+// What shows behind screens while they open, so dark mode never flashes white.
+void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => undefined);
 
 function Navigator() {
   const { status } = useSession();
@@ -29,7 +32,7 @@ function Navigator() {
 
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         {/* Signed-out screens and signed-in screens can't be reached from each other. */}
         <Stack.Protected guard={status === 'signedOut'}>

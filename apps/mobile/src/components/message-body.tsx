@@ -15,7 +15,7 @@ interface Props {
 
 /** A message's text: @mentions highlighted (yours stands out), links and phone numbers tappable. */
 export function MessageBody({ text, mentioned, me, onAccent, style }: Props) {
-  const link: TextStyle = { color: onAccent ? '#FFFFFF' : colors.accent, fontFamily: fonts.medium, textDecorationLine: 'underline' };
+  const link: TextStyle = { color: onAccent ? colors.onFill : colors.accent, fontFamily: fonts.medium, textDecorationLine: 'underline' };
   return (
     <Text style={style}>
       {mentionSegments(text, mentioned).map((segment, i) => {
@@ -25,8 +25,8 @@ export function MessageBody({ text, mentioned, me, onAccent, style }: Props) {
           <Text
             key={i}
             style={[
-              { fontFamily: fonts.bold, color: onAccent ? '#FFFFFF' : colors.accent },
-              isMe && { backgroundColor: onAccent ? 'rgba(255,255,255,0.22)' : colors.accentSoft, borderRadius: 4 },
+              { fontFamily: fonts.bold, color: onAccent ? colors.onFill : colors.accent },
+              isMe && { backgroundColor: onAccent ? colors.onFillWash : colors.accentSoft, borderRadius: 4 },
             ]}
           >
             {segment.text}

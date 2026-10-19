@@ -402,7 +402,7 @@ export default function PlanTab() {
                 {item.latitude !== null ? (
                   <Feather name="map-pin" size={13} color={colors.muted} accessibilityLabel="On the map" />
                 ) : null}
-                {canEdit ? <Feather name="move" size={15} color="#B9B2A6" /> : null}
+                {canEdit ? <Feather name="move" size={15} color={colors.faint} /> : null}
               </View>
               {meta.length > 0 ? <Body style={{ fontSize: 13 }}>{meta.join(' · ')}</Body> : null}
             </Pressable>
@@ -484,11 +484,11 @@ export default function PlanTab() {
                     style={[styles.pill, on && styles.pillOn]}
                   >
                     {key === ANYTIME ? (
-                      <Text style={[styles.pillNoDay, on && { color: '#FFFFFF' }]}>No{'\n'}day</Text>
+                      <Text style={[styles.pillNoDay, on && { color: colors.onFill }]}>No{'\n'}day</Text>
                     ) : (
                       <>
-                        <Text style={[styles.pillDay, on && { color: '#E4DED4' }]}>{weekdayOf(key)}</Text>
-                        <Text style={[styles.pillNum, on && { color: '#FFFFFF' }]}>{dayOfMonth(key)}</Text>
+                        <Text style={[styles.pillDay, on && { color: colors.onFillMuted }]}>{weekdayOf(key)}</Text>
+                        <Text style={[styles.pillNum, on && { color: colors.onFill }]}>{dayOfMonth(key)}</Text>
                       </>
                     )}
                   </Pressable>
@@ -533,7 +533,7 @@ export default function PlanTab() {
                       onPress={() => setMode(m)}
                       style={[styles.mode, mode === m && styles.modeOn]}
                     >
-                      <Text style={[styles.modeText, mode === m && { color: '#FFFFFF' }]}>{MODE_META[m].label}</Text>
+                      <Text style={[styles.modeText, mode === m && { color: colors.onFill }]}>{MODE_META[m].label}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -571,7 +571,7 @@ export default function PlanTab() {
 
       {toast ? (
         <View style={styles.toast} accessibilityLiveRegion="polite">
-          <Body style={{ color: '#FFFFFF' }}>{toast}</Body>
+          <Body style={{ color: colors.onFill }}>{toast}</Body>
         </View>
       ) : null}
 
@@ -615,7 +615,7 @@ export default function PlanTab() {
 
           {canEdit && items && items.length > 0 ? (
             <Pressable accessibilityRole="button" accessibilityLabel="Add to plan" onPress={() => openSheet()} style={styles.fab}>
-              <Feather name="plus" size={20} color="#FFFFFF" />
+              <Feather name="plus" size={20} color={colors.onFill} />
               <Text style={styles.fabText}>Add to plan</Text>
             </Pressable>
           ) : null}
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
   pillDay: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   pillNum: { fontFamily: fonts.bold, fontSize: 18, color: colors.ink },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  viewSwitch: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: '#ECE7DF' },
+  viewSwitch: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: colors.track },
   viewOption: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingHorizontal: 12, borderRadius: radius.pill },
   viewOptionOn: { backgroundColor: colors.surface },
   viewText: { fontFamily: fonts.bold, fontSize: 13, color: colors.muted },
@@ -734,20 +734,20 @@ const styles = StyleSheet.create({
   cardDragging: { borderColor: colors.accent, transform: [{ scale: 1.02 }] },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cardTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
-  editingTag: { position: 'absolute', top: -10, right: 12, fontFamily: fonts.bold, fontSize: 11, color: '#FFFFFF', backgroundColor: colors.coral, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  editingTag: { position: 'absolute', top: -10, right: 12, fontFamily: fonts.bold, fontSize: 11, color: colors.onFill, backgroundColor: colors.coral, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
+  fabText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onFill },
   pillNoDay: { fontFamily: fonts.bold, fontSize: 12, lineHeight: 15, textAlign: 'center', color: colors.ink },
-  dayNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: '#FBF3DC' },
+  dayNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: radius.md, backgroundColor: colors.note },
   dayNoteEmpty: { backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 2 },
   dayNoteText: { flex: 1, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, color: colors.ink },
   todoBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
   todoBadgeText: { fontFamily: fonts.bold, fontSize: 11, color: colors.accentInk },
   routeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
   routeTotal: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted, flexBasis: '100%' },
-  modes: { flexDirection: 'row', padding: 2, borderRadius: radius.pill, backgroundColor: '#ECE7DF' },
+  modes: { flexDirection: 'row', padding: 2, borderRadius: radius.pill, backgroundColor: colors.track },
   mode: { minHeight: 30, justifyContent: 'center', paddingHorizontal: 10, borderRadius: radius.pill },
   modeOn: { backgroundColor: colors.ink },
   modeText: { fontFamily: fonts.bold, fontSize: 12, color: colors.muted },

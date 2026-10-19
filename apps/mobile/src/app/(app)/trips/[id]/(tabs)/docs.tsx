@@ -308,13 +308,13 @@ export default function DocsTab() {
             onPress={() => router.push(`/trips/${trip.id}/imports`)}
             style={[styles.fromEmail, openCount > 0 && styles.fromEmailWaiting]}
           >
-            <Feather name="mail" size={16} color={openCount > 0 ? '#FFFFFF' : colors.accent} />
-            <Text style={[styles.fromEmailText, openCount > 0 && { color: '#FFFFFF' }]}>
+            <Feather name="mail" size={16} color={openCount > 0 ? colors.onFill : colors.accent} />
+            <Text style={[styles.fromEmailText, openCount > 0 && { color: colors.onFill }]}>
               {openCount > 0
                 ? `${openCount} ${openCount === 1 ? 'booking' : 'bookings'} found in email to check`
                 : 'Add bookings from email'}
             </Text>
-            <Feather name="chevron-right" size={16} color={openCount > 0 ? '#FFFFFF' : colors.muted} />
+            <Feather name="chevron-right" size={16} color={openCount > 0 ? colors.onFill : colors.muted} />
           </Pressable>
         ) : null}
 
@@ -325,7 +325,7 @@ export default function DocsTab() {
             value={search}
             onChangeText={setSearch}
             placeholder="Search by name"
-            placeholderTextColor="#8C867B"
+            placeholderTextColor={colors.faint}
             style={styles.searchInput}
           />
           {search ? (
@@ -346,7 +346,7 @@ export default function DocsTab() {
                 onPress={() => setFilter(f)}
                 style={[styles.chip, on && styles.chipOn]}
               >
-                <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>
+                <Text style={[styles.chipText, on && { color: colors.onFill }]}>
                   {f === 'all' ? 'All' : DOCUMENT_KIND_META[f].label}
                 </Text>
               </Pressable>
@@ -357,7 +357,7 @@ export default function DocsTab() {
 
       {toast ? (
         <View style={styles.toast} accessibilityLiveRegion="polite">
-          <Body style={{ color: '#FFFFFF' }}>{toast}</Body>
+          <Body style={{ color: colors.onFill }}>{toast}</Body>
         </View>
       ) : null}
 
@@ -442,7 +442,7 @@ export default function DocsTab() {
               label="PDF or file"
               onPress={pickFile}
               style={{ flex: 1 }}
-              icon={<Feather name="upload" size={18} color="#FFFFFF" />}
+              icon={<Feather name="upload" size={18} color={colors.onFill} />}
             />
           </View>
         </View>

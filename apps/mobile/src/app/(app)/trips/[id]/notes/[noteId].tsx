@@ -204,7 +204,7 @@ export default function NoteScreen() {
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Title"
-                placeholderTextColor="#8C867B"
+                placeholderTextColor={colors.faint}
                 maxLength={100}
                 style={styles.titleInput}
               />
@@ -213,7 +213,7 @@ export default function NoteScreen() {
                 value={body}
                 onChangeText={setBody}
                 placeholder={'Write anything the group should be able to find.\nLinks and phone numbers become tappable.'}
-                placeholderTextColor="#8C867B"
+                placeholderTextColor={colors.faint}
                 multiline
                 maxLength={NOTE_MAX_CHARS}
                 autoFocus={startEditing === '1'}

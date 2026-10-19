@@ -186,8 +186,8 @@ export function IdeaSheet({ visible, idea, tripId, canEdit, onSave, onDelete, on
                       onPress={() => set('type', t)}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Feather name={ITEM_TYPE_META[t].icon} size={14} color={on ? '#FFFFFF' : colors.ink} />
-                      <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>
+                      <Feather name={ITEM_TYPE_META[t].icon} size={14} color={on ? colors.onFill : colors.ink} />
+                      <Text style={[styles.chipText, on && { color: colors.onFill }]}>
                         {ITEM_TYPE_META[t].label}
                       </Text>
                     </Pressable>

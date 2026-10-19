@@ -198,8 +198,8 @@ export function ItemSheet(props: Props) {
                       onPress={() => set('type', t)}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Feather name={ITEM_TYPE_META[t].icon} size={14} color={on ? '#FFFFFF' : colors.ink} />
-                      <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{ITEM_TYPE_META[t].label}</Text>
+                      <Feather name={ITEM_TYPE_META[t].icon} size={14} color={on ? colors.onFill : colors.ink} />
+                      <Text style={[styles.chipText, on && { color: colors.onFill }]}>{ITEM_TYPE_META[t].label}</Text>
                     </Pressable>
                   );
                 })}
@@ -280,7 +280,7 @@ export function ItemSheet(props: Props) {
                       onPress={() => set('day', d)}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>
+                      <Text style={[styles.chipText, on && { color: colors.onFill }]}>
                         {d === ANYTIME ? 'No day yet' : shortDate(d)}
                       </Text>
                     </Pressable>

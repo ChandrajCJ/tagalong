@@ -71,7 +71,16 @@ services:
     buildCommand: npx --yes pnpm@10.18.0 install --frozen-lockfile --filter tagalong --filter "@tagalong/mobile..." && npx --yes pnpm@10.18.0 --filter @tagalong/mobile exec expo export --platform web --output-dir dist
     staticPublishPath: apps/mobile/dist
     # A single-page app: /invite/abc and every other path load index.html.
+    # Android checks this file to let invite links open the installed app (App Links).
+    headers:
+      - path: /.well-known/assetlinks.json
+        name: Content-Type
+        value: application/json
     routes:
+      # Served as the file itself, before the catch-all below sends everything to the app.
+      - type: rewrite
+        source: /.well-known/assetlinks.json
+        destination: /.well-known/assetlinks.json
       - type: rewrite
         source: /*
         destination: /index.html

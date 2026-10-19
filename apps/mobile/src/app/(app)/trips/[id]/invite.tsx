@@ -179,7 +179,7 @@ export default function InviteScreen() {
                       label="Share"
                       onPress={() => void share(role)}
                       style={{ flex: 1 }}
-                      icon={<Feather name="share" size={18} color="#FFFFFF" />}
+                      icon={<Feather name="share" size={18} color={colors.onFill} />}
                     />
                   </View>
                 </>
@@ -243,6 +243,6 @@ const styles = StyleSheet.create({
   linkText: { fontFamily: fonts.medium, fontSize: 14, color: colors.ink },
   list: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
   inviteRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.lg, paddingRight: space.sm, paddingVertical: space.sm },
-  divider: { borderTopWidth: 1, borderTopColor: '#EFEAE2' },
+  divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   inviteTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
 });

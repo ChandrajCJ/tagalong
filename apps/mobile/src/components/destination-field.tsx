@@ -109,7 +109,7 @@ export function DestinationField({ value, picked, onChangeText, onPick, error, a
 const styles = StyleSheet.create({
   list: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, overflow: 'hidden' },
   option: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 52, paddingHorizontal: space.md },
-  divider: { borderTopWidth: 1, borderTopColor: '#EFEAE2' },
+  divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   optionName: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   optionKind: { fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   pickedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

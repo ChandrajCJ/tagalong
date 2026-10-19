@@ -106,7 +106,7 @@ export function PackingSuggestions({ visible, trip, existing, onAdd, onClose }: 
                   style={styles.row}
                 >
                   <View style={[styles.box, on && styles.boxOn]}>
-                    {on ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+                    {on ? <Feather name="check" size={14} color={colors.onFill} /> : null}
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.text}>{s.text}</Text>
@@ -133,7 +133,7 @@ export function PackingSuggestions({ visible, trip, existing, onAdd, onClose }: 
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.4)' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.xl, gap: space.md },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   center: { paddingVertical: space.xxl, alignItems: 'center' },

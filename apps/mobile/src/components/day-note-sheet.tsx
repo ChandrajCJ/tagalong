@@ -97,7 +97,7 @@ export function DayNoteSheet({ visible, tripId, date, day, onSaved, onClose }: P
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.4)' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.xl, gap: space.md },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   notice: { flexDirection: 'row', gap: space.sm, alignItems: 'flex-start', padding: space.md, borderRadius: radius.md, backgroundColor: colors.coralSoft },

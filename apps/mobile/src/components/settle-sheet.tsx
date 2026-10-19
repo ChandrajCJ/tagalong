@@ -100,7 +100,7 @@ export function SettleSheet({ transfer, currency, nameOf, onSave, onClose }: Pro
                     onPress={() => setMethod(m)}
                     style={[styles.chip, on && styles.chipOn]}
                   >
-                    <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{SETTLEMENT_LABELS[m]}</Text>
+                    <Text style={[styles.chipText, on && { color: colors.onFill }]}>{SETTLEMENT_LABELS[m]}</Text>
                   </Pressable>
                 );
               })}
@@ -116,7 +116,7 @@ export function SettleSheet({ transfer, currency, nameOf, onSave, onClose }: Pro
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.4)' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.xl, gap: space.md },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.lineStrong },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },

@@ -20,7 +20,7 @@ function Pin({ pin, selected }: { pin: MapPin; selected: boolean }) {
     <View
       style={[
         styles.pin,
-        pin.outlined ? { backgroundColor: '#FFFFFF', borderColor: pin.color } : { backgroundColor: pin.color },
+        pin.outlined ? { backgroundColor: colors.onPhoto, borderColor: pin.color } : { backgroundColor: pin.color },
         selected && styles.pinSelected,
       ]}
     >
@@ -90,7 +90,7 @@ function ExpoGoMap({ pins, bounds, selectedId, onPressPin, line }: TripMapProps)
 }
 
 const styles = StyleSheet.create({
-  pin: { minWidth: 30, height: 30, paddingHorizontal: 6, borderRadius: 15, borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 3 },
+  pin: { minWidth: 30, height: 30, paddingHorizontal: 6, borderRadius: 15, borderWidth: 2.5, borderColor: colors.onPhoto, alignItems: 'center', justifyContent: 'center', shadowColor: colors.shadow, shadowOpacity: 0.25, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 3 },
   pinSelected: { transform: [{ scale: 1.25 }], borderColor: colors.ink },
-  pinText: { fontFamily: fonts.bold, fontSize: 12, color: '#FFFFFF' },
+  pinText: { fontFamily: fonts.bold, fontSize: 12, color: colors.onPhoto },
 });

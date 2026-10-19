@@ -55,7 +55,7 @@ export function IconButton({ icon, label, onPress, tipAlign = 'right', tone = 'p
         onBlur={() => setTip(false)}
         style={[styles.button, solid ? styles.solid : styles.plain, disabled && { opacity: 0.5 }, style]}
       >
-        <Feather name={icon} size={iconSize} color={solid ? '#FFFFFF' : colors.ink} />
+        <Feather name={icon} size={iconSize} color={solid ? colors.onFill : colors.ink} />
       </Pressable>
       {tip ? (
         <View
@@ -87,5 +87,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.ink,
   },
-  tooltipText: { fontFamily: fonts.medium, fontSize: 12, color: '#FFFFFF' },
+  tooltipText: { fontFamily: fonts.medium, fontSize: 12, color: colors.onFill },
 });

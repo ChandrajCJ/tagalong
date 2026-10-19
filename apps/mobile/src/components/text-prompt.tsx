@@ -69,7 +69,7 @@ export function TextPrompt({ visible, title, message, label, initial, saveLabel 
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.4)' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.xl, gap: space.md },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
 });

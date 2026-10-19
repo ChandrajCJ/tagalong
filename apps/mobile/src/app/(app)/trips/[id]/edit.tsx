@@ -139,7 +139,7 @@ export default function EditTrip() {
                   onPress={() => setCurrency(c)}
                   style={[styles.pill, c === currency && styles.pillOn]}
                 >
-                  <Body style={{ fontFamily: fonts.bold, color: c === currency ? '#FFFFFF' : colors.ink }}>{c}</Body>
+                  <Body style={{ fontFamily: fonts.bold, color: c === currency ? colors.onFill : colors.ink }}>{c}</Body>
                 </Pressable>
               ))}
             </View>

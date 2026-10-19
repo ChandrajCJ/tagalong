@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "sharp": "^0.35.5",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -59,7 +60,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "make:icons": "node scripts/make-icons.mjs",
+    "lint": "eslint src && node scripts/check-colors.mjs && node --experimental-strip-types --no-warnings scripts/check-contrast.mjs",
     "postinstall": "node scripts/copy-map-worker.mjs",
     "eas-build-pre-install": "node scripts/eas-google-services.mjs"
   },

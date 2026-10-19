@@ -158,14 +158,14 @@ export default function ImportsScreen() {
 
           {toast ? (
             <View style={styles.toast} accessibilityLiveRegion="polite">
-              <Body style={{ color: '#FFFFFF', flex: 1 }}>{toast.text}</Body>
+              <Body style={{ color: colors.onFill, flex: 1 }}>{toast.text}</Body>
               {toast.itemId ? (
                 <Pressable accessibilityRole="link" onPress={() => router.push(`/trips/${trip.id}/items/${toast.itemId}`)}>
                   <Text style={styles.toastLink}>Open</Text>
                 </Pressable>
               ) : null}
               <Pressable accessibilityRole="button" accessibilityLabel="Dismiss" onPress={() => setToast(undefined)}>
-                <Feather name="x" size={16} color="#FFFFFF" />
+                <Feather name="x" size={16} color={colors.onFill} />
               </Pressable>
             </View>
           ) : null}
@@ -293,7 +293,7 @@ export default function ImportsScreen() {
               onChangeText={setText}
               multiline
               placeholder="Your booking is confirmed. PNR: K7XQ2M…"
-              placeholderTextColor="#8C867B"
+              placeholderTextColor={colors.faint}
               style={styles.paste}
             />
             <Button label="Find bookings" onPress={() => void findInText()} loading={busy === 'paste'} disabled={!text.trim()} />
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   body: { padding: space.xl, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl * 2 },
   back: { width: 44, height: 44, justifyContent: 'center', marginLeft: -space.sm },
   toast: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
-  toastLink: { fontFamily: fonts.bold, fontSize: 14, color: '#FFFFFF', textDecorationLine: 'underline' },
+  toastLink: { fontFamily: fonts.bold, fontSize: 14, color: colors.onFill, textDecorationLine: 'underline' },
   source: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   candidate: { gap: space.sm, padding: space.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   candidateTop: { flexDirection: 'row', alignItems: 'center', gap: space.md },

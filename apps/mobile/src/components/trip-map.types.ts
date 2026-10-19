@@ -1,3 +1,4 @@
+import { scheme } from '@/theme';
 /** A pin on the trip map: a plan item (coloured by day) or an idea (outlined). */
 export interface MapPin {
   id: string;
@@ -28,4 +29,5 @@ export interface MapLine {
 }
 
 /** Free, open map tiles and style (OpenFreeMap), no key needed. */
-export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+/** OpenFreeMap's street map, or its dark version in the dark look. */
+export const MAP_STYLE_URL = `https://tiles.openfreemap.org/styles/${scheme === 'dark' ? 'dark' : 'liberty'}`;

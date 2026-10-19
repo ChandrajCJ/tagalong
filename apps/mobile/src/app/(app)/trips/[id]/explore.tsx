@@ -139,7 +139,7 @@ export default function ExploreScreen() {
                 label="Add to Ideas"
                 onPress={() => void addToIdeas(place)}
                 loading={adding === place.id}
-                icon={<Feather name="plus" size={16} color="#FFFFFF" />}
+                icon={<Feather name="plus" size={16} color={colors.onFill} />}
                 style={{ minHeight: 40, paddingHorizontal: space.md }}
               />
             )
@@ -204,8 +204,8 @@ export default function ExploreScreen() {
                   onPress={() => setCategory(c)}
                   style={[styles.chip, on && styles.chipOn]}
                 >
-                  <Feather name={CATEGORY_META[c].icon} size={14} color={on ? '#FFFFFF' : colors.ink} />
-                  <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{CATEGORY_META[c].label}</Text>
+                  <Feather name={CATEGORY_META[c].icon} size={14} color={on ? colors.onFill : colors.ink} />
+                  <Text style={[styles.chipText, on && { color: colors.onFill }]}>{CATEGORY_META[c].label}</Text>
                 </Pressable>
               );
             })}

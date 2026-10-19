@@ -345,7 +345,7 @@ export default function PhotosTab() {
           {photo.kind === 'video' ? <VideoBadge durationMs={photo.durationMs} /> : null}
           {selected ? (
             <View style={[styles.check, selected.has(photo.id) && styles.checkOn]}>
-              {selected.has(photo.id) ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+              {selected.has(photo.id) ? <Feather name="check" size={14} color={colors.onPhoto} /> : null}
             </View>
           ) : null}
         </Pressable>
@@ -395,7 +395,7 @@ export default function PhotosTab() {
                 onPress={() => setMode(m.key)}
                 style={[styles.mode, on && styles.modeOn]}
               >
-                <Text style={[styles.modeText, on && { color: '#FFFFFF' }]}>{m.label}</Text>
+                <Text style={[styles.modeText, on && { color: colors.onFill }]}>{m.label}</Text>
               </Pressable>
             );
           })}
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm },
   banner: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm, marginHorizontal: space.xl, marginBottom: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
   bannerError: { backgroundColor: colors.coralSoft },
-  bar: { width: '100%', height: 4, borderRadius: 2, backgroundColor: 'rgba(14,107,92,0.2)', overflow: 'hidden' },
+  bar: { width: '100%', height: 4, borderRadius: 2, backgroundColor: colors.accentTrack, overflow: 'hidden' },
   barFill: { height: 4, backgroundColor: colors.accent },
   list: { paddingHorizontal: space.xl, paddingBottom: 96 },
   modes: { flexDirection: 'row', gap: space.sm, paddingHorizontal: space.xl, paddingBottom: space.sm },
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   tile: { flex: 1, borderRadius: 4, backgroundColor: colors.line },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
-  check: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
+  check: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: colors.onPhoto, backgroundColor: 'rgba(0,0,0,0.25)', alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   selectBar: { gap: space.sm, padding: space.md, paddingHorizontal: space.xl, borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
   selectCount: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink, textAlign: 'center' },

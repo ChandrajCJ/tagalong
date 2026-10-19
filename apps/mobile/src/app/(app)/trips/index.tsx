@@ -173,15 +173,16 @@ function TripCard({ trip }: { trip: TripSummary }) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${trip.name}, ${formatDateRange(trip.startDate, trip.endDate)}${unread ? `, ${trip.unreadCount} new messages` : ''}`}
-        // A plain style: Link asChild hands the Pressable its own style, so a
-        // function style here would be dropped (the card lost its border).
-        style={[styles.card, trip.archived && { opacity: 0.8 }]}
+        // One flat style object: Link asChild hands the Pressable its own style,
+        // so a function style is dropped (the card lost its border) and an
+        // array makes Expo Router throw.
+        style={trip.archived ? StyleSheet.flatten([styles.card, { opacity: 0.8 }]) : styles.card}
       >
         <CoverImage color={trip.coverColor} uri={trip.coverUrl} cacheKey={`cover-${trip.id}`} credit={trip.coverCredit} style={styles.cover}>
           {countdown ? <Text style={styles.chip}>{countdown}</Text> : <View />}
           {unread ? (
             <View style={styles.unread}>
-              <Feather name="message-square" size={12} color="#FFFFFF" />
+              <Feather name="message-square" size={12} color={colors.onFill} />
               <Text style={styles.unreadText}>{unread}</Text>
             </View>
           ) : null}
@@ -231,16 +232,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.lineStrong,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   cover: { height: 120, padding: space.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  chip: { backgroundColor: '#FFFFFF', color: colors.ink, fontFamily: fonts.bold, fontSize: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: 'hidden' },
+  chip: { backgroundColor: colors.surface, color: colors.ink, fontFamily: fonts.bold, fontSize: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: 'hidden' },
   unread: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.coral, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-  unreadText: { color: '#FFFFFF', fontFamily: fonts.bold, fontSize: 12 },
+  unreadText: { color: colors.onFill, fontFamily: fonts.bold, fontSize: 12 },
   cardBody: { padding: space.lg, gap: 4 },
   cardTitle: { fontFamily: fonts.display, fontSize: 21, color: colors.ink },
   meta: { fontFamily: fonts.bold, fontSize: 12, color: colors.accentInk, marginTop: 4 },

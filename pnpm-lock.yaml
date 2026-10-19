@@ -259,6 +259,9 @@ importers:
       '@types/react':
         specifier: ~19.2.2
         version: 19.2.18
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@26.6.2)
       typescript:
         specifier: ~6.0.3
         version: 6.0.3

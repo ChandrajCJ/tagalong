@@ -187,7 +187,7 @@ export default function ListsScreen() {
           style={styles.lineMain}
         >
           <View style={[styles.box, item.scope === 'everyone' && styles.boxRound, done && styles.boxOn, !canTick && { opacity: 0.4 }]}>
-            {done ? <Feather name="check" size={14} color="#FFFFFF" /> : null}
+            {done ? <Feather name="check" size={14} color={colors.onFill} /> : null}
           </View>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[styles.lineText, done && styles.lineDone]}>{item.text}</Text>
@@ -262,7 +262,7 @@ export default function ListsScreen() {
         {kind === 'packing' && canEdit && kindItems.length === 0 ? (
           <Button
             label="Start with suggestions"
-            icon={<Feather name="zap" size={16} color="#FFFFFF" />}
+            icon={<Feather name="zap" size={16} color={colors.onFill} />}
             onPress={() => setSuggesting(true)}
           />
         ) : null}
@@ -294,7 +294,7 @@ export default function ListsScreen() {
                 value={draft}
                 onChangeText={setDraft}
                 placeholder={PLACEHOLDER[kind]}
-                placeholderTextColor="#8C867B"
+                placeholderTextColor={colors.faint}
                 returnKeyType="done"
                 onSubmitEditing={() => void addLine()}
                 maxLength={200}
@@ -307,7 +307,7 @@ export default function ListsScreen() {
                 onPress={() => void addLine()}
                 style={[styles.addButton, !draft.trim() && { opacity: 0.4 }]}
               >
-                <Feather name="plus" size={20} color="#FFFFFF" />
+                <Feather name="plus" size={20} color={colors.onFill} />
               </Pressable>
             </View>
             {kind === 'packing' ? (
@@ -325,7 +325,7 @@ export default function ListsScreen() {
                     onPress={() => setDraftScope(scope)}
                     style={[styles.scopeChip, draftScope === scope && styles.scopeChipOn]}
                   >
-                    <Text style={[styles.scopeText, draftScope === scope && { color: '#FFFFFF' }]}>{label}</Text>
+                    <Text style={[styles.scopeText, draftScope === scope && { color: colors.onFill }]}>{label}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -380,7 +380,7 @@ export default function ListsScreen() {
               <Text style={styles.noteTitle} numberOfLines={1}>
                 {note.title}
               </Text>
-              <Feather name="chevron-right" size={18} color="#8C867B" />
+              <Feather name="chevron-right" size={18} color={colors.faint} />
             </View>
             {note.body ? (
               <Body numberOfLines={2} style={{ fontSize: 13 }}>
@@ -476,8 +476,8 @@ export default function ListsScreen() {
 
           {toast ? (
             <Pressable accessibilityLiveRegion="polite" onPress={() => setToast(undefined)} style={styles.toast}>
-              <Body style={{ color: '#FFFFFF', flex: 1 }}>{toast}</Body>
-              <Feather name="x" size={16} color="#FFFFFF" />
+              <Body style={{ color: colors.onFill, flex: 1 }}>{toast}</Body>
+              <Feather name="x" size={16} color={colors.onFill} />
             </Pressable>
           ) : null}
 
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
   body: { padding: space.xl, paddingTop: space.sm, gap: space.lg, paddingBottom: space.xxl * 2 },
   back: { width: 44, height: 44, justifyContent: 'center', marginLeft: -space.sm },
   center: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
-  tabs: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: '#ECE7DF' },
+  tabs: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: colors.track },
   tab: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
   tabOn: { backgroundColor: colors.surface },
   tabText: { fontFamily: fonts.bold, fontSize: 14, color: colors.muted },
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
   listHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   listTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: 'hidden' },
-  line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#EFEAE2', marginTop: -1 },
+  line: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.divider, marginTop: -1 },
   lineMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 52, paddingLeft: space.md, paddingVertical: space.sm },
   box: { width: 24, height: 24, borderRadius: 7, borderWidth: 1.5, borderColor: colors.lineStrong, alignItems: 'center', justifyContent: 'center' },
   boxRound: { borderRadius: 12 },

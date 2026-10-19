@@ -132,8 +132,8 @@ export function TimeField({ label, value, placeholder = 'No set time', editable 
         onPress={() => setOpen(true)}
         style={[styles.trigger, !editable && { opacity: 0.6 }]}
       >
-        <Feather name="clock" size={16} color={value ? colors.accent : '#8C867B'} />
-        <Text style={[styles.triggerText, !value && { color: '#8C867B' }]}>
+        <Feather name="clock" size={16} color={value ? colors.accent : colors.faint} />
+        <Text style={[styles.triggerText, !value && { color: colors.faint }]}>
           {value ? display(value) : placeholder}
         </Text>
       </Pressable>
@@ -184,7 +184,7 @@ export function TimeField({ label, value, placeholder = 'No set time', editable 
 const styles = StyleSheet.create({
   trigger: { flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 52, paddingHorizontal: space.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
   triggerText: { fontFamily: fonts.body, fontSize: 16, color: colors.ink },
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.4)' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: space.xl, gap: space.sm },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.lineStrong },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
@@ -198,6 +198,6 @@ const styles = StyleSheet.create({
   option: { height: ROW, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
   optionOn: { backgroundColor: colors.ink },
   optionText: { fontFamily: fonts.medium, fontSize: 18, color: colors.ink },
-  optionTextOn: { fontFamily: fonts.bold, color: '#FFFFFF' },
+  optionTextOn: { fontFamily: fonts.bold, color: colors.onFill },
   actions: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
 });

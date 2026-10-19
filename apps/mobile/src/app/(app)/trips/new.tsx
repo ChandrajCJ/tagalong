@@ -179,7 +179,7 @@ export default function NewTrip() {
                   }}
                   style={[styles.pill, c === currency && styles.pillOn]}
                 >
-                  <Body style={{ fontFamily: fonts.bold, color: c === currency ? '#FFFFFF' : colors.ink }}>
+                  <Body style={{ fontFamily: fonts.bold, color: c === currency ? colors.onFill : colors.ink }}>
                     {c}
                   </Body>
                 </Pressable>

@@ -248,8 +248,8 @@ export function BookingSheet(props: Props) {
                       onPress={() => setType(t)}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Feather name={BOOKING_META[t].icon} size={14} color={on ? '#FFFFFF' : colors.ink} />
-                      <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{BOOKING_META[t].label}</Text>
+                      <Feather name={BOOKING_META[t].icon} size={14} color={on ? colors.onFill : colors.ink} />
+                      <Text style={[styles.chipText, on && { color: colors.onFill }]}>{BOOKING_META[t].label}</Text>
                     </Pressable>
                   );
                 })}

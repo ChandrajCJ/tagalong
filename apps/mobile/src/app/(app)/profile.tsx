@@ -7,9 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { NotificationToggles } from '@/components/notification-toggles';
 import { Body, Button, Field, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
+import { chooseAppearance } from '@/lib/appearance';
 import { remindersAvailable, syncReminders } from '@/lib/reminders';
 import { useSession } from '@/lib/session';
-import { colors, fonts, radius, space } from '@/theme';
+import { appearanceChoice, colors, fonts, radius, space, type AppearanceChoice } from '@/theme';
 
 /** Your name as friends see it, and the UPI ID they can pay you back on. */
 export default function ProfileScreen() {
@@ -186,12 +187,39 @@ export default function ProfileScreen() {
                       onPress={() => void changePrefs({ reminderMinutes: m })}
                       style={[styles.lead, on && styles.leadOn]}
                     >
-                      <Text style={[styles.leadText, on && { color: '#FFFFFF' }]}>{m < 60 ? `${m} min` : `${m / 60} h`} before</Text>
+                      <Text style={[styles.leadText, on && { color: colors.onFill }]}>{m < 60 ? `${m} min` : `${m / 60} h`} before</Text>
                     </Pressable>
                   );
                 })}
               </View>
             ) : null}
+          </View>
+
+          <View style={{ gap: space.sm, marginTop: space.xl }}>
+            <Label>Appearance</Label>
+            <View style={styles.leads} accessibilityRole="radiogroup" accessibilityLabel="Appearance">
+              {(
+                [
+                  ['system', 'Like my phone'],
+                  ['light', 'Light'],
+                  ['dark', 'Dark'],
+                ] as [AppearanceChoice, string][]
+              ).map(([value, label]) => {
+                const on = appearanceChoice === value;
+                return (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="radio"
+                    aria-checked={on}
+                    onPress={() => (on ? undefined : void chooseAppearance(value))}
+                    style={[styles.lead, on && styles.leadOn]}
+                  >
+                    <Text style={[styles.leadText, on && { color: colors.onFill }]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Body style={{ fontSize: 13 }}>The app restarts for a moment to switch.</Body>
           </View>
 
           <View style={{ gap: space.sm, marginTop: space.xl }}>

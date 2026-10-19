@@ -179,7 +179,8 @@ This is the app from a traveller's point of view.
     when (and, where the phone allows, where) it was taken. Browse by day, on
     a map, or by the group's favourites (hearts). **Select** several to
     download them to your phone or delete them; a photo shows on a plan item
-    automatically if it was taken during it.
+    automatically if it was taken during it. **Videos** up to a minute go in
+    the album (or a chat) too, and play in the viewer.
 
 ### Money
 27. **Money**: tap **Add expense**. Say what it was, the amount in any
@@ -268,6 +269,7 @@ requests.
 | Polish 1, part A | Archive trips; owners delete and restore them (purged after 30 days); edit and delete chat messages; unread counts on trips, the Chat tab and the app icon |
 | Polish 1, part B | Photos and screenshots in chat, @mentions, link previews, delivered and read ticks with an Info sheet and a read-receipts setting, trip cover photos |
 | Polish 1, part C | Notifications you control (six kinds, per-trip mute), reminders before timed stops, gentle "add a place" hints in the plan, places for ideas, Explore food and nightlife that load |
+| Polish 1, part D | Videos in the album and chat, dark mode (Profile → Appearance), invite links that open the installed app, the new app icon |
 
 ## 6. What's not done yet
 
@@ -283,8 +285,8 @@ Known gaps in what exists today:
   a real UPI app.
 - **Photo locations on Android** only arrive in a real build, where the app
   can ask for the "photo locations" permission; Expo Go can't.
-- **Invite links open the web app,** not the installed app, until Android App
-  Links are set up after the first real build.
+- **Invite links open the installed app** only with the APK from Polish 1
+  part D onwards, once the web app is deployed with its `assetlinks.json`.
 - **iPhone installs** need Apple's paid developer account; until then iPhone
   friends use the web app.
 - **No in-app card or net-banking payments:** those need a paid payment

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.chandrajcj.tagalong",
+      "sha256_cert_fingerprints": [
+        "65:DD:33:5C:12:A2:59:7B:39:51:A4:C7:62:93:D0:7A:45:4C:BE:72:48:9B:EC:34:D6:09:03:65:6F:9B:39:FB"
+      ]
+    }
+  }
+]

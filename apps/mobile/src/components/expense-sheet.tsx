@@ -377,7 +377,7 @@ export function ExpenseSheet({
                         onPress={() => set('paidBy', p.userId)}
                         style={[styles.chip, on && styles.chipOn]}
                       >
-                        <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{name(p)}</Text>
+                        <Text style={[styles.chipText, on && { color: colors.onFill }]}>{name(p)}</Text>
                       </Pressable>
                     );
                   })}
@@ -436,7 +436,7 @@ export function ExpenseSheet({
                               onChangeText={(v) => set('values', { ...form.values, [p.userId]: v })}
                               keyboardType={form.method === 'shares' ? 'number-pad' : 'decimal-pad'}
                               placeholder="0"
-                              placeholderTextColor="#8C867B"
+                              placeholderTextColor={colors.faint}
                               editable={editable}
                               style={styles.valueInput}
                             />
@@ -481,8 +481,8 @@ export function ExpenseSheet({
                       onPress={() => set('category', c)}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Feather name={CATEGORY_META[c].icon} size={14} color={on ? '#FFFFFF' : colors.ink} />
-                      <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>{CATEGORY_META[c].label}</Text>
+                      <Feather name={CATEGORY_META[c].icon} size={14} color={on ? colors.onFill : colors.ink} />
+                      <Text style={[styles.chipText, on && { color: colors.onFill }]}>{CATEGORY_META[c].label}</Text>
                     </Pressable>
                   );
                 })}
@@ -503,7 +503,7 @@ export function ExpenseSheet({
                       onPress={() => set('spentOn', d)}
                       style={[styles.chip, on && styles.chipOn]}
                     >
-                      <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>
+                      <Text style={[styles.chipText, on && { color: colors.onFill }]}>
                         {d === todayIso() ? 'Today' : shortDate(d)}
                       </Text>
                     </Pressable>
@@ -541,13 +541,13 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
-  segments: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: '#ECE7DF' },
+  segments: { flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: colors.track },
   segment: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   segmentOn: { backgroundColor: colors.surface },
   segmentText: { fontFamily: fonts.bold, fontSize: 13, color: colors.muted },
   people: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
   personRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 52, paddingHorizontal: space.md },
-  divider: { borderTopWidth: 1, borderTopColor: '#EFEAE2' },
+  divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   check: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 48 },
   personName: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
   valueInput: { width: 76, minHeight: 40, paddingHorizontal: space.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.bg, fontFamily: fonts.medium, fontSize: 15, color: colors.ink, textAlign: 'right' },

@@ -53,7 +53,7 @@ export function DateRangeField({ label, value, onChange, error }: Props) {
         onPress={() => setOpen(true)}
         style={[styles.field, error ? { borderColor: colors.danger } : null]}
       >
-        <Text style={[styles.fieldText, !summary && { color: '#8C867B' }]}>
+        <Text style={[styles.fieldText, !summary && { color: colors.faint }]}>
           {summary ?? 'Add dates'}
         </Text>
         <CalendarIcon />
@@ -329,8 +329,8 @@ const styles = StyleSheet.create({
   dayEndpoint: { backgroundColor: colors.ink },
   dayToday: { borderWidth: 1.5, borderColor: colors.accent },
   dayText: { fontFamily: fonts.medium, fontSize: 15, color: colors.ink },
-  dayTextPast: { color: '#B9B2A6' },
-  dayTextEndpoint: { color: '#FFFFFF', fontFamily: fonts.bold },
+  dayTextPast: { color: colors.faint },
+  dayTextEndpoint: { color: colors.onFill, fontFamily: fonts.bold },
   footer: {
     paddingHorizontal: SIDE_PADDING,
     paddingTop: space.md,

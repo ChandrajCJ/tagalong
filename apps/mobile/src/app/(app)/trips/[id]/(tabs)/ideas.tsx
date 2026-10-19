@@ -327,7 +327,7 @@ export default function IdeasTab() {
               onPress={() => vote(idea, 'up')}
               style={[styles.voteButton, voted('up') && styles.voteOn]}
             >
-              <Feather name="thumbs-up" size={15} color={voted('up') ? '#FFFFFF' : colors.ink} />
+              <Feather name="thumbs-up" size={15} color={voted('up') ? colors.onFill : colors.ink} />
             </Pressable>
             <Text style={styles.score} accessibilityLabel={`${idea.ups} yes, ${idea.downs} no`}>
               {score > 0 ? `+${score}` : score}
@@ -339,7 +339,7 @@ export default function IdeasTab() {
               onPress={() => vote(idea, 'down')}
               style={[styles.voteButton, voted('down') && styles.voteDownOn]}
             >
-              <Feather name="thumbs-down" size={15} color={voted('down') ? '#FFFFFF' : colors.ink} />
+              <Feather name="thumbs-down" size={15} color={voted('down') ? colors.onFill : colors.ink} />
             </Pressable>
           </View>
 
@@ -379,7 +379,7 @@ export default function IdeasTab() {
                   }
                   style={[styles.removeFromPlan, confirmingRemoval === idea.id && styles.removeConfirm]}
                 >
-                  <Text style={[styles.removeText, confirmingRemoval === idea.id && { color: '#FFFFFF' }]}>
+                  <Text style={[styles.removeText, confirmingRemoval === idea.id && { color: colors.onFill }]}>
                     {confirmingRemoval === idea.id ? 'Tap again to take it out' : 'Take out of plan'}
                   </Text>
                 </Pressable>
@@ -422,7 +422,7 @@ export default function IdeasTab() {
 
       {toast ? (
         <View style={styles.toast} accessibilityLiveRegion="polite">
-          <Body style={{ color: '#FFFFFF' }}>{toast}</Body>
+          <Body style={{ color: colors.onFill }}>{toast}</Body>
         </View>
       ) : null}
 
@@ -469,7 +469,7 @@ export default function IdeasTab() {
           onPress={() => setSheet({ open: true })}
           style={styles.fab}
         >
-          <Feather name="plus" size={20} color="#FFFFFF" />
+          <Feather name="plus" size={20} color={colors.onFill} />
           <Text style={styles.fabText}>Add idea</Text>
         </Pressable>
       ) : null}
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: space.xl, paddingTop: space.md, gap: 4 },
   list: { padding: space.xl, paddingTop: space.md, paddingBottom: 120, gap: space.sm },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, marginBottom: space.sm, overflow: 'hidden' },
-  cardPromoted: { borderColor: colors.accentSoft, backgroundColor: '#FBFDFC' },
+  cardPromoted: { borderColor: colors.accentSoft, backgroundColor: colors.surfaceTint },
   cardMain: { padding: 14, gap: 6 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cardTitle: { flex: 1, fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
@@ -529,6 +529,6 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
+  fabText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onFill },
   toast: { marginHorizontal: space.xl, marginTop: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },
 });

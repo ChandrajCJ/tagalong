@@ -116,7 +116,7 @@ function Action({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: space.xl, paddingBottom: 40, gap: space.md },
   preview: { fontFamily: fonts.body, fontSize: 14, color: colors.muted },
   reactions: { flexDirection: 'row', justifyContent: 'space-between' },

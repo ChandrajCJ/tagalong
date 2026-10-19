@@ -24,7 +24,7 @@ function ReadyBanner() {
   return (
     <SafeAreaView edges={['bottom']} style={styles.wrap} pointerEvents="box-none">
       <View style={styles.banner} accessibilityRole="alert">
-        <Feather name="download" size={18} color="#FFFFFF" />
+        <Feather name="download" size={18} color={colors.onFill} />
         <Text style={styles.text}>A new version of Tagalong is ready.</Text>
         <Pressable accessibilityRole="button" onPress={() => setLater(true)} style={styles.button}>
           <Text style={styles.later}>Later</Text>
@@ -50,9 +50,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     marginBottom: 64,
   },
-  text: { flex: 1, fontFamily: fonts.medium, fontSize: 14, color: '#FFFFFF' },
+  text: { flex: 1, fontFamily: fonts.medium, fontSize: 14, color: colors.onFill },
   button: { minHeight: 40, paddingHorizontal: space.md, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
-  later: { fontFamily: fonts.bold, fontSize: 14, color: '#FFFFFFB3' },
-  restart: { backgroundColor: '#FFFFFF' },
+  later: { fontFamily: fonts.bold, fontSize: 14, color: colors.onFillMuted },
+  restart: { backgroundColor: colors.surface },
   restartText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
 });

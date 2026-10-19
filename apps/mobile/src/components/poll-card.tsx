@@ -72,7 +72,7 @@ export function PollCard({ poll, memberCount, canClose, onPick, onClose, canAddT
                   onPress={() => onAddToPlan?.(option)}
                   style={styles.addPlan}
                 >
-                  <Feather name="plus" size={12} color="#FFFFFF" />
+                  <Feather name="plus" size={12} color={colors.onFill} />
                   <Text style={styles.addPlanText}>Plan</Text>
                 </Pressable>
               ) : null}
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   optionLine: { flexDirection: 'row', alignItems: 'center', paddingRight: 6 },
   optionRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: 10, paddingVertical: 8 },
   addPlan: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 30, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: colors.accent },
-  addPlanText: { fontFamily: fonts.bold, fontSize: 12, color: '#FFFFFF' },
+  addPlanText: { fontFamily: fonts.bold, fontSize: 12, color: colors.onFill },
   planned: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 30, paddingHorizontal: 8, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
   plannedText: { fontFamily: fonts.bold, fontSize: 12, color: colors.accentInk },
   optionLabel: { flex: 1, fontFamily: fonts.medium, fontSize: 14, color: colors.ink },

@@ -24,11 +24,11 @@ interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
 }
 
 const variantStyles: Record<Variant, { bg: string; fg: string; border?: string }> = {
-  primary: { bg: colors.accent, fg: '#FFFFFF' },
-  dark: { bg: colors.ink, fg: '#FFFFFF' },
-  light: { bg: '#FFFFFF', fg: colors.ink },
+  primary: { bg: colors.accent, fg: colors.onFill },
+  dark: { bg: colors.ink, fg: colors.onFill },
+  light: { bg: colors.surface, fg: colors.ink },
   outline: { bg: 'transparent', fg: colors.ink, border: colors.lineStrong },
-  outlineLight: { bg: 'transparent', fg: '#FFFFFF', border: '#FFFFFF' },
+  outlineLight: { bg: 'transparent', fg: colors.onFill, border: colors.onFill },
   ghost: { bg: 'transparent', fg: colors.accent },
 };
 
@@ -76,7 +76,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field(
       <TextInput
         ref={ref}
         accessibilityLabel={label}
-        placeholderTextColor="#8C867B"
+        placeholderTextColor={colors.faint}
         style={[styles.input, error ? { borderColor: colors.danger } : null, style]}
         {...rest}
       />
@@ -106,12 +106,12 @@ export function Avatar({ name, color, size = 28 }: { name: string; color: string
         borderRadius: size / 2,
         backgroundColor: color,
         borderWidth: 2,
-        borderColor: '#FFFFFF',
+        borderColor: colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: '#FFFFFF', fontFamily: fonts.bold, fontSize: size * 0.42 }}>
+      <Text style={{ color: colors.onPhoto, fontFamily: fonts.bold, fontSize: size * 0.42 }}>
         {name.slice(0, 1).toUpperCase()}
       </Text>
     </View>

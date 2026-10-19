@@ -659,7 +659,7 @@ export default function ChatTab() {
           >
             {m.replyTo ? (
               <View style={[styles.quote, mine && styles.quoteMine]}>
-                <Text style={[styles.quoteName, mine && { color: '#FFFFFF' }]} numberOfLines={1}>
+                <Text style={[styles.quoteName, mine && { color: colors.onFill }]} numberOfLines={1}>
                   {quotedName(m.replyTo.senderName)}
                 </Text>
                 <Text style={[styles.quoteBody, mine && { color: colors.onAccentMuted }]} numberOfLines={2}>
@@ -678,7 +678,7 @@ export default function ChatTab() {
                 mentioned={mentioned}
                 me={me}
                 onAccent={mine}
-                style={{ ...styles.body, ...(mine ? { color: '#FFFFFF' } : null), ...(hasPhotos ? { marginTop: 6, maxWidth: 220 } : null) }}
+                style={{ ...styles.body, ...(mine ? { color: colors.onFill } : null), ...(hasPhotos ? { marginTop: 6, maxWidth: 220 } : null) }}
               />
             ) : null}
             {preview ? <LinkPreviewCard preview={preview} mine={mine} /> : null}
@@ -876,7 +876,7 @@ export default function ChatTab() {
                     onPress={() => setAttachments((prev) => prev.filter((x) => x.key !== a.key))}
                     style={styles.attachRemove}
                   >
-                    <Feather name="x" size={14} color="#FFFFFF" />
+                    <Feather name="x" size={14} color={colors.onFill} />
                   </Pressable>
                 </View>
               ))}
@@ -920,7 +920,7 @@ export default function ChatTab() {
               value={draft}
               onChangeText={onChangeDraft}
               placeholder={attachments.length > 0 ? 'Add a caption' : 'Message the group'}
-              placeholderTextColor="#8C867B"
+              placeholderTextColor={colors.faint}
               multiline
               maxLength={4000}
               style={styles.input}
@@ -932,7 +932,7 @@ export default function ChatTab() {
               onPress={send}
               style={[styles.send, !draft.trim() && attachments.length === 0 && { opacity: 0.4 }]}
             >
-              <Feather name={editing ? 'check' : 'send'} size={20} color="#FFFFFF" />
+              <Feather name={editing ? 'check' : 'send'} size={20} color={colors.onFill} />
             </Pressable>
           </View>
         ) : (
@@ -1053,8 +1053,8 @@ function Ticks({ state }: { state: 'sent' | 'delivered' | 'read' }) {
 }
 
 const styles = StyleSheet.create({
-  quote: { borderLeftWidth: 3, borderLeftColor: colors.accent, backgroundColor: 'rgba(14,107,92,0.08)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 6 },
-  quoteMine: { borderLeftColor: '#FFFFFF', backgroundColor: 'rgba(255,255,255,0.16)' },
+  quote: { borderLeftWidth: 3, borderLeftColor: colors.accent, backgroundColor: colors.accentWash, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 6 },
+  quoteMine: { borderLeftColor: colors.onFill, backgroundColor: colors.onFillWash },
   quoteName: { fontFamily: fonts.bold, fontSize: 12, color: colors.accent },
   quoteBody: { fontFamily: fonts.body, fontSize: 13, color: colors.muted },
   replyBar: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.md, paddingLeft: space.sm, paddingVertical: 6, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
@@ -1070,7 +1070,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 48, transform: [{ scaleY: -1 }] },
   day: { alignSelf: 'center', marginVertical: space.md, fontFamily: fonts.bold, fontSize: 12, color: colors.muted },
   systemWrap: { alignItems: 'center', marginVertical: space.sm },
-  system: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted, backgroundColor: '#EDE8DF', paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.pill, overflow: 'hidden', textAlign: 'center' },
+  system: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted, backgroundColor: colors.track, paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.pill, overflow: 'hidden', textAlign: 'center' },
   row: { flexDirection: 'row', gap: space.sm, marginTop: 3 },
   rowMine: { justifyContent: 'flex-end' },
   bubbleCol: { maxWidth: '78%', gap: 3 },
@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
   pollButton: { flexDirection: 'row', gap: 4, height: 44, paddingHorizontal: 10, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft },
   pollText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accentInk },
   flash: { alignSelf: 'center', marginBottom: space.xs, paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.ink },
-  flashText: { fontFamily: fonts.bold, fontSize: 13, color: '#FFFFFF' },
+  flashText: { fontFamily: fonts.bold, fontSize: 13, color: colors.onFill },
   tip: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginHorizontal: space.md, marginBottom: space.xs, paddingLeft: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
   tipText: { flex: 1, fontFamily: fonts.medium, fontSize: 12, color: colors.accentInk, paddingVertical: 8 },
   tipClose: { width: 40, height: 36, alignItems: 'center', justifyContent: 'center' },

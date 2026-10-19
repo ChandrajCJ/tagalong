@@ -12,7 +12,7 @@ import { TripMap } from './trip-map';
 import type { MapLine, MapPin } from './trip-map.types';
 import { Body, Button } from './ui';
 
-const NO_DAY_COLOR = '#8C867B';
+const NO_DAY_COLOR = colors.faint;
 
 interface Props {
   trip: Trip;
@@ -136,7 +136,7 @@ export function PlanMapView({ trip, items, days }: Props) {
     <View style={{ flex: 1 }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} style={styles.filterBar}>
         <Pressable accessibilityRole="tab" aria-selected={day === 'all'} onPress={() => setDay('all')} style={[styles.chip, day === 'all' && styles.chipOn]}>
-          <Text style={[styles.chipText, day === 'all' && { color: '#FFFFFF' }]}>All days</Text>
+          <Text style={[styles.chipText, day === 'all' && { color: colors.onFill }]}>All days</Text>
         </Pressable>
         {daysWithPins.map((d) => {
           const n = days.indexOf(d);
@@ -144,7 +144,7 @@ export function PlanMapView({ trip, items, days }: Props) {
           return (
             <Pressable key={d} accessibilityRole="tab" aria-selected={on} onPress={() => setDay(d)} style={[styles.chip, on && styles.chipOn]}>
               <View style={[styles.swatch, { backgroundColor: dayColor(n) }]} />
-              <Text style={[styles.chipText, on && { color: '#FFFFFF' }]}>
+              <Text style={[styles.chipText, on && { color: colors.onFill }]}>
                 Day {n + 1}
               </Text>
             </Pressable>
@@ -228,9 +228,9 @@ const styles = StyleSheet.create({
   chipIdeasOn: { borderColor: colors.coral },
   chipText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   swatch: { width: 10, height: 10, borderRadius: 5 },
-  ideaSwatch: { backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: colors.coral },
+  ideaSwatch: { backgroundColor: colors.surface, borderWidth: 2, borderColor: colors.coral },
   overlayNote: { position: 'absolute', left: space.xl, right: space.xl, top: space.md, gap: space.sm, padding: space.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
-  card: { position: 'absolute', left: space.md, right: space.md, bottom: space.md, flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+  card: { position: 'absolute', left: space.md, right: space.md, bottom: space.md, flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line, shadowColor: colors.shadow, shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
   cardTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   cardMeta: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   cardButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },

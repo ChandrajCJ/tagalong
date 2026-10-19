@@ -490,14 +490,14 @@ export default function MoneyTab() {
 
       {canEdit && data && rows.length > 0 ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Add expense" onPress={() => setSheet({})} style={styles.fab}>
-          <Feather name="plus" size={20} color="#FFFFFF" />
+          <Feather name="plus" size={20} color={colors.onFill} />
           <Text style={styles.fabText}>Add expense</Text>
         </Pressable>
       ) : null}
 
       {toast ? (
         <View style={styles.toast} accessibilityLiveRegion="polite">
-          <Body style={{ color: '#FFFFFF' }}>{toast}</Body>
+          <Body style={{ color: colors.onFill }}>{toast}</Body>
         </View>
       ) : null}
 
@@ -531,10 +531,10 @@ const styles = StyleSheet.create({
   body: { padding: space.xl, paddingTop: space.md, paddingBottom: 120, gap: space.xl },
   hero: { backgroundColor: colors.accent, borderRadius: radius.xl, padding: space.xl, gap: 4 },
   heroLabel: { fontFamily: fonts.medium, fontSize: 13, color: colors.onAccentMuted },
-  heroAmount: { fontFamily: fonts.display, fontSize: 28, color: '#FFFFFF' },
+  heroAmount: { fontFamily: fonts.display, fontSize: 28, color: colors.onFill },
   heroSub: { fontFamily: fonts.medium, fontSize: 13, color: colors.onAccentMuted, marginTop: 4 },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line },
-  divider: { borderTopWidth: 1, borderTopColor: '#EFEAE2' },
+  divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   transfer: { flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, paddingLeft: space.lg },
   transferText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   transferAmount: { fontFamily: fonts.display, fontSize: 18, color: colors.ink, marginTop: 2 },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', gap: space.md, paddingVertical: 32, paddingHorizontal: space.lg },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  fabText: { fontFamily: fonts.bold, fontSize: 15, color: '#FFFFFF' },
+  fabText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onFill },
   undo: { minHeight: 36, paddingHorizontal: 10, justifyContent: 'center' },
   undoText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   toast: { position: 'absolute', left: space.xl, right: space.xl, bottom: 90, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },

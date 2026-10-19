@@ -102,7 +102,7 @@ function Row({ name, detail }: { name: string; detail: string | null }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: space.xl, gap: space.md },
   title: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },

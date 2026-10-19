@@ -62,7 +62,7 @@ export function ActionMenu({ visible, title, actions, onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(28,27,25,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: space.xl, paddingBottom: space.lg, gap: space.sm },
   title: { fontFamily: fonts.bold, fontSize: 14, color: colors.muted, marginBottom: space.xs },
   action: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 52, paddingHorizontal: space.md, borderRadius: radius.md, backgroundColor: colors.bg },

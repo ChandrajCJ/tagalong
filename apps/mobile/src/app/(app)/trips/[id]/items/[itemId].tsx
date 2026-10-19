@@ -671,7 +671,7 @@ export default function ItemDetail() {
                       <Text
                         style={[
                           styles.msgBody,
-                          isMe && { color: '#FFFFFF' },
+                          isMe && { color: colors.onFill },
                           m.deletedAt && { fontStyle: 'italic', opacity: 0.7 },
                         ]}
                       >
@@ -681,7 +681,7 @@ export default function ItemDetail() {
                         style={[
                           styles.msgTime,
                           isMe && { color: colors.onAccentMuted },
-                          m.status === 'failed' && { color: isMe ? '#FFFFFF' : colors.danger },
+                          m.status === 'failed' && { color: isMe ? colors.onFill : colors.danger },
                         ]}
                       >
                         {m.status === 'failed'
@@ -708,7 +708,7 @@ export default function ItemDetail() {
               value={draft}
               onChangeText={setDraft}
               placeholder={`About ${item.title}…`}
-              placeholderTextColor="#8C867B"
+              placeholderTextColor={colors.faint}
               multiline
               maxLength={4000}
               style={styles.input}
@@ -720,7 +720,7 @@ export default function ItemDetail() {
               onPress={send}
               style={[styles.send, !draft.trim() && { opacity: 0.4 }]}
             >
-              <Feather name="send" size={18} color="#FFFFFF" />
+              <Feather name="send" size={18} color={colors.onFill} />
             </Pressable>
           </View>
         ) : null}

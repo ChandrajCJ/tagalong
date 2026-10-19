@@ -81,8 +81,8 @@ function PlaceMarker({
 }
 
 const styles = StyleSheet.create({
-  pin: { width: 52, height: 52, borderRadius: 12, borderWidth: 3, borderColor: '#FFFFFF', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
+  pin: { width: 52, height: 52, borderRadius: 12, borderWidth: 3, borderColor: colors.onPhoto, backgroundColor: colors.onPhoto, shadowColor: colors.shadow, shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
   photo: { flex: 1, borderRadius: 9 },
-  badge: { position: 'absolute', top: -8, right: -8, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: colors.coral, borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontFamily: fonts.bold, fontSize: 11, color: '#FFFFFF' },
+  badge: { position: 'absolute', top: -8, right: -8, minWidth: 22, height: 22, paddingHorizontal: 5, borderRadius: 11, backgroundColor: colors.coral, borderWidth: 2, borderColor: colors.onPhoto, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontFamily: fonts.bold, fontSize: 11, color: colors.onPhoto },
 });
