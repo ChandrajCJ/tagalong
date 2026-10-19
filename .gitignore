@@ -24,3 +24,8 @@ deploy/backups/
 
 # copied from maplibre-gl on install
 apps/mobile/public/maplibre-gl-worker.js
+
+# Firebase config for Android push: an EAS secret file in builds, never committed.
+apps/mobile/google-services.json
+# Firebase service-account keys must never be committed.
+*firebase-adminsdk*.json
