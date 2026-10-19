@@ -99,7 +99,9 @@ function TripCard({ trip }: { trip: TripSummary }) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${trip.name}, ${formatDateRange(trip.startDate, trip.endDate)}`}
-        style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+        // A plain style: Link asChild hands the Pressable its own style, so a
+        // function style here would be dropped (the card lost its border).
+        style={styles.card}
       >
         <View style={[styles.cover, { backgroundColor: trip.coverColor }]}>
           {countdown ? <Text style={styles.chip}>{countdown}</Text> : null}
