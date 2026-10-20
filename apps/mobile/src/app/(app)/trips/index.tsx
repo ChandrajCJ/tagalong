@@ -9,7 +9,7 @@ import { IconButton } from '@/components/icon-button';
 import { Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { todayIso } from '@/lib/dates';
-import { formatDateRange, tripCountdown } from '@/lib/format';
+import { formatDateRange, readinessLine, tripCountdown } from '@/lib/format';
 import { registerForPush, setAppBadge } from '@/lib/push';
 import { useTripsRealtime } from '@/lib/realtime';
 import { youAre } from '@/lib/roles';
@@ -167,6 +167,8 @@ export default function Trips() {
 function TripCard({ trip }: { trip: TripSummary }) {
   const countdown = tripCountdown(trip.startDate, trip.endDate);
   const people = trip.memberCount === 1 ? '1 person' : `${trip.memberCount} people`;
+  // Getting ready matters before the trip, not after it.
+  const ready = countdown && countdown !== 'Past' && !trip.archived ? readinessLine(trip.readiness) : null;
   const unread = trip.unreadCount > 0 ? `${trip.unreadCount > 99 ? '99+' : trip.unreadCount} new` : null;
   return (
     <Link href={`/trips/${trip.id}`} asChild>
@@ -195,6 +197,12 @@ function TripCard({ trip }: { trip: TripSummary }) {
           <Text style={styles.meta}>
             {people} · {youAre(trip.myRole)}
           </Text>
+          {ready ? (
+            <View style={styles.ready}>
+              <Feather name="check-square" size={12} color={colors.accentInk} />
+              <Text style={styles.readyText}>{ready}</Text>
+            </View>
+          ) : null}
         </View>
       </Pressable>
     </Link>
@@ -221,6 +229,8 @@ function DeletedRow({ trip, onRestore }: { trip: DeletedTrip; onRestore: () => v
 }
 
 const styles = StyleSheet.create({
+  ready: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  readyText: { fontFamily: fonts.medium, fontSize: 12, color: colors.accentInk },
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: space.xl, paddingTop: space.md },
   list: { padding: space.xl, paddingBottom: 120, gap: space.lg },

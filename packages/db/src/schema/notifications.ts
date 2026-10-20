@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, integer, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { id } from './columns';
 import { identity, users } from './identity';
 import { trips } from './trips';
@@ -23,6 +23,8 @@ export const notificationPrefs = identity.table(
     money: boolean('money'),
     todos: boolean('todos'),
     trip: boolean('trip'),
+    /** The countdown before a trip: a week, three days, the evening before, the morning of. */
+    countdown: boolean('countdown'),
     /** Reminders before timed stops, which the phone schedules itself. Defaults row only. */
     reminders: boolean('reminders'),
     reminderMinutes: integer('reminder_minutes'),
@@ -40,4 +42,20 @@ export const notificationPrefs = identity.table(
       sql`coalesce(${t.tripId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
     ),
   ],
+);
+
+/** Each countdown push goes once per trip and person: "week", "three", "eve", "day". */
+export const countdownSent = identity.table(
+  'countdown_sent',
+  {
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    stage: text('stage').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tripId, t.userId, t.stage] })],
 );

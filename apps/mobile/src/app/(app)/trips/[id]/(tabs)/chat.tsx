@@ -584,7 +584,7 @@ export default function ChatTab() {
           {!mine ? (
             <View style={{ width: 30 }}>
               {item.firstInGroup ? (
-                <Avatar name={m.senderName ?? '?'} color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)} size={28} />
+                <Avatar name={m.senderName ?? '?'} userId={m.senderId ?? undefined} color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)} size={28} />
               ) : null}
             </View>
           ) : null}
@@ -636,6 +636,7 @@ export default function ChatTab() {
             {item.firstInGroup ? (
               <Avatar
                 name={m.senderName ?? '?'}
+                userId={m.senderId ?? undefined}
                 color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)}
                 size={28}
               />
@@ -857,7 +858,7 @@ export default function ChatTab() {
                 }}
                 style={styles.mentionRow}
               >
-                <Avatar name={p.displayName} color={avatarColor(memberIndex.get(p.userId) ?? 0)} size={26} />
+                <Avatar name={p.displayName} userId={p.userId} color={avatarColor(memberIndex.get(p.userId) ?? 0)} size={26} />
                 <Text style={styles.mentionName}>{p.displayName}</Text>
               </Pressable>
             ))}

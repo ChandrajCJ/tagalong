@@ -1,4 +1,5 @@
-import { forwardRef } from 'react';
+import { Image } from 'expo-image';
+import { forwardRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,6 +12,7 @@ import {
   type TextProps,
   type ViewStyle,
 } from 'react-native';
+import { useAvatarPhoto, type AvatarPhoto } from '@/lib/avatars';
 import { colors, fonts, radius, space } from '@/theme';
 
 type Variant = 'primary' | 'dark' | 'light' | 'outline' | 'outlineLight' | 'ghost';
@@ -97,7 +99,38 @@ export function Label({ style, ...rest }: TextProps) {
   return <Text style={[styles.label, style]} {...rest} />;
 }
 
-export function Avatar({ name, color, size = 28 }: { name: string; color: string; size?: number }) {
+/**
+ * Someone's profile photo, or their initial in their colour without one.
+ * The photo comes from `photo`, or else from the trip on screen by `userId`;
+ * it's cached by its version, so it loads once and changes when they change it.
+ */
+export function Avatar({
+  name,
+  color,
+  size = 28,
+  userId,
+  photo,
+}: {
+  name: string;
+  color: string;
+  size?: number;
+  userId?: string;
+  photo?: AvatarPhoto | null;
+}) {
+  const fromTrip = useAvatarPhoto(userId);
+  const shown = photo === undefined ? fromTrip : photo;
+  const [failed, setFailed] = useState<string | null>(null);
+  if (shown && failed !== shown.version) {
+    return (
+      <Image
+        accessibilityLabel={name}
+        source={{ uri: shown.url, cacheKey: `avatar-${userId ?? 'me'}-${shown.version}` }}
+        cachePolicy="disk"
+        onError={() => setFailed(shown.version)}
+        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: colors.surface, backgroundColor: color }}
+      />
+    );
+  }
   return (
     <View
       style={{

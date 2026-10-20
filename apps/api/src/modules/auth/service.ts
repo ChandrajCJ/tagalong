@@ -4,6 +4,7 @@ import type { AuthTokens, Me } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import type { Deps } from '../../deps';
 import { randomCode, randomToken, safeEqual, sha256 } from '../../lib/crypto';
+import { avatarOf } from '../../lib/avatars';
 import { badRequest, tooMany, unauthorized } from '../../lib/errors';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -146,12 +147,14 @@ export const createAuthService = (app: FastifyInstance, deps: Deps) => {
           homeCurrency: users.homeCurrency,
           upiId: users.upiId,
           readReceipts: users.readReceipts,
+          avatarKey: users.avatarKey,
         })
         .from(users)
         .where(and(eq(users.id, userId), isNull(users.deletedAt)))
         .limit(1);
       if (!user) throw unauthorized();
-      return user;
+      const { avatarKey, ...rest } = user;
+      return { ...rest, ...(await avatarOf(deps.storage, avatarKey)) };
     },
 
     /** Changes your name or UPI ID; `upiId: null` removes it. */

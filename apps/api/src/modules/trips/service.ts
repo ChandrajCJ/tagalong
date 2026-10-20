@@ -16,10 +16,12 @@ import {
 import type { Redis } from 'ioredis';
 import type { z } from 'zod';
 import { requireTripRole } from '../../lib/access';
+import { avatarOf } from '../../lib/avatars';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
 import type { Geo } from '../../lib/geo';
 import type { Notifier } from '../../lib/notifier';
+import { readinessFor } from '../../lib/readiness';
 import type { Storage } from '../../lib/storage';
 import { postSystemMessage, unreadCounts } from '../chat/channel';
 import { checkPlaceDates, locationColumns, placeRows, toPlace } from './places';
@@ -79,6 +81,7 @@ export const createTripsService = (
         .where(and(eq(tripMembers.userId, userId), isNull(tripMembers.leftAt), isNull(trips.deletedAt)))
         .orderBy(sql`${trips.startDate} asc nulls last`, desc(trips.createdAt));
       const unread = await unreadCounts(db, userId, rows.map((r) => r.id));
+      const readiness = await readinessFor(db, userId, rows.map((r) => r.id));
       const summaries: TripSummary[] = await Promise.all(
         rows.map(async ({ archivedAt, coverKey, ...r }) => ({
           ...r,
@@ -87,6 +90,7 @@ export const createTripsService = (
           myRole: r.myRole as TripRole,
           archived: archivedAt !== null,
           unreadCount: unread.get(r.id) ?? 0,
+          readiness: readiness.get(r.id) ?? null,
         })),
       );
 
@@ -221,6 +225,7 @@ export const createTripsService = (
           role: tripMembers.role,
           upiId: users.upiId,
           joinedAt: tripMembers.joinedAt,
+          avatarKey: users.avatarKey,
         })
         .from(tripMembers)
         .innerJoin(users, eq(users.id, tripMembers.userId))
@@ -238,7 +243,14 @@ export const createTripsService = (
         location,
         myRole,
         myUserId: userId,
-        members: members.map((m) => ({ ...m, role: m.role as TripRole, joinedAt: m.joinedAt.toISOString() })),
+        members: await Promise.all(
+          members.map(async ({ avatarKey, ...m }) => ({
+            ...m,
+            role: m.role as TripRole,
+            joinedAt: m.joinedAt.toISOString(),
+            ...(await avatarOf(storage, avatarKey)),
+          })),
+        ),
       };
     },
 

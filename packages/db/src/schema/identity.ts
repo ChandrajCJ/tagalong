@@ -89,6 +89,22 @@ export const sessions = identity.table(
   (t) => [index('sessions_user_idx').on(t.userId)],
 );
 
+/**
+ * Someone's calendar link (Profile → Calendar): a calendar app reads their
+ * trips from /calendar/<token>.ics with no sign-in, so the token is the key.
+ * One per person; making a new one replaces the old, and only the hash is kept.
+ */
+export const calendarFeeds = identity.table('calendar_feeds', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  /** Stops without a time go in as all-day items. */
+  includeUntimed: boolean('include_untimed').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastFetchedAt: timestamp('last_fetched_at', { withTimezone: true }),
+});
+
 /** One-time sign-in codes for email login. Only the hash is stored. */
 export const loginCodes = identity.table(
   'login_codes',

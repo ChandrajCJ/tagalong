@@ -124,6 +124,10 @@ export const TripMember = z.object({
   upiId: z.string().nullable().default(null),
   /** When they joined, so a message's ticks only wait for people who were there. */
   joinedAt: z.string().nullable().default(null),
+  /** A short-lived link to their profile photo; initials in their colour without one. */
+  avatarUrl: z.string().url().nullable().default(null),
+  /** Changes with the photo, so a cached one is replaced. */
+  avatarVersion: z.string().nullable().default(null),
 });
 export type TripMember = z.infer<typeof TripMember>;
 
@@ -144,6 +148,11 @@ export const TripSummary = z.object({
   archived: z.boolean().default(false),
   /** Main-chat messages from others since I last read it. */
   unreadCount: z.number().int().default(0),
+  /** "4 of 18 packed · 2 to-dos open", from where I stand; null when there are no lists yet. */
+  readiness: z
+    .object({ packed: z.number().int(), packingTotal: z.number().int(), todosOpen: z.number().int() })
+    .nullable()
+    .default(null),
 });
 export type TripSummary = z.infer<typeof TripSummary>;
 
@@ -220,7 +229,7 @@ export type CoverSuggestion = z.infer<typeof CoverSuggestion>;
 export const TripUnread = z.object({ chat: z.number().int() });
 export type TripUnread = z.infer<typeof TripUnread>;
 
-export const Trip = TripSummary.omit({ unreadCount: true }).extend({
+export const Trip = TripSummary.omit({ unreadCount: true, readiness: true }).extend({
   /** The signed-in user's id, so screens can tell which member is "you". */
   myUserId: z.string().uuid(),
   baseCurrency: z.string().length(3),

@@ -155,7 +155,7 @@ export const processNotify = async (
 };
 
 /** Phones that uninstalled the app stop getting pushes. */
-const forgetDeadTokens = async (db: Db, tokens: { id: string }[], tickets: PushTicket[]) => {
+export const forgetDeadTokens = async (db: Db, tokens: { id: string }[], tickets: PushTicket[]) => {
   await Promise.all(
     tickets.map((ticket, i) =>
       ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
@@ -223,7 +223,7 @@ export const summarise = (kind: ActivityJob['kind'], lines: ActivityLine[]) => {
   const names = [...new Set(lines.map((l) => l.actorName).filter((n): n is string => !!n))];
   const who = names.length === 0 ? '' : `${joinNames(names.slice(0, 3))}${names.length > 3 ? ' and others' : ''}`;
   const groups = new Set(lines.map((l) => l.group ?? ''));
-  const what = { plan: 'plan updates', money: 'money updates', todos: 'to-do updates', trip: 'trip updates' }[kind];
+  const what = { plan: 'plan updates', money: 'money updates', todos: 'to-do updates', trip: 'trip updates', countdown: 'reminders' }[kind];
   if (kind === 'plan' && groups.size === 1 && lines[0]!.group) return `${who || 'Someone'} changed ${lines[0]!.group}: ${lines.length} updates`;
   return who ? `${who}: ${lines.length} ${what}` : `${lines.length} ${what}`;
 };

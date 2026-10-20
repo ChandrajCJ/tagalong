@@ -11,6 +11,10 @@ export const KIND_COPY: Record<NotificationKind, { title: string; detail: string
   money: { title: 'Money', detail: 'Expenses you’re part of, and when someone pays you' },
   todos: { title: 'To-dos', detail: 'One is put on you, or yours is due tomorrow' },
   trip: { title: 'Trip', detail: 'The trip’s name or dates change' },
+  countdown: {
+    title: 'Countdown',
+    detail: '“A week to Goa! 2 to-dos still open”, then 3 days out, the evening before and the morning of',
+  },
 };
 
 const KINDS = Object.keys(KIND_COPY) as NotificationKind[];

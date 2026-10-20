@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** What can send a push. Each can be turned off, everywhere or for one trip. */
-export const NOTIFICATION_KINDS = ['chat', 'mentions', 'plan', 'money', 'todos', 'trip'] as const;
+export const NOTIFICATION_KINDS = ['chat', 'mentions', 'plan', 'money', 'todos', 'trip', 'countdown'] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 /** How long before a timed stop its reminder goes off, in minutes. */
@@ -18,6 +18,8 @@ export const NotificationPrefs = z.object({
   money: z.boolean(),
   todos: z.boolean(),
   trip: z.boolean(),
+  /** "A week to Goa!", "Tomorrow: Goa · 4 items to pack": the countdown before a trip. */
+  countdown: z.boolean().default(true),
   /** Reminders before timed stops, set on the phone. */
   reminders: z.boolean(),
   reminderMinutes: z.number().int(),
@@ -33,6 +35,7 @@ export const DEFAULT_PREFS: NotificationPrefs = {
   money: true,
   todos: true,
   trip: true,
+  countdown: true,
   reminders: true,
   reminderMinutes: DEFAULT_REMINDER_MINUTES,
   mutedUntil: null,
@@ -52,6 +55,7 @@ export const UpdateNotificationPrefsInput = z.object({
   money: toggle.optional(),
   todos: toggle.optional(),
   trip: toggle.optional(),
+  countdown: toggle.optional(),
   reminders: toggle.optional(),
   reminderMinutes: lead.optional(),
   mutedUntil: z.string().datetime().nullable().optional(),
@@ -66,6 +70,7 @@ export const UpdateTripNotificationsInput = z.object({
   money: toggle.nullable().optional(),
   todos: toggle.nullable().optional(),
   trip: toggle.nullable().optional(),
+  countdown: toggle.nullable().optional(),
   mutedUntil: z.string().datetime().nullable().optional(),
 });
 export type UpdateTripNotificationsInput = z.input<typeof UpdateTripNotificationsInput>;
@@ -81,6 +86,7 @@ export const TripNotifications = z.object({
     money: z.boolean().nullable(),
     todos: z.boolean().nullable(),
     trip: z.boolean().nullable(),
+    countdown: z.boolean().nullable().default(null),
     mutedUntil: z.string().nullable(),
   }),
 });

@@ -383,7 +383,7 @@ export default function MoneyTab() {
                 const net = balances.get(p.userId) ?? 0;
                 return (
                   <View key={p.userId} style={[styles.balance, i > 0 && styles.divider]}>
-                    <Avatar name={p.displayName} color={avatarColor(i)} />
+                    <Avatar name={p.displayName} userId={p.userId} color={avatarColor(i)} />
                     <Text style={styles.balanceName}>
                       {p.userId === me ? 'You' : p.displayName}
                       {p.active ? '' : ' (left)'}

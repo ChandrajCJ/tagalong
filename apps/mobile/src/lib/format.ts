@@ -29,3 +29,13 @@ export const tripCountdown = (start: string | null, end: string | null, today = 
   if (now <= day(end ?? start)) return 'Happening now';
   return 'Past';
 };
+
+/** "4 of 18 packed · 2 to-dos open": getting ready, from where I stand; null with nothing to show. */
+export const readinessLine = (r: { packed: number; packingTotal: number; todosOpen: number } | null) => {
+  if (!r) return null;
+  const parts = [
+    r.packingTotal > 0 ? `${r.packed} of ${r.packingTotal} packed` : null,
+    r.todosOpen > 0 ? `${r.todosOpen} ${r.todosOpen === 1 ? 'to-do' : 'to-dos'} open` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+};

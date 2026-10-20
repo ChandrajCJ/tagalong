@@ -51,6 +51,11 @@ const EnvSchema = z.object({
   IMPORT_IMAP_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
   /** Whose Authentication-Results headers to trust: the receiving server's. */
   IMPORT_AUTHSERV_ID: z.string().default('mx.google.com'),
+  /**
+   * The web app's address, for links back to it from calendar events. Unset
+   * uses the first of CORS_ORIGINS, and leaves the links out without either.
+   */
+  APP_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
   /** Websites allowed to call the API from a browser, comma-separated. Unset allows any (development). */
   CORS_ORIGINS: z.string().optional(),
   ACCESS_TOKEN_TTL_SEC: z.coerce.number().int().default(15 * 60),

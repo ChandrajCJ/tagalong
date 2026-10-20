@@ -49,8 +49,13 @@ This is the app from a traveller's point of view.
 ### Getting in
 1. Open the app and tap **Continue with email**. Type your email; a 6-digit
    code arrives; type it in. There are no passwords.
-2. Tap **Profile** (top right of your trips) to set the name friends see and,
-   optionally, your **UPI ID** so people can pay you back in one tap.
+2. Tap **Profile** (top right of your trips) to set the name friends see, a
+   **photo** (cropped square on the phone; only people on your trips see it)
+   and, optionally, your **UPI ID** so people can pay you back in one tap.
+   **Calendar** there makes a private link that Google or Apple Calendar
+   subscribes to: every trip, timed stop and booking appears in your own
+   calendar and keeps up with changes. Anyone with the link can see your
+   plans, so it's off until you turn it on, and **Stop sharing** ends it.
 
 ### Starting a trip
 3. On **Your trips**, tap **New trip**. Start typing the destination: real
@@ -75,8 +80,8 @@ This is the app from a traveller's point of view.
 8. The Overview shows a countdown, who's coming, **the weather** for the trip
    days (a forecast up to two weeks out, "typical weather" from last year
    beyond that), the **next booking** ("Flight 6E 2134 · Thu 08:15 · in 2
-   days"), an **Explore** card, a **Get ready** card ("Packing 12/30 · 2
-   to-dos left · 3 notes"), and a list of everything you can do here.
+   days"), an **Explore** card, a **Get ready** card ("4 of 18 packed · 2
+   to-dos open · 3 notes"), and a list of everything you can do here.
    On a trip to several places it reads "Lisbon (Oct 22–24) → Porto (24–26)
    → Madrid (26–29)", and each day's weather is at that day's place.
    **Edit** changes the trip's name, dates, places or cover: a colour,
@@ -86,8 +91,10 @@ This is the app from a traveller's point of view.
    The **⋯** button archives the trip (it moves to "Archived" on your list,
    for you only), and lets an owner **delete** it for everyone (type its name
    to confirm; it can be restored from "Recently deleted" for 30 days) or
-   anyone else **leave** it. **Your trips** splits into upcoming, past and
-   archived, and each card says how many chat messages are new.
+   anyone else **leave** it. The ⋯ menu also has **Download calendar
+   (.ics)** for this one trip. **Your trips** splits into upcoming, past and
+   archived, and each card says how many chat messages are new and, before
+   the trip, how ready you are ("4 of 18 packed · 2 to-dos open").
 
 ### Finding things to do: Explore
 9. **Explore Goa** lists places worth going to, by category: top sights, food
@@ -183,8 +190,10 @@ This is the app from a traveller's point of view.
     the poll"), so the chat doubles as a record of what happened.
 25. In the installed app, push notifications arrive bundled ("Priya and Sam
     sent 5 messages") and skip anyone who has the app open. Besides chat,
-    they cover @mentions, plan changes, money you're part of, to-dos and
-    trip changes. **Profile → Notifications** switches each kind and sets
+    they cover @mentions, plan changes, money you're part of, to-dos,
+    trip changes and a **countdown** ("A week to Goa! 2 to-dos still open",
+    then three days out, the evening before with the weather, and "Today's
+    the day! First up: …" that morning, each at a sensible hour where you are). **Profile → Notifications** switches each kind and sets
     reminders before timed stops ("Lunch in 30 min"); each trip's ⋯ menu can
     mute it for a day, a week or until turned back on.
 
@@ -285,6 +294,7 @@ requests.
 | Polish 1, part C | Notifications you control (six kinds, per-trip mute), reminders before timed stops, gentle "add a place" hints in the plan, places for ideas, Explore food and nightlife that load |
 | Polish 1, part D | Videos in the album and chat, dark mode (Profile → Appearance), invite links that open the installed app, the new app icon |
 | Polish 2, part E | Trips to several places (each day's weather, Explore, place search, map and clock follow its place), a whole day opened in Google Maps |
+| Polish 2, part F | A calendar link Google or Apple Calendar subscribes to, a trip's .ics download, countdown pushes before a trip, profile photos |
 
 ## 6. What's not done yet
 

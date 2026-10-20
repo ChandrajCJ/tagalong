@@ -16,6 +16,7 @@ import { imapMailbox, INBOX_QUEUE, processInbox } from './inbox';
 import { expoPushSender, processActivity, processMention, processNotify } from './notify';
 import { processLinkPreview } from './preview';
 import { PURGE_JOB, purgeDeletedTrips } from './purge';
+import { COUNTDOWN_JOB, queueCountdowns } from './countdown';
 import { DUE_JOB, queueDueTomorrow } from './due';
 import { bullJobs } from '../lib/jobs';
 import { createNotifier } from '../lib/notifier';
@@ -77,6 +78,11 @@ export const startWorkers = async ({
         if (result.queued) log.info(result, 'To-dos due tomorrow');
         return result;
       }
+      if (job.name === COUNTDOWN_JOB) {
+        const result = await queueCountdowns({ db, push: expoPushSender });
+        if (result.sent) log.info(result, 'Countdown pushes');
+        return result;
+      }
       if (job.name === PURGE_JOB) {
         const result = await purgeDeletedTrips({ db, storage });
         if (result.trips) log.info(result, 'Purged deleted trips');
@@ -134,6 +140,8 @@ export const startWorkers = async ({
   await systemQueue.upsertJobScheduler(PURGE_JOB, { pattern: '0 3 * * *' }, { name: PURGE_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
   // To-dos due tomorrow: every hour, so each trip's evening comes round; each is sent once.
   await systemQueue.upsertJobScheduler(DUE_JOB, { pattern: '15 * * * *' }, { name: DUE_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
+  // Countdowns before trips: hourly, so each person's 9 am and 7 pm come round; each stage is sent once.
+  await systemQueue.upsertJobScheduler(COUNTDOWN_JOB, { pattern: '20 * * * *' }, { name: COUNTDOWN_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
   await systemQueue.close();
 
   // Forwarded booking emails: read the inbox every two minutes, one run at a time.

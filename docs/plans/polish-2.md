@@ -1,6 +1,6 @@
 # Polish 2: several destinations, calendar, whole-day directions, live location, reminders, avatars, widget
 
-Status: approved plan; session E done. Everything stays free.
+Status: approved plan; sessions E and F done. Everything stays free.
 
 Sessions at a glance:
 - **E:** trips with several destinations · open a whole day in Google Maps. Server + OTA.

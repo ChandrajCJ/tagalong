@@ -1,11 +1,12 @@
 import { Trip } from '@tagalong/shared';
 import { router } from 'expo-router';
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Button, Title } from '@/components/ui';
 import { colors, space } from '@/theme';
 import { ApiError, request } from './api';
+import { AvatarPhotos, photosOf } from './avatars';
 import { CLIENT_ID } from './client-id';
 import { useTripRealtime } from './realtime';
 import { requestReminderSync } from './reminders';
@@ -49,6 +50,9 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
     if (message.event.type === 'trip.deleted' && message.event.originClientId !== CLIENT_ID) setDeleted(true);
   });
 
+  // Everyone's profile photos, for any avatar on the trip's screens.
+  const photos = useMemo(() => photosOf(trip?.members ?? []), [trip?.members]);
+
   if (deleted) {
     return (
       <SafeAreaView style={styles.gone}>
@@ -61,7 +65,11 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
     );
   }
 
-  return <TripContext.Provider value={{ trip, error, reload }}>{children}</TripContext.Provider>;
+  return (
+    <TripContext.Provider value={{ trip, error, reload }}>
+      <AvatarPhotos.Provider value={photos}>{children}</AvatarPhotos.Provider>
+    </TripContext.Provider>
+  );
 }
 
 export const useTrip = () => {

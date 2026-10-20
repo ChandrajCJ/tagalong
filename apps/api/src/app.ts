@@ -9,6 +9,7 @@ import { osrmRouting } from './lib/routing';
 import { s3Storage } from './lib/storage';
 import { authRoutes } from './modules/auth/routes';
 import { bookingsRoutes } from './modules/bookings/routes';
+import { calendarRoutes } from './modules/calendar/routes';
 import { chatRoutes } from './modules/chat/routes';
 import { daysRoutes } from './modules/days/routes';
 import { devicesRoutes } from './modules/devices/routes';
@@ -24,6 +25,7 @@ import { listsRoutes } from './modules/lists/routes';
 import { notificationsRoutes } from './modules/notifications/routes';
 import { photosRoutes } from './modules/photos/routes';
 import { tripsRoutes } from './modules/trips/routes';
+import { usersRoutes } from './modules/users/routes';
 import { authPlugin } from './plugins/auth';
 import { errorsPlugin } from './plugins/errors';
 
@@ -90,6 +92,8 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(placesRoutes, { deps: fullDeps });
   await app.register(listsRoutes, { deps: fullDeps });
   await app.register(importsRoutes, { deps: fullDeps });
+  await app.register(calendarRoutes, { deps: fullDeps });
+  await app.register(usersRoutes, { deps: fullDeps });
 
   return app;
 };

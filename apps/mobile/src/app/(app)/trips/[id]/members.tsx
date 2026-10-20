@@ -103,7 +103,7 @@ export default function Members() {
                 onPress={() => manage(m)}
                 style={[styles.row, i > 0 && styles.divider]}
               >
-                <Avatar name={m.displayName} color={avatarColor(i)} size={36} />
+                <Avatar name={m.displayName} userId={m.userId} color={avatarColor(i)} size={36} />
                 <Text style={styles.name}>
                   {m.displayName}
                   {isMe ? <Text style={styles.you}> (you)</Text> : null}

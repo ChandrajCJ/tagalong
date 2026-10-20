@@ -4,13 +4,15 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { CalendarLink } from '@/components/calendar-link';
 import { NotificationToggles } from '@/components/notification-toggles';
-import { Body, Button, Field, Label, Title } from '@/components/ui';
+import { Avatar, Body, Button, Field, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { chooseAppearance } from '@/lib/appearance';
+import { pickAvatar, removeAvatar, uploadAvatar } from '@/lib/avatars';
 import { remindersAvailable, syncReminders } from '@/lib/reminders';
 import { useSession } from '@/lib/session';
-import { appearanceChoice, colors, fonts, radius, space, type AppearanceChoice } from '@/theme';
+import { appearanceChoice, avatarColor, colors, fonts, radius, space, type AppearanceChoice } from '@/theme';
 
 /** Your name as friends see it, and the UPI ID they can pay you back on. */
 export default function ProfileScreen() {
@@ -89,6 +91,24 @@ export default function ProfileScreen() {
     }
   };
 
+  // Profile photo: chosen or taken, cropped square on the phone, saved straight away.
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const changePhoto = async (from: 'library' | 'camera' | 'remove') => {
+    setPhotoBusy(true);
+    setNotice(undefined);
+    try {
+      if (from === 'remove') setMe(await removeAvatar());
+      else {
+        const uri = await pickAvatar(from);
+        if (uri) setMe(await uploadAvatar(uri));
+      }
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : 'Couldn’t change your photo. Try again.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const confirmSignOut = () =>
     Alert.alert('Sign out?', 'You can sign back in any time with your email.', [
       { text: 'Cancel', style: 'cancel' },
@@ -110,6 +130,34 @@ export default function ProfileScreen() {
             <View style={styles.notice} accessibilityLiveRegion="polite">
               <Feather name={notice === 'Saved' ? 'check' : 'info'} size={16} color={colors.accentInk} />
               <Body style={{ flex: 1, color: colors.accentInk }}>{notice}</Body>
+            </View>
+          ) : null}
+
+          {me ? (
+            <View style={styles.photoRow}>
+              <Avatar
+                name={me.displayName}
+                color={avatarColor(0)}
+                size={88}
+                userId={me.id}
+                photo={me.avatarUrl && me.avatarVersion ? { url: me.avatarUrl, version: me.avatarVersion } : null}
+              />
+              <View style={{ flex: 1, gap: space.xs }}>
+                <Button
+                  label={me.avatarUrl ? 'Change photo' : 'Choose a photo'}
+                  variant="outline"
+                  onPress={() => void changePhoto('library')}
+                  loading={photoBusy}
+                  style={{ minHeight: 40 }}
+                />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  <Button label="Take one" variant="ghost" onPress={() => void changePhoto('camera')} disabled={photoBusy} style={{ minHeight: 36 }} />
+                  {me.avatarUrl ? (
+                    <Button label="Remove" variant="ghost" onPress={() => void changePhoto('remove')} disabled={photoBusy} style={{ minHeight: 36 }} />
+                  ) : null}
+                </View>
+                <Body style={{ fontSize: 12 }}>Only people on your trips see it.</Body>
+              </View>
             </View>
           ) : null}
 
@@ -195,6 +243,13 @@ export default function ProfileScreen() {
             ) : null}
           </View>
 
+          {me ? (
+            <View style={{ gap: space.sm, marginTop: space.xl }}>
+              <Label>Calendar</Label>
+              <CalendarLink userId={me.id} />
+            </View>
+          ) : null}
+
           <View style={{ gap: space.sm, marginTop: space.xl }}>
             <Label>Appearance</Label>
             <View style={styles.leads} accessibilityRole="radiogroup" accessibilityLabel="Appearance">
@@ -240,6 +295,10 @@ export default function ProfileScreen() {
                 trackColor={{ true: colors.accent, false: colors.lineStrong }}
               />
             </View>
+            <Body style={{ fontSize: 13 }}>
+              Your profile photo shows only to people on your trips. Your calendar link (under Calendar) lets whoever has it
+              see your trip plans; it’s off until you turn it on, and Stop sharing ends it at once.
+            </Body>
           </View>
 
           <View style={{ gap: space.sm, marginTop: space.xl }}>
@@ -263,5 +322,6 @@ const styles = StyleSheet.create({
   leadOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   leadText: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink },
   settingTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   notice: { flexDirection: 'row', gap: space.sm, alignItems: 'center', padding: space.md, borderRadius: radius.md, backgroundColor: colors.accentSoft },
 });

@@ -197,4 +197,6 @@ export type VotePollInput = z.input<typeof VotePollInput>;
 export const RegisterPushTokenInput = z.object({
   token: z.string().min(10).max(200),
   platform: z.enum(['ios', 'android', 'web']),
+  /** The phone's time zone, so countdown pushes arrive at a sensible local hour. */
+  timezone: z.string().max(64).optional(),
 });

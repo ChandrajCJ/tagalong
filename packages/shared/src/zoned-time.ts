@@ -39,7 +39,7 @@ const partsIn = (at: Date, tz: string) =>
   ) as Record<string, string>;
 
 /** How many minutes `tz` is ahead of UTC at the moment `at`. */
-const offsetMinutes = (at: Date, tz: string) => {
+export const offsetMinutes = (at: Date, tz: string) => {
   const p = partsIn(at, tz);
   const asUtc = Date.UTC(+p.year!, +p.month! - 1, +p.day!, +p.hour!, +p.minute!);
   return (asUtc - Math.floor(at.getTime() / 60_000) * 60_000) / 60_000;

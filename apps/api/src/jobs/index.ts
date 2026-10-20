@@ -3,6 +3,7 @@
 export { expoPushSender, processMention, processNotify, type PushSender } from './notify';
 export { processLinkPreview, type PreviewResult } from './preview';
 export { PURGE_JOB, purgeDeletedTrips, type PurgeResult } from './purge';
+export { COUNTDOWN_JOB, queueCountdowns } from './countdown';
 export { processThumbnail, THUMB_SIZE, type ThumbnailResult } from './thumbnail';
 export { MEDIA_QUEUE, NOTIFY_QUEUE, type NotifyJob, type ThumbnailJob } from '../lib/jobs';
 export { s3Storage } from '../lib/storage';

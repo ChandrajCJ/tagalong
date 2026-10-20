@@ -13,7 +13,8 @@ import { WeatherStrip } from '@/components/weather-strip';
 import { ApiError, request } from '@/lib/api';
 import { confirmAction } from '@/lib/confirm';
 import { BOOKING_META, formatInZone, relativeFrom, routeOf, titleOf } from '@/lib/bookings';
-import { formatDateRange, tripCountdown } from '@/lib/format';
+import { downloadTripCalendar } from '@/lib/calendar';
+import { formatDateRange, readinessLine, tripCountdown } from '@/lib/format';
 import { useTripLists, useTripNotes } from '@/lib/lists';
 import { useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
@@ -100,6 +101,15 @@ export default function TripOverview() {
       hint: 'Mute this trip, or choose what it tells you about',
       onPress: () => router.push(`${base}/notifications`),
     },
+    {
+      icon: 'calendar',
+      label: 'Download calendar (.ics)',
+      hint: 'This trip’s days, timed stops and bookings, for any calendar app',
+      onPress: () =>
+        void downloadTripCalendar(trip.id, trip.name).catch((e: unknown) =>
+          setProblem(e instanceof ApiError ? e.message : 'Couldn’t make the calendar file. Try again.'),
+        ),
+    },
     trip.archived
       ? {
           icon: 'inbox',
@@ -166,7 +176,7 @@ export default function TripOverview() {
               <View style={{ flexDirection: 'row' }}>
                 {trip.members.slice(0, 4).map((m, i) => (
                   <View key={m.userId} style={{ marginLeft: i === 0 ? 0 : -8 }}>
-                    <Avatar name={m.displayName} color={avatarColor(i)} size={26} />
+                    <Avatar name={m.displayName} userId={m.userId} color={avatarColor(i)} size={26} />
                   </View>
                 ))}
               </View>
@@ -391,12 +401,8 @@ function GetReadyCard() {
   const summary = lists ? listsSummary(lists, items, trip.myUserId) : null;
   const parts = summary
     ? [
-        summary.packingTotal > 0 ? `Packing ${summary.packed}/${summary.packingTotal}` : null,
-        summary.todosTotal > 0
-          ? summary.todosLeft === 0
-            ? 'To-dos all done'
-            : `${summary.todosLeft} ${summary.todosLeft === 1 ? 'to-do' : 'to-dos'} left`
-          : null,
+        readinessLine({ packed: summary.packed, packingTotal: summary.packingTotal, todosOpen: summary.todosLeft }),
+        summary.todosTotal > 0 && summary.todosLeft === 0 ? 'To-dos all done' : null,
         notes && notes.length > 0 ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}` : null,
       ].filter(Boolean)
     : [];

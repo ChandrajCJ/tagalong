@@ -309,7 +309,7 @@ export default function IdeasTab() {
             <View style={styles.faces}>
               {idea.voters.slice(0, 5).map((v, i) => (
                 <View key={v.userId} style={{ marginLeft: i === 0 ? 0 : -8, opacity: v.value === 'up' ? 1 : 0.4 }}>
-                  <Avatar name={v.displayName} color={avatarColor(i)} size={22} />
+                  <Avatar name={v.displayName} userId={v.userId} color={avatarColor(i)} size={22} />
                 </View>
               ))}
               {idea.voters.length > 5 ? (

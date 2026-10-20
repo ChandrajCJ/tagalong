@@ -68,7 +68,8 @@ export const registerForPush = (): Promise<PushStatus> => {
       const { data: token } = await N.getExpoPushTokenAsync({ projectId: projectId() });
       await request('/me/devices/push-token', {
         method: 'POST',
-        body: { token, platform: Platform.OS },
+        // The phone's time zone, so countdown pushes come at a sensible hour here.
+        body: { token, platform: Platform.OS, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       });
       return 'registered';
     } catch {

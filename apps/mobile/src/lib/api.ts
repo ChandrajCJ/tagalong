@@ -96,11 +96,13 @@ interface RequestOptions<S extends z.ZodTypeAny> {
   body?: unknown;
   schema?: S;
   auth?: boolean;
+  /** Read the answer as plain text (a calendar file) rather than JSON. */
+  text?: boolean;
 }
 
 export async function request<S extends z.ZodTypeAny>(
   path: string,
-  { method = 'GET', body, schema, auth = true }: RequestOptions<S> = {},
+  { method = 'GET', body, schema, auth = true, text = false }: RequestOptions<S> = {},
   retried = false,
 ): Promise<z.output<S>> {
   const headers: Record<string, string> = { [CLIENT_ID_HEADER]: CLIENT_ID };
@@ -121,7 +123,7 @@ export async function request<S extends z.ZodTypeAny>(
 
   if (res.status === 401 && auth && !retried) {
     // Several requests can fail at once; refresh only once for all of them.
-    if (await refreshAccessToken()) return request(path, { method, body, schema, auth }, true);
+    if (await refreshAccessToken()) return request(path, { method, body, schema, auth, text }, true);
   }
 
   if (!res.ok) {
@@ -132,6 +134,7 @@ export async function request<S extends z.ZodTypeAny>(
     throw new ApiError(res.status, data.error ?? 'error', data.message ?? 'Something went wrong', data);
   }
   if (res.status === 204) return undefined as z.output<S>;
+  if (text) return (await res.text()) as z.output<S>;
   const json: unknown = await res.json();
   return schema ? schema.parse(json) : (json as z.output<S>);
 }

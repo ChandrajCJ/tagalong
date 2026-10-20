@@ -654,6 +654,7 @@ export default function ItemDetail() {
                   >
                     <Avatar
                       name={m.senderName ?? '?'}
+                      userId={m.senderId ?? undefined}
                       color={avatarColor(memberIndex.get(m.senderId ?? '') ?? 0)}
                       size={26}
                     />

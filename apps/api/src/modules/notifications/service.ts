@@ -16,7 +16,7 @@ type UpdateDefaults = z.output<typeof UpdateNotificationPrefsInput>;
 type UpdateTrip = z.output<typeof UpdateTripNotificationsInput>;
 
 /** The switches a person can turn on and off, per trip or as defaults. */
-type Kind = 'chat' | 'mentions' | 'plan' | 'money' | 'todos' | 'trip';
+type Kind = 'chat' | 'mentions' | 'plan' | 'money' | 'todos' | 'trip' | 'countdown';
 
 /** Defaults, then the trip's own choices on top; anything never set is on. */
 const resolve = (defaults: Row | undefined, trip: Row | undefined): NotificationPrefs => {
@@ -30,6 +30,7 @@ const resolve = (defaults: Row | undefined, trip: Row | undefined): Notification
     money: pick('money'),
     todos: pick('todos'),
     trip: pick('trip'),
+    countdown: pick('countdown'),
     reminders: defaults?.reminders ?? DEFAULT_PREFS.reminders,
     reminderMinutes: defaults?.reminderMinutes ?? DEFAULT_PREFS.reminderMinutes,
     mutedUntil: latest && latest.getTime() > Date.now() ? latest.toISOString() : null,
@@ -117,6 +118,7 @@ export const createNotificationsService = (db: Db) => {
           money: trip?.money ?? null,
           todos: trip?.todos ?? null,
           trip: trip?.trip ?? null,
+          countdown: trip?.countdown ?? null,
           mutedUntil: trip?.mutedUntil && trip.mutedUntil.getTime() > Date.now() ? trip.mutedUntil.toISOString() : null,
         },
       };
