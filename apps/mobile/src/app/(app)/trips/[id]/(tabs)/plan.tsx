@@ -1,6 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
 import {
+  cityOf,
   DayReordered,
+  dayRouteLinks,
   hasRole,
   ItemList,
   ItineraryItem,
@@ -16,7 +18,7 @@ import {
 } from '@tagalong/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from 'react-native-draggable-flatlist';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DayNoteSheet } from '@/components/day-note-sheet';
@@ -46,6 +48,7 @@ import { useTripRealtime } from '@/lib/realtime';
 import { VIEWER_NOTE } from '@/lib/roles';
 import { useTrip } from '@/lib/trip-context';
 import { colors, fonts, radius, space } from '@/theme';
+import { dayCityLabel, dayPlaceOf, destinationFor } from '@/lib/trip-places';
 
 type Editors = Record<string, { itemId: string; name: string }>;
 
@@ -189,6 +192,8 @@ export default function PlanTab() {
     return new Map((route?.legs ?? []).filter((l) => next.get(l.fromId) === l.toId).map((l) => [l.fromId, l]));
   }, [route, dayItems]);
   const canShorten = canEdit && currentDate !== null && movableCount(dayItems) >= 3;
+  // The whole day as one Google Maps route, in plan order, split when it's longer than one link takes.
+  const dayLinks = useMemo(() => dayRouteLinks(dayItems, mode), [dayItems, mode]);
   const placeless = canEdit ? dayItems.filter(needsPlace) : [];
 
   // Look up a guess for the day's stops without a place: only a single clear match is offered.
@@ -200,7 +205,7 @@ export default function PlanTab() {
     let live = true;
     void Promise.all(
       todo.map(async (i) => {
-        const found = await request(`/places/search?scope=place&tripId=${tripId}&q=${encodeURIComponent(i.title)}`, {
+        const found = await request(`/places/search?scope=place&tripId=${tripId}${i.date ? `&date=${i.date}` : ''}&q=${encodeURIComponent(i.title)}`, {
           schema: PlaceSearch,
         }).catch(() => null);
         return [guessKey(i), found?.results.length === 1 ? found.results[0]! : null] as const;
@@ -353,10 +358,22 @@ export default function PlanTab() {
   if (!trip) return null;
 
   const dayIndex = days.indexOf(current);
+  // On a trip to several places, each day says where: "Porto", or "Lisbon → Porto" on a travel day.
+  const several = trip.places.length > 1;
+  const cityLabel = currentDate ? dayCityLabel(trip, currentDate) : null;
+  const pillCity = (date: string) => {
+    const day = dayPlaceOf(trip, date);
+    return day ? `${day.leaving ? '→' : ''}${cityOf(day.place.destination)}` : '';
+  };
   const heading =
     current === ANYTIME
       ? 'No day yet'
-      : `${dayIndex >= 0 ? `Day ${dayIndex + 1} · ` : ''}${shortDate(current)}`;
+      : `${dayIndex >= 0 ? `Day ${dayIndex + 1} · ` : ''}${shortDate(current)}${cityLabel ? ` · ${cityLabel}` : ''}`;
+  const skippedNote =
+    dayLinks.skipped > 0
+      ? `${dayLinks.skipped} ${dayLinks.skipped === 1 ? 'stop isn’t' : 'stops aren’t'} on the map, so the route leaves ${dayLinks.skipped === 1 ? 'it' : 'them'} out.`
+      : null;
+  const appleNote = Platform.OS === 'ios' ? 'Opens in Google Maps: Apple Maps can’t take a route with several stops.' : null;
 
   const renderItem = ({ item, drag, isActive }: RenderItemParams<ItineraryItem>) => {
     const editor = Object.values(editors).find((e) => e.itemId === item.id);
@@ -410,7 +427,7 @@ export default function PlanTab() {
               <Pressable
                 accessibilityRole="link"
                 accessibilityLabel={`Directions to ${item.placeName ?? item.title}`}
-                onPress={() => openDirections(item.placeName ?? item.title, trip.destination, item)}
+                onPress={() => openDirections(item.placeName ?? item.title, destinationFor(trip, item.date), item)}
                 style={styles.directions}
               >
                 <Feather name="navigation" size={13} color={colors.accent} />
@@ -479,9 +496,9 @@ export default function PlanTab() {
                     key={key}
                     accessibilityRole="tab"
                     aria-selected={on}
-                    accessibilityLabel={key === ANYTIME ? 'No day yet' : shortDate(key)}
+                    accessibilityLabel={key === ANYTIME ? 'No day yet' : `${shortDate(key)}${several ? `, ${dayCityLabel(trip, key)}` : ''}`}
                     onPress={() => setSelected(key)}
-                    style={[styles.pill, on && styles.pillOn]}
+                    style={[styles.pill, several && styles.pillTall, on && styles.pillOn]}
                   >
                     {key === ANYTIME ? (
                       <Text style={[styles.pillNoDay, on && { color: colors.onFill }]}>No{'\n'}day</Text>
@@ -489,6 +506,11 @@ export default function PlanTab() {
                       <>
                         <Text style={[styles.pillDay, on && { color: colors.onFillMuted }]}>{weekdayOf(key)}</Text>
                         <Text style={[styles.pillNum, on && { color: colors.onFill }]}>{dayOfMonth(key)}</Text>
+                        {several ? (
+                          <Text style={[styles.pillCity, on && { color: colors.onFillMuted }]} numberOfLines={1}>
+                            {pillCity(key)}
+                          </Text>
+                        ) : null}
                       </>
                     )}
                   </Pressable>
@@ -542,6 +564,29 @@ export default function PlanTab() {
                     <Feather name="shuffle" size={13} color={colors.accentInk} />
                     <Text style={styles.shortestText}>Shortest order</Text>
                   </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+            {currentDate && dayLinks.links.length > 0 ? (
+              <View style={styles.googleRow}>
+                {dayLinks.links.map((link, i) => (
+                  <Pressable
+                    key={link.url}
+                    accessibilityRole="link"
+                    accessibilityHint="Opens the day’s stops in Google Maps as one route"
+                    onPress={() => void Linking.openURL(link.url).catch(() => undefined)}
+                    style={styles.google}
+                  >
+                    <Feather name="external-link" size={13} color={colors.accentInk} />
+                    <Text style={styles.googleText}>
+                      {dayLinks.links.length === 1
+                        ? 'Open day in Google Maps'
+                        : `Open part ${i + 1} (stops ${link.fromStop}–${link.toStop})`}
+                    </Text>
+                  </Pressable>
+                ))}
+                {skippedNote || appleNote ? (
+                  <Text style={styles.googleNote}>{[skippedNote, appleNote].filter(Boolean).join(' ')}</Text>
                 ) : null}
               </View>
             ) : null}
@@ -646,6 +691,7 @@ export default function PlanTab() {
       <FindOnMapSheet
         visible={!!findingFor}
         tripId={trip.id}
+        date={findingFor?.date}
         query={findingFor?.placeName ?? findingFor?.title ?? ''}
         onPick={async (place) => {
           if (findingFor) await pinItem(findingFor, place);
@@ -718,6 +764,12 @@ const styles = StyleSheet.create({
   pillOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   pillDay: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   pillNum: { fontFamily: fonts.bold, fontSize: 18, color: colors.ink },
+  pillTall: { width: 64, height: 72 },
+  pillCity: { maxWidth: 58, fontFamily: fonts.medium, fontSize: 10, color: colors.muted },
+  googleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },
+  google: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
+  googleText: { fontFamily: fonts.bold, fontSize: 12, color: colors.accentInk },
+  googleNote: { flexBasis: '100%', fontFamily: fonts.body, fontSize: 12, color: colors.muted },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   viewSwitch: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: colors.track },
   viewOption: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 34, paddingHorizontal: 12, borderRadius: radius.pill },

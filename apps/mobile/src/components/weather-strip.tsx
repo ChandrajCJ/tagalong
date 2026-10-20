@@ -19,18 +19,28 @@ export function WeatherStrip({ trip }: { trip: Trip }) {
   const [weather, setWeather] = useState<TripWeather | null>(null);
   const latitude = trip.location?.latitude ?? null;
   const longitude = trip.location?.longitude ?? null;
+  // Each day's weather is at that day's place.
+  const places = trip.places.map((p) => ({
+    destination: p.destination,
+    latitude: p.location?.latitude ?? null,
+    longitude: p.location?.longitude ?? null,
+    startDate: p.startDate,
+    endDate: p.endDate,
+  }));
+  const placesKey = JSON.stringify(places);
 
   useEffect(() => {
     let live = true;
     const today = new Date().toISOString().slice(0, 10);
-    tripWeather(fetch, { latitude, longitude, startDate: trip.startDate, endDate: trip.endDate }, today)
+    tripWeather(fetch, { latitude, longitude, startDate: trip.startDate, endDate: trip.endDate }, today, undefined, places)
       .catch(() => request(`/trips/${trip.id}/weather`, { schema: TripWeather }))
       .then((w) => live && setWeather(w))
       .catch(() => live && setWeather(null));
     return () => {
       live = false;
     };
-  }, [trip.id, latitude, longitude, trip.startDate, trip.endDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip.id, latitude, longitude, trip.startDate, trip.endDate, placesKey]);
 
   if (!weather || weather.kind === 'none' || weather.days.length === 0) return null;
   const typical = weather.kind === 'typical';
@@ -42,15 +52,22 @@ export function WeatherStrip({ trip }: { trip: Trip }) {
         <Text style={styles.note}>{typical ? 'Last year on these dates' : 'Forecast'}</Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days}>
-        {weather.days.map((d) => {
+        {weather.days.map((d, i) => {
           const info = weatherInfo(d.code);
+          // The city over its first day, when the trip moves on.
+          const newPlace = d.place && d.place !== weather.days[i - 1]?.place ? d.place : null;
           return (
             <View
               key={d.date}
               style={styles.day}
               accessible
-              accessibilityLabel={`${weekdayOf(d.date)} ${d.date.slice(8)}: ${info.label}, ${d.maxC} to ${d.minC} degrees${d.rainChance != null ? `, ${d.rainChance}% chance of rain` : ''}`}
+              accessibilityLabel={`${weekdayOf(d.date)} ${d.date.slice(8)}${d.place ? ` in ${d.place}` : ''}: ${info.label}, ${d.maxC} to ${d.minC} degrees${d.rainChance != null ? `, ${d.rainChance}% chance of rain` : ''}`}
             >
+              {weather.days.some((w) => w.place) ? (
+                <Text style={styles.place} numberOfLines={1}>
+                  {newPlace ?? ' '}
+                </Text>
+              ) : null}
               <Text style={styles.weekday}>
                 {weekdayOf(d.date)} {Number(d.date.slice(8))}
               </Text>
@@ -75,6 +92,7 @@ const styles = StyleSheet.create({
   days: { paddingHorizontal: space.lg, gap: space.md },
   day: { alignItems: 'center', gap: 2, minWidth: 48 },
   weekday: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
+  place: { maxWidth: 72, fontFamily: fonts.bold, fontSize: 11, color: colors.accent },
   max: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   min: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   rain: { fontFamily: fonts.bold, fontSize: 11, color: colors.rain },

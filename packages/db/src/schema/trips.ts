@@ -57,6 +57,36 @@ export const trips = tripsSchema.table('trips', {
   ...softDelete(),
 });
 
+/**
+ * The places a trip goes to, in order (Lisbon → Porto → Madrid); at least
+ * one. The trip's own destination columns are a summary of these, kept in
+ * step by the service, so older phones and every other query still work.
+ */
+export const tripPlaces = tripsSchema.table(
+  'trip_places',
+  {
+    id: id(),
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    // A fractional-index key: sorting these strings gives the trip's order.
+    position: text('position').notNull(),
+    destination: text('destination').notNull(),
+    placeId: text('place_id'),
+    latitude: doublePrecision('latitude'),
+    longitude: doublePrecision('longitude'),
+    bounds: jsonb('bounds').$type<[number, number, number, number]>(),
+    countryCode: char('country_code', { length: 2 }),
+    timezone: text('timezone'),
+    /** The days spent there; optional, and inside the trip's dates. */
+    startDate: date('start_date', { mode: 'string' }),
+    endDate: date('end_date', { mode: 'string' }),
+    version: version(),
+    ...timestamps(),
+  },
+  (t) => [index('trip_places_trip_position_idx').on(t.tripId, t.position)],
+);
+
 /** Every permission check in the app goes through this table. */
 export const tripMembers = tripsSchema.table(
   'trip_members',

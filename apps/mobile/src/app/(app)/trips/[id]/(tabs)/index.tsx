@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { hasRole, listsSummary, NextUp } from '@tagalong/shared';
+import { cityOf, hasRole, listsSummary, NextUp } from '@tagalong/shared';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +17,7 @@ import { formatDateRange, tripCountdown } from '@/lib/format';
 import { useTripLists, useTripNotes } from '@/lib/lists';
 import { useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
+import { placesLine } from '@/lib/trip-places';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
 
 type IconName = React.ComponentProps<typeof Feather>['name'];
@@ -57,6 +58,9 @@ export default function TripOverview() {
   // On a photo the title is white, over the photo's darkened bottom.
   const onPhoto = !!trip.coverUrl;
   const base = `/trips/${trip.id}` as const;
+  // "Lisbon, Porto and Madrid" for a trip to several places.
+  const cities = trip.places.length > 0 ? trip.places.map((p) => cityOf(p.destination)) : [cityOf(trip.destination)];
+  const citiesText = cities.length > 1 ? `${cities.slice(0, -1).join(', ')} and ${cities.at(-1)}` : cities[0]!;
 
   const setArchived = async (archived: boolean) => {
     try {
@@ -190,7 +194,7 @@ export default function TripOverview() {
         ) : null}
         <View style={styles.card}>
           <Text style={styles.countdown}>{countdown ?? 'No dates yet'}</Text>
-          <Body>{trip.destination}</Body>
+          <Body>{placesLine(trip)}</Body>
           {!trip.startDate && canInvite ? (
             <Button
               label="Add dates"
@@ -217,7 +221,7 @@ export default function TripOverview() {
               <Feather name="compass" size={22} color={colors.onFill} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.exploreTitle}>Explore {trip.destination.split(',')[0]}</Text>
+              <Text style={styles.exploreTitle}>Explore {citiesText}</Text>
               <Body style={{ fontSize: 13 }}>Sights, food, beaches and more nearby. Add favourites to Ideas.</Body>
             </View>
             <Feather name="chevron-right" size={18} color={colors.faint} />
@@ -232,7 +236,7 @@ export default function TripOverview() {
               <Feather name="map-pin" size={22} color={colors.onFill} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.exploreTitle}>Put {trip.destination.split(',')[0]} on the map</Text>
+              <Text style={styles.exploreTitle}>Put {cities[0]} on the map</Text>
               <Body style={{ fontSize: 13 }}>Pick the destination from the suggestions to get weather and places to go.</Body>
             </View>
             <Feather name="chevron-right" size={18} color={colors.faint} />

@@ -1,4 +1,11 @@
-import { CreateTripInput, SetCoverInput, UpdateMemberInput, UpdateTripInput } from '@tagalong/shared';
+import {
+  CreateTripInput,
+  CreateTripPlaceInput,
+  SetCoverInput,
+  UpdateMemberInput,
+  UpdateTripInput,
+  UpdateTripPlaceInput,
+} from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
@@ -7,10 +14,12 @@ import { createNotifier } from '../../lib/notifier';
 import { parse } from '../../lib/validate';
 import { createCoverService } from './cover';
 import { createMembersService } from './members';
+import { createTripPlacesService } from './places';
 import { createTripsService } from './service';
 
 const TripParams = z.object({ id: z.string().uuid() });
 const MemberParams = TripParams.extend({ userId: z.string().uuid() });
+const PlaceParams = TripParams.extend({ placeId: z.string().uuid() });
 
 export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }) => {
   const tripsService = createTripsService(
@@ -22,6 +31,7 @@ export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
     createNotifier(deps.db, deps.redis, deps.jobs),
   );
   const membersService = createMembersService(deps.db, deps.redis);
+  const placesService = createTripPlacesService(deps.db, deps.redis, deps.geo);
   const cover = createCoverService(deps.db, deps.redis, deps.storage, deps.jobs, deps.geo);
   app.addHook('preHandler', app.authenticate);
 
@@ -81,6 +91,29 @@ export const tripsRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
   app.delete('/trips/:id/archive', async (request, reply) => {
     const { id } = parse(TripParams, request.params);
     await tripsService.setArchived(id, request.user.sub, false);
+    return reply.status(204).send();
+  });
+
+  app.get('/trips/:id/places', async (request) => ({
+    places: await placesService.list(parse(TripParams, request.params).id, request.user.sub),
+  }));
+
+  app.post('/trips/:id/places', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    const input = parse(CreateTripPlaceInput, request.body);
+    const { place, created } = await placesService.create(id, request.user.sub, input, originOf(request));
+    return reply.status(created ? 201 : 200).send(place);
+  });
+
+  app.patch('/trips/:id/places/:placeId', async (request) => {
+    const { id, placeId } = parse(PlaceParams, request.params);
+    const input = parse(UpdateTripPlaceInput, request.body);
+    return placesService.update(id, placeId, request.user.sub, input, originOf(request));
+  });
+
+  app.delete('/trips/:id/places/:placeId', async (request, reply) => {
+    const { id, placeId } = parse(PlaceParams, request.params);
+    await placesService.remove(id, placeId, request.user.sub, originOf(request));
     return reply.status(204).send();
   });
 

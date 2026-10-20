@@ -123,7 +123,8 @@ export const createCoverService = (db: Db, redis: Redis, storage: Storage, jobs:
     async suggestion(tripId: string, userId: string): Promise<CoverSuggestion | null> {
       await requireTripRole(db, tripId, userId, 'viewer');
       const [trip] = await db.select({ destination: trips.destination }).from(trips).where(eq(trips.id, tripId));
-      const name = trip?.destination.split(',')[0]?.trim();
+      // "Lisbon → Porto → Madrid": the first place's photo.
+      const name = trip?.destination.split(' → ')[0]?.split(',')[0]?.trim();
       if (!name) return null;
       return geo.destinationPhoto(name).catch(() => null);
     },

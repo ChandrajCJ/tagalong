@@ -4,6 +4,72 @@ import { TripLocation } from './places';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 
+/** At most this many places on one trip: a long rail trip, not a world tour. */
+export const MAX_TRIP_PLACES = 12;
+
+/** One city or region on a trip (Lisbon → Porto → Madrid), in trip order. */
+export const TripPlace = z.object({
+  id: z.string().uuid(),
+  tripId: z.string().uuid(),
+  /** A fractional-index key: sorting these strings gives the trip's order. */
+  position: z.string(),
+  /** "Lisbon, Portugal": what was picked or typed. */
+  destination: z.string(),
+  /** Where it is, when a real place was picked. */
+  location: TripLocation.nullable(),
+  timezone: z.string().nullable(),
+  /** The days spent there, inside the trip's dates. Optional: without them, the first place is used. */
+  startDate: isoDate.nullable(),
+  endDate: isoDate.nullable(),
+  version: z.number().int(),
+});
+export type TripPlace = z.infer<typeof TripPlace>;
+
+export const TripPlaceList = z.object({ places: z.array(TripPlace) });
+
+const placeDates = <T extends { startDate?: string | null; endDate?: string | null }>(p: T) =>
+  !p.startDate || !p.endDate || p.startDate <= p.endDate;
+const placeDatesIssue = { message: 'Leaving must be on or after arriving', path: ['endDate'] };
+
+/** A place as typed into New trip, before the trip exists. */
+export const NewTripPlace = z
+  .object({
+    id: z.string().uuid().optional(),
+    destination: z.string().trim().min(1).max(200),
+    location: TripLocation.nullable().optional(),
+    startDate: isoDate.nullable().optional(),
+    endDate: isoDate.nullable().optional(),
+  })
+  .refine(placeDates, placeDatesIssue);
+export type NewTripPlace = z.input<typeof NewTripPlace>;
+
+/** POST /trips/:id/places. Without a position it goes last. */
+export const CreateTripPlaceInput = z
+  .object({
+    id: z.string().uuid().optional(),
+    destination: z.string().trim().min(1).max(200),
+    location: TripLocation.nullable().optional(),
+    startDate: isoDate.nullable().optional(),
+    endDate: isoDate.nullable().optional(),
+    position: z.string().min(1).max(100).optional(),
+  })
+  .refine(placeDates, placeDatesIssue);
+export type CreateTripPlaceInput = z.input<typeof CreateTripPlaceInput>;
+
+/** PATCH /trips/:id/places/:placeId. `version` is the one you last saw. */
+export const UpdateTripPlaceInput = z
+  .object({
+    destination: z.string().trim().min(1).max(200).optional(),
+    /** A newly picked place, or null to forget it (the name became free text). */
+    location: TripLocation.nullable().optional(),
+    startDate: isoDate.nullable().optional(),
+    endDate: isoDate.nullable().optional(),
+    position: z.string().min(1).max(100).optional(),
+    version: z.number().int().min(1),
+  })
+  .refine(placeDates, placeDatesIssue);
+export type UpdateTripPlaceInput = z.input<typeof UpdateTripPlaceInput>;
+
 export const CreateTripInput = z
   .object({
     id: z.string().uuid().optional(),
@@ -18,6 +84,12 @@ export const CreateTripInput = z
       .default('#D8A47F'),
     /** The real place picked from the destination search, if any. */
     location: TripLocation.optional(),
+    /**
+     * Every place on the trip, in order, when there's more than one (or the
+     * one has dates). Replaces `destination` and `location`, which older
+     * phones still send on their own.
+     */
+    places: z.array(NewTripPlace).min(1).max(MAX_TRIP_PLACES).optional(),
   })
   .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {
     message: 'End date must be on or after the start date',
@@ -156,6 +228,11 @@ export const Trip = TripSummary.omit({ unreadCount: true }).extend({
   location: TripLocation.nullable(),
   /** The destination's time zone, e.g. "Asia/Kolkata", once known. */
   timezone: z.string().nullable(),
+  /**
+   * Every place on the trip, in order; at least one. `destination`,
+   * `location` and `timezone` above summarise them for older phones.
+   */
+  places: z.array(TripPlace).default([]),
   members: z.array(TripMember),
   /** Which photo is on the cover, so Edit can show it and offer "Remove photo". */
   coverPhotoId: z.string().uuid().nullable().default(null),

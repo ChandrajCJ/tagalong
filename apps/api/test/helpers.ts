@@ -247,6 +247,8 @@ export type FakeGeo = Geo & {
   calls: string[];
   /** Every search, with how it was asked. */
   searches: ({ query: string } & NonNullable<Parameters<Geo['search']>[1]>)[];
+  /** Where weather and Wikipedia were asked about, as "weather@lat,lng:from:to" and "wiki@lat,lng". */
+  spots: string[];
   reset(): void;
 };
 
@@ -265,18 +267,21 @@ export const fakeGeo = (): FakeGeo => {
     answers: fresh(),
     calls: [],
     searches: [],
+    spots: [],
     reset() {
       geo.answers = fresh();
       geo.calls.length = 0;
       geo.searches.length = 0;
+      geo.spots.length = 0;
     },
     async search(query, options) {
       geo.calls.push(`search:${query}`);
       geo.searches.push({ query, ...options });
       return geo.answers.search;
     },
-    async wikipediaNearby() {
+    async wikipediaNearby(point) {
       geo.calls.push('wiki');
+      geo.spots.push(`wiki@${point.latitude},${point.longitude}`);
       if (geo.answers.wiki === null) throw new Error('Wikipedia is down');
       return geo.answers.wiki;
     },
@@ -288,8 +293,9 @@ export const fakeGeo = (): FakeGeo => {
       geo.calls.push(`photon:${category}`);
       return geo.answers.photon;
     },
-    async weather(_centre, kind, from, to) {
+    async weather(centre, kind, from, to) {
       geo.calls.push(`weather:${kind}:${from}:${to}`);
+      geo.spots.push(`weather@${centre.latitude},${centre.longitude}:${from}:${to}`);
       return geo.answers.weather;
     },
     async timezoneAt() {

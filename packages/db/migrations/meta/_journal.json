@@ -148,6 +148,13 @@
       "when": 1792427577501,
       "tag": "0020_videos",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792496483650,
+      "tag": "0021_trip_places",
+      "breakpoints": true
     }
   ]
 }

@@ -31,7 +31,7 @@ describe('trip weather', () => {
     expect(w).toEqual({
       kind: 'forecast',
       timezone: 'Asia/Kolkata',
-      days: [{ date: '2026-10-23', code: 61, maxC: 32, minC: 24, rainChance: 70, rainMm: null }],
+      days: [{ date: '2026-10-23', code: 61, maxC: 32, minC: 24, rainChance: 70, rainMm: null, place: null }],
     });
   });
 
@@ -59,6 +59,36 @@ describe('trip weather', () => {
     await tripWeather(fetch, { ...goa, startDate: null, endDate: null }, '2026-10-19');
     expect(urls[0]).toContain('start_date=2026-10-19');
     expect(urls[0]).toContain('end_date=2026-10-25');
+  });
+
+  it('asks for each stretch of a several-place trip at its own place, labelled', async () => {
+    const urls: string[] = [];
+    const fetch = async (url: string) => {
+      urls.push(url);
+      const from = new URL(url).searchParams.get('start_date')!;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          timezone: 'Europe/Lisbon',
+          daily: { time: [from], weather_code: [0], temperature_2m_max: [22], temperature_2m_min: [14], precipitation_probability_max: [0] },
+        }),
+      };
+    };
+    const places = [
+      { destination: 'Lisbon, Portugal', latitude: 38.7, longitude: -9.1, startDate: '2026-10-22', endDate: '2026-10-24' },
+      { destination: 'Porto, Portugal', latitude: 41.15, longitude: -8.6, startDate: '2026-10-24', endDate: '2026-10-26' },
+    ];
+    const w = await tripWeather(fetch, { latitude: 38.7, longitude: -9.1, startDate: '2026-10-22', endDate: '2026-10-26' }, '2026-10-19', undefined, places);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain('latitude=38.7&');
+    expect(urls[0]).toContain('end_date=2026-10-23');
+    expect(urls[1]).toContain('latitude=41.15&');
+    expect(urls[1]).toContain('start_date=2026-10-24');
+    expect(w.days.map((d) => [d.date, d.place])).toEqual([
+      ['2026-10-22', 'Lisbon'],
+      ['2026-10-24', 'Porto'],
+    ]);
   });
 
   it('fails when Open-Meteo refuses, so the caller can fall back', async () => {

@@ -1,5 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import {
+  cityOf,
   hasRole,
   Idea,
   IdeaList,
@@ -415,7 +416,7 @@ export default function IdeasTab() {
             style={styles.findPlaces}
           >
             <Feather name="compass" size={14} color={colors.accentInk} />
-            <Text style={styles.findPlacesText}>Find places near {trip.destination.split(',')[0]}</Text>
+            <Text style={styles.findPlacesText}>Find places near {cityOf(trip.places[0]?.destination ?? trip.destination)}</Text>
           </Pressable>
         ) : null}
       </View>

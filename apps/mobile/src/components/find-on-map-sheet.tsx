@@ -9,6 +9,8 @@ import { Body } from './ui';
 interface Props {
   visible: boolean;
   tripId: string;
+  /** The stop's day, so the search looks around that day's place. */
+  date?: string | null;
   /** What to look for first: the item's place, or its title. */
   query: string;
   onPick: (place: PickedPlace) => Promise<void>;
@@ -16,7 +18,7 @@ interface Props {
 }
 
 /** "Find on map" for a plan item added before it had a spot: the place search, prefilled. */
-export function FindOnMapSheet({ visible, tripId, query, onPick, onClose }: Props) {
+export function FindOnMapSheet({ visible, tripId, date, query, onPick, onClose }: Props) {
   const [text, setText] = useState(query);
   const [error, setError] = useState<string>();
 
@@ -48,6 +50,7 @@ export function FindOnMapSheet({ visible, tripId, query, onPick, onClose }: Prop
               value={text}
               picked={false}
               tripId={tripId}
+              date={date}
               onChangeText={setText}
               onPick={async (place) => {
                 try {

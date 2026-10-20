@@ -11,6 +11,7 @@ import { colors, fonts, radius, space } from '@/theme';
 import { TripMap } from './trip-map';
 import type { MapLine, MapPin } from './trip-map.types';
 import { Body, Button } from './ui';
+import { dayCityLabel, dayPlaceOf, destinationFor } from '@/lib/trip-places';
 
 const NO_DAY_COLOR = colors.faint;
 
@@ -91,11 +92,11 @@ export function PlanMapView({ trip, items, days }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [located, openIdeas, day, showIdeas, days]);
 
-  // Open on the pins, or the destination when there are none yet.
+  // Open on the pins, or the day's city, or the destination (every place) when there are none yet.
+  const around = (loc: { latitude: number; longitude: number; bounds: [number, number, number, number] | null } | null | undefined) =>
+    loc ? (loc.bounds ?? boundsAround([loc], 0.1)) : null;
   const bounds =
-    boundsAround(pins) ??
-    trip.location?.bounds ??
-    (trip.location ? boundsAround([trip.location], 0.1) : null);
+    boundsAround(pins) ?? (filteredDate ? around(dayPlaceOf(trip, filteredDate)?.place.location) : null) ?? around(trip.location);
 
   const daysWithPins = days.filter((d) => located.some((i) => i.date === d));
 
@@ -146,6 +147,7 @@ export function PlanMapView({ trip, items, days }: Props) {
               <View style={[styles.swatch, { backgroundColor: dayColor(n) }]} />
               <Text style={[styles.chipText, on && { color: colors.onFill }]}>
                 Day {n + 1}
+                {dayCityLabel(trip, d) ? ` · ${dayCityLabel(trip, d)}` : ''}
               </Text>
             </Pressable>
           );
@@ -164,7 +166,8 @@ export function PlanMapView({ trip, items, days }: Props) {
       </ScrollView>
 
       <View style={{ flex: 1 }}>
-        <TripMap pins={pins} bounds={bounds} line={line} selectedId={selected ? `${selected.kind}:${selected.kind === 'item' ? selected.item.id : selected.idea.id}` : null} onPressPin={pick} />
+        {/* A new day frames itself: the map only frames when it opens. */}
+        <TripMap key={day} pins={pins} bounds={bounds} line={line} selectedId={selected ? `${selected.kind}:${selected.kind === 'item' ? selected.item.id : selected.idea.id}` : null} onPressPin={pick} />
 
         {pins.length === 0 ? (
           <View style={styles.overlayNote}>
@@ -194,7 +197,7 @@ export function PlanMapView({ trip, items, days }: Props) {
               accessibilityLabel="Directions"
               onPress={() => {
                 const target = selected.kind === 'item' ? selected.item : selected.idea;
-                openDirections(target.title, trip.destination, target);
+                openDirections(target.title, destinationFor(trip, selected.kind === 'item' ? selected.item.date : null), target);
               }}
               style={styles.cardButton}
             >

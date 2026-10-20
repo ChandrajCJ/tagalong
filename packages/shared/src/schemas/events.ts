@@ -15,6 +15,9 @@ export const TRIP_EVENT_TYPES = [
   'trip.updated',
   /** The owner deleted the trip; open screens leave it. */
   'trip.deleted',
+  /** One of the trip's places (Lisbon → Porto) was added, changed or removed; the payload is the place. */
+  'place.upserted',
+  'place.deleted',
   'message.created',
   /** Someone edited their message; the payload is the message. */
   'message.updated',

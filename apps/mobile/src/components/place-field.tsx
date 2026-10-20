@@ -23,6 +23,8 @@ interface Props {
   picked: boolean;
   /** The trip to search around, and whose ideas to suggest first. */
   tripId: string;
+  /** The stop's day: on a trip to several places, the search looks around that day's place. */
+  date?: string | null;
   onChangeText: (text: string) => void;
   onPick: (place: PickedPlace) => void;
   placeholder?: string;
@@ -56,7 +58,7 @@ const fromSearch = (r: PlaceResult): Suggestion => ({
  * one puts it on the map; typing anything else still works, just without a pin.
  */
 export function PlaceField(props: Props) {
-  const { label, value, picked, tripId, onChangeText, onPick, placeholder, editable = true, autoFocus, searchNow } = props;
+  const { label, value, picked, tripId, date, onChangeText, onPick, placeholder, editable = true, autoFocus, searchNow } = props;
   const pickedHint = props.pickedHint ?? 'On the map, with travel times and directions.';
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [results, setResults] = useState<PlaceResult[]>([]);
@@ -83,13 +85,15 @@ export function PlaceField(props: Props) {
     const ticket = ++latest.current;
     setSearching(true);
     const timer = setTimeout(() => {
-      request(`/places/search?scope=place&tripId=${tripId}&q=${encodeURIComponent(query)}`, { schema: PlaceSearch })
+      request(`/places/search?scope=place&tripId=${tripId}${date ? `&date=${date}` : ''}&q=${encodeURIComponent(query)}`, {
+        schema: PlaceSearch,
+      })
         .then((data) => ticket === latest.current && setResults(data.results))
         .catch(() => ticket === latest.current && setResults([]))
         .finally(() => ticket === latest.current && setSearching(false));
     }, 350);
     return () => clearTimeout(timer);
-  }, [value, picked, active, tripId]);
+  }, [value, picked, active, tripId, date]);
 
   const query = value.trim().toLowerCase();
   const ideaMatches = picked || !active || query.length < 2 ? [] : ideas.filter((i) => i.title.toLowerCase().includes(query)).slice(0, 3);

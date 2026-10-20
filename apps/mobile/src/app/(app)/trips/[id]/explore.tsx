@@ -1,5 +1,6 @@
 import Feather from '@expo/vector-icons/Feather';
 import {
+  cityOf,
   hasRole,
   Idea,
   IdeaList,
@@ -36,22 +37,32 @@ const CATEGORY_META: Record<RecommendationCategory, { label: string; icon: IconN
 export default function ExploreScreen() {
   const { trip } = useTrip();
   const [category, setCategory] = useState<RecommendationCategory>('sights');
-  const [lists, setLists] = useState<Partial<Record<RecommendationCategory, RecommendationList>>>({});
+  // On a trip to several places, which one to explore; the first until someone picks.
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  // Answers by place and category: "<placeId>:food".
+  const [lists, setLists] = useState<Record<string, RecommendationList>>({});
   const [error, setError] = useState<string>();
   const [inIdeas, setInIdeas] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
 
   const tripId = trip?.id;
   const canEdit = !!trip && hasRole(trip.myRole, 'editor');
-  const city = trip?.destination.split(',')[0]?.trim() ?? 'here';
+  const places = trip?.places ?? [];
+  const place = places.find((p) => p.id === placeId) ?? places[0] ?? null;
+  const city = place ? cityOf(place.destination) : trip ? cityOf(trip.destination) : 'here';
+  // A place that isn't on the map can't be explored; the trip's own spot stands in for one-place trips.
+  const onMap = places.length > 1 ? !!place?.location : !!trip?.location;
+  const key = `${place?.id ?? 'trip'}:${category}`;
 
   const load = useCallback(
-    async (which: RecommendationCategory) => {
+    async (which: RecommendationCategory, where: string | null) => {
       if (!tripId) return;
       setError(undefined);
       try {
-        const list = await request(`/trips/${tripId}/recommendations?category=${which}`, { schema: RecommendationList });
-        setLists((prev) => ({ ...prev, [which]: list }));
+        const list = await request(`/trips/${tripId}/recommendations?category=${which}${where ? `&place=${where}` : ''}`, {
+          schema: RecommendationList,
+        });
+        setLists((prev) => ({ ...prev, [`${where ?? 'trip'}:${which}`]: list }));
       } catch (e) {
         setError(e instanceof ApiError ? e.message : 'Couldn’t load places. Check your connection and try again.');
       }
@@ -60,8 +71,8 @@ export default function ExploreScreen() {
   );
 
   useEffect(() => {
-    if (trip?.location && !lists[category]) void load(category);
-  }, [trip?.location, category, lists, load]);
+    if (onMap && !lists[key]) void load(category, place?.id ?? null);
+  }, [onMap, category, key, lists, load, place?.id]);
 
   // Which places are already ideas, so they aren't added twice.
   useEffect(() => {
@@ -99,8 +110,9 @@ export default function ExploreScreen() {
     }
   };
 
-  const list = lists[category];
+  const list = lists[key];
 
+  const explored = place?.destination ?? trip.destination;
   const renderPlace = ({ item: place }: { item: Recommendation }) => {
     const added = inIdeas.has(place.id);
     return (
@@ -147,7 +159,7 @@ export default function ExploreScreen() {
           <Pressable
             accessibilityRole="link"
             accessibilityLabel={`Directions to ${place.name}`}
-            onPress={() => openDirections(place.name, trip.destination, place)}
+            onPress={() => openDirections(place.name, explored, place)}
             style={styles.link}
           >
             <Feather name="navigation" size={14} color={colors.accent} />
@@ -183,11 +195,32 @@ export default function ExploreScreen() {
         </Body>
       </View>
 
-      {!trip.location ? (
+      {places.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.places} style={{ flexGrow: 0 }}>
+          {places.map((p) => {
+            const on = p.id === place?.id;
+            return (
+              <Pressable
+                key={p.id}
+                accessibilityRole="tab"
+                aria-selected={on}
+                onPress={() => setPlaceId(p.id)}
+                style={[styles.placeChip, on && styles.placeChipOn]}
+              >
+                <Feather name="map-pin" size={13} color={on ? colors.accentInk : colors.muted} />
+                <Text style={[styles.chipText, on && { color: colors.accentInk }]}>{cityOf(p.destination)}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
+      {!onMap ? (
         <View style={styles.center}>
           <Feather name="map-pin" size={28} color={colors.accent} />
           <Body style={{ textAlign: 'center' }}>
-            This trip’s destination isn’t on the map yet. Pick it from the suggestions in Edit trip to see places to go.
+            {places.length > 1 ? `${city} isn’t on the map yet.` : 'This trip’s destination isn’t on the map yet.'} Pick it from
+            the suggestions in Edit trip to see places to go.
           </Body>
           {canEdit ? <Button label="Set the location" onPress={() => router.push(`/trips/${trip.id}/edit`)} /> : null}
         </View>
@@ -214,7 +247,7 @@ export default function ExploreScreen() {
           {error && !list ? (
             <View style={styles.center}>
               <Body style={{ textAlign: 'center' }}>{error}</Body>
-              <Button label="Try again" variant="outline" onPress={() => void load(category)} />
+              <Button label="Try again" variant="outline" onPress={() => void load(category, place?.id ?? null)} />
             </View>
           ) : !list ? (
             <View style={styles.center}>
@@ -243,7 +276,7 @@ export default function ExploreScreen() {
                   // Empty because sources were busy, not because there's nothing: say so, and offer a retry.
                   <View style={styles.center}>
                     <Body style={{ textAlign: 'center' }}>Couldn’t load places right now. Try again.</Body>
-                    <Button label="Try again" variant="outline" onPress={() => void load(category)} />
+                    <Button label="Try again" variant="outline" onPress={() => void load(category, place?.id ?? null)} />
                   </View>
                 ) : (
                   <View style={styles.center}>
@@ -266,6 +299,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.xl, paddingTop: space.sm, gap: space.xs },
   back: { width: 44, height: 44, marginLeft: -space.md, alignItems: 'center', justifyContent: 'center' },
+  places: { gap: space.sm, paddingHorizontal: space.xl, paddingTop: space.md },
+  placeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  placeChipOn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
   chips: { gap: space.sm, paddingHorizontal: space.xl, paddingVertical: space.md },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },

@@ -2,19 +2,23 @@ import { eq } from 'drizzle-orm';
 import { trips, type Db } from '@tagalong/db';
 import {
   mergePlaces,
+  placeForDate,
   sameDayLastYear,
-  weatherPlan,
+  weatherStretches,
   type Bounds,
   type PlaceResult,
   type PlaceScope,
   type RecommendationCategory,
   type RecommendationList,
   type TripWeather,
+  type WeatherDay,
+  type WeatherStretch,
 } from '@tagalong/shared';
 import type { Redis } from 'ioredis';
 import { requireTripRole } from '../../lib/access';
 import { badRequest, HttpError, tooMany } from '../../lib/errors';
 import { PHOTON_TAGS, type Geo, type GeoPlace, type Point } from '../../lib/geo';
+import { placeRows } from '../trips/places';
 
 const DAY = 24 * 60 * 60;
 const ATTRIBUTION = 'Places from Wikipedia and © OpenStreetMap contributors';
@@ -124,7 +128,7 @@ export const createPlacesService = (
     return value;
   };
 
-  const locationOf = async (tripId: string) => {
+  const tripOf = async (tripId: string) => {
     const [trip] = await db
       .select({
         latitude: trips.latitude,
@@ -139,6 +143,38 @@ export const createPlacesService = (
     return trip!;
   };
 
+  /**
+   * Where to look on a trip: the place asked for by id, or the place of a
+   * day (a stop on the Porto day searches around Porto), or the first.
+   * Falls back to the trip's summary when that place isn't on the map.
+   */
+  const placeOf = async (tripId: string, which: { placeId?: string; date?: string } = {}) => {
+    const places = await placeRows(db, tripId);
+    const chosen = which.placeId
+      ? places.find((p) => p.id === which.placeId)
+      : placeForDate(places, which.date ?? null)?.place;
+    if (which.placeId && !chosen) throw badRequest('That place isn’t on this trip');
+    if (chosen && chosen.latitude !== null && chosen.longitude !== null) {
+      return { latitude: chosen.latitude, longitude: chosen.longitude, bounds: chosen.bounds };
+    }
+    const trip = await tripOf(tripId);
+    return { latitude: trip.latitude, longitude: trip.longitude, bounds: trip.bounds };
+  };
+
+  /** One stretch of days at one place: the forecast, or last year's weather dated this year. */
+  const stretchWeather = (kind: 'forecast' | 'typical', s: WeatherStretch) => {
+    const key = `geo:weather:${kind}:${s.centre.latitude.toFixed(2)},${s.centre.longitude.toFixed(2)}:${s.from}:${s.to}${s.place ? `:${s.place}` : ''}`;
+    return cached<WeatherDay[]>(key, kind === 'forecast' ? 3 * 60 * 60 : 30 * DAY, async () => {
+      if (kind === 'forecast') {
+        const w = await geo.weather(s.centre, 'forecast', s.from, s.to);
+        return { value: w.days.map((d) => ({ ...d, place: s.place })), keep: w.days.length > 0 };
+      }
+      const w = await geo.weather(s.centre, 'archive', sameDayLastYear(s.from), sameDayLastYear(s.to));
+      const days = w.days.map((d) => ({ ...d, date: addYears(d.date, 1), rainChance: null, place: s.place }));
+      return { value: days, keep: days.length > 0 };
+    });
+  };
+
   return {
     /**
      * Destinations matching what someone typed or, in place scope, spots in
@@ -147,7 +183,13 @@ export const createPlacesService = (
     async search(
       query: string,
       userId: string,
-      { near, scope = 'destination', tripId }: { near?: Point; scope?: PlaceScope; tripId?: string } = {},
+      {
+        near,
+        scope = 'destination',
+        tripId,
+        placeId,
+        date,
+      }: { near?: Point; scope?: PlaceScope; tripId?: string; placeId?: string; date?: string } = {},
     ): Promise<PlaceResult[]> {
       if (tripId) await requireTripRole(db, tripId, userId, 'viewer');
       // If Redis can't count (full, restarting), let the search through.
@@ -157,7 +199,8 @@ export const createPlacesService = (
 
       let bbox: Bounds | undefined;
       if (scope === 'place' && tripId) {
-        const trip = await locationOf(tripId);
+        // Around the stop's day's place, or the place picked in Explore.
+        const trip = await placeOf(tripId, { placeId, date });
         if (trip.latitude !== null && trip.longitude !== null) {
           near = { latitude: trip.latitude, longitude: trip.longitude };
           bbox = placeArea(near, trip.bounds ?? null);
@@ -169,9 +212,14 @@ export const createPlacesService = (
     },
 
     /** Places worth going to near the trip's destination, best known first. */
-    async recommendations(tripId: string, userId: string, category: RecommendationCategory): Promise<RecommendationList> {
+    async recommendations(
+      tripId: string,
+      userId: string,
+      category: RecommendationCategory,
+      placeId?: string,
+    ): Promise<RecommendationList> {
       await requireTripRole(db, tripId, userId, 'viewer');
-      const trip = await locationOf(tripId);
+      const trip = await placeOf(tripId, { placeId });
       if (trip.latitude === null || trip.longitude === null) {
         throw badRequest('Pick the destination from the suggestions to see places to go', 'no_location');
       }
@@ -231,26 +279,18 @@ export const createPlacesService = (
       });
     },
 
-    /** The forecast for the trip's days, or last year's weather on them when it's further out. */
+    /**
+     * The forecast for the trip's days, or last year's weather on them when
+     * it's further out. Each day uses that day's place.
+     */
     async weather(tripId: string, userId: string, today = new Date().toISOString().slice(0, 10)): Promise<TripWeather> {
       await requireTripRole(db, tripId, userId, 'viewer');
-      const trip = await locationOf(tripId);
-      if (trip.latitude === null || trip.longitude === null) return { kind: 'none', timezone: trip.timezone, days: [] };
-      const plan = weatherPlan(trip.startDate, trip.endDate, today);
-      if (!plan) return { kind: 'none', timezone: trip.timezone, days: [] };
-      const centre = { latitude: trip.latitude, longitude: trip.longitude };
-      const key = `geo:weather:${plan.kind}:${centre.latitude.toFixed(2)},${centre.longitude.toFixed(2)}:${plan.from}:${plan.to}`;
-
-      return cached<TripWeather>(key, plan.kind === 'forecast' ? 3 * 60 * 60 : 30 * DAY, async () => {
-        if (plan.kind === 'forecast') {
-          const w = await geo.weather(centre, 'forecast', plan.from, plan.to);
-          return { value: { kind: 'forecast' as const, timezone: w.timezone, days: w.days }, keep: w.days.length > 0 };
-        }
-        // Last year's weather on the same dates, shown against this year's.
-        const w = await geo.weather(centre, 'archive', sameDayLastYear(plan.from), sameDayLastYear(plan.to));
-        const days = w.days.map((d) => ({ ...d, date: addYears(d.date, 1), rainChance: null }));
-        return { value: { kind: 'typical' as const, timezone: w.timezone, days }, keep: days.length > 0 };
-      });
+      const trip = await tripOf(tripId);
+      const places = await placeRows(db, tripId);
+      const wanted = weatherStretches(trip, places, today);
+      if (!wanted) return { kind: 'none', timezone: trip.timezone, days: [] };
+      const days = await Promise.all(wanted.stretches.map((s) => stretchWeather(wanted.kind, s)));
+      return { kind: wanted.kind, timezone: trip.timezone, days: days.flat() };
     },
   };
 };

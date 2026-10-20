@@ -42,9 +42,9 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
   // Someone renamed the trip or changed its dates: every screen follows.
   useTripRealtime(tripId, (message) => {
     if (message.kind !== 'event') return;
-    if (message.event.type === 'trip.updated') void reload();
+    if (message.event.type === 'trip.updated' || message.event.type.startsWith('place.')) void reload();
     // A stop or booking was added, moved or removed: reminders follow.
-    if (/^(item|booking|day)\.|^trip\.updated$/.test(message.event.type)) requestReminderSync();
+    if (/^(item|booking|day|place)\.|^trip\.updated$/.test(message.event.type)) requestReminderSync();
     // Whoever deleted it already left; everyone else is told why it's gone.
     if (message.event.type === 'trip.deleted' && message.event.originClientId !== CLIENT_ID) setDeleted(true);
   });

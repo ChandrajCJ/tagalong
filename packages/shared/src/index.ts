@@ -29,3 +29,4 @@ export * from './geo';
 export * from './weather';
 export * from './messages';
 export * from './reminders';
+export * from './trip-places';

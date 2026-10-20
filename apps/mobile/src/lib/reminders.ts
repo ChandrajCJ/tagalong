@@ -6,6 +6,7 @@ import {
   MyTrips,
   NotificationPrefs,
   PUSH_CHANNELS,
+  timezoneForStop,
   Trip,
   wantedReminders,
   type ReminderStop,
@@ -40,7 +41,10 @@ const upcomingStops = async (now: Date): Promise<ReminderStop[]> => {
         request(`/trips/${summary.id}/items`, { schema: ItemList }),
         request(`/trips/${summary.id}/bookings`, { schema: BookingList }),
       ]);
-      const zone = trip.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const fallback = trip.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Lisbon → Madrid: a stop's time is on its day's place's clock.
+      const zoneOf = (i: { date: string | null; latitude: number | null; longitude: number | null }) =>
+        timezoneForStop(trip.places, i.date, i) ?? fallback;
       const items = plan.items.flatMap((i): ReminderStop[] =>
         i.date && i.startTime && i.date >= from && i.date <= to
           ? [
@@ -50,7 +54,7 @@ const upcomingStops = async (now: Date): Promise<ReminderStop[]> => {
                 tripId: trip.id,
                 tripName: trip.name,
                 title: i.title,
-                startsAt: itemStartsAt(i.date, i.startTime, zone),
+                startsAt: itemStartsAt(i.date, i.startTime, zoneOf(i)),
                 type: i.type,
                 placeName: i.placeName,
               },

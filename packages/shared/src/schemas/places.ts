@@ -85,6 +85,8 @@ export const WeatherDay = z.object({
   rainChance: z.number().nullable(),
   /** Rain that fell, for typical weather; null for forecasts. */
   rainMm: z.number().nullable(),
+  /** Which of the trip's places it's for ("Porto"), when the trip has several. */
+  place: z.string().nullable().default(null),
 });
 export type WeatherDay = z.infer<typeof WeatherDay>;
 

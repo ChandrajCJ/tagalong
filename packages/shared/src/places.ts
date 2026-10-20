@@ -136,6 +136,51 @@ export const directionsLinks = (query: string) => ({
   apple: `https://maps.apple.com/?daddr=${encodeURIComponent(query)}`,
 });
 
+/** Google Maps takes at most this many stops between the start and the end of one link. */
+export const MAX_WAYPOINTS = 9;
+
+const GOOGLE_TRAVEL_MODE = { foot: 'walking', car: 'driving', bike: 'bicycling' } as const;
+
+export interface DayRouteLink {
+  url: string;
+  /** Which stops it covers, counted along the day's list from 1: "stops 1–11". */
+  fromStop: number;
+  toStop: number;
+}
+
+/**
+ * Links that open a whole day in Google Maps as one route through every stop
+ * on the map, in plan order. One link holds a start, an end and nine stops
+ * between; a longer day is split into parts that meet at a shared stop.
+ * Stops are given as coordinates, so Google can't mistake one for a
+ * same-named place elsewhere. Stops not on the map are skipped and counted.
+ */
+export const dayRouteLinks = (
+  stops: { latitude: number | null; longitude: number | null }[],
+  mode: 'foot' | 'car' | 'bike',
+): { links: DayRouteLink[]; skipped: number } => {
+  const located = stops.flatMap((s, i) =>
+    s.latitude !== null && s.longitude !== null ? [{ n: i + 1, spot: `${s.latitude.toFixed(6)},${s.longitude.toFixed(6)}` }] : [],
+  );
+  const skipped = stops.length - located.length;
+  if (located.length < 2) return { links: [], skipped };
+  const perLink = MAX_WAYPOINTS + 2;
+  const links: DayRouteLink[] = [];
+  // Each part starts where the last one ended.
+  for (let start = 0; start < located.length - 1; start += perLink - 1) {
+    const part = located.slice(start, start + perLink);
+    const params = [
+      'api=1',
+      `origin=${encodeURIComponent(part[0]!.spot)}`,
+      `destination=${encodeURIComponent(part.at(-1)!.spot)}`,
+      ...(part.length > 2 ? [`waypoints=${encodeURIComponent(part.slice(1, -1).map((p) => p.spot).join('|'))}`] : []),
+      `travelmode=${GOOGLE_TRAVEL_MODE[mode]}`,
+    ];
+    links.push({ url: `https://www.google.com/maps/dir/?${params.join('&')}`, fromStop: part[0]!.n, toStop: part.at(-1)!.n });
+  }
+  return { links, skipped };
+};
+
 /** One colour per trip day on the map, repeating after eight days. */
 export const DAY_COLORS = ['#0E6B5C', '#B54A28', '#5B4E86', '#7A5F14', '#3F6E8C', '#8A3D5C', '#4F7A3A', '#9A5B13'] as const;
 export const dayColor = (dayIndex: number) => DAY_COLORS[((dayIndex % DAY_COLORS.length) + DAY_COLORS.length) % DAY_COLORS.length]!;

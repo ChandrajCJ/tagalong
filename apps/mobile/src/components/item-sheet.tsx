@@ -230,6 +230,7 @@ export function ItemSheet(props: Props) {
               value={form.placeName}
               picked={!!form.spot}
               tripId={tripId}
+              date={dateOfKey(form.day)}
               onChangeText={(v) =>
                 // A different place: the old pin no longer fits it.
                 setForm((f) => ({ ...f, placeName: v, spot: null }))

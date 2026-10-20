@@ -56,7 +56,9 @@ This is the app from a traveller's point of view.
 3. On **Your trips**, tap **New trip**. Start typing the destination: real
    places are suggested as you type ("Goa, India", "Lisbon, Portugal"). Pick
    one, and the trip gets weather, a map and things to do, and its currency
-   switches to the local one (still changeable).
+   switches to the local one (still changeable). Going to more than one
+   place? **Add another stop on this trip** (Lisbon → Porto → Madrid), each
+   with the days you're there if you know them.
 4. Add dates (optional, and changeable later), a name (optional) and a cover
    colour, or a cover photo. Tap **Create trip**.
 
@@ -75,9 +77,12 @@ This is the app from a traveller's point of view.
    beyond that), the **next booking** ("Flight 6E 2134 · Thu 08:15 · in 2
    days"), an **Explore** card, a **Get ready** card ("Packing 12/30 · 2
    to-dos left · 3 notes"), and a list of everything you can do here.
-   **Edit** changes the trip's name, dates, destination or cover: a colour,
+   On a trip to several places it reads "Lisbon (Oct 22–24) → Porto (24–26)
+   → Madrid (26–29)", and each day's weather is at that day's place.
+   **Edit** changes the trip's name, dates, places or cover: a colour,
    or a photo you upload, pick from the album, or the destination's photo
-   from Wikipedia.
+   from Wikipedia. Places can be added, re-dated, moved up or down, and
+   removed (a trip keeps at least one).
    The **⋯** button archives the trip (it moves to "Archived" on your list,
    for you only), and lets an owner **delete** it for everyone (type its name
    to confirm; it can be restored from "Recently deleted" for 30 days) or
@@ -88,7 +93,8 @@ This is the app from a traveller's point of view.
 9. **Explore Goa** lists places worth going to, by category: top sights, food
    and drink, nature and beaches, museums and culture, nightlife, shopping.
    Each has a photo and description where available, **Directions** and a
-   link to read more. Tap **Add to Ideas** to put it to the group.
+   link to read more. Tap **Add to Ideas** to put it to the group. A trip to
+   several places has a switch at the top (Lisbon · Porto · Madrid).
 
 ### Deciding together: Ideas and polls
 10. **Ideas** is everything the group is considering. Anyone suggests, and
@@ -106,7 +112,10 @@ This is the app from a traveller's point of view.
    9:10 train from Rossio") just under the day pills. Hold and drag to reorder. Everyone sees
     changes live, sees "Sam is editing" on an item someone has open, and gets
     a clear message instead of silently overwriting each other.
-13. **Where** suggests real places around the destination as you type, with
+    On a trip to several places, each day pill says its city, a travel day
+    says both ("Lisbon → Porto"), and a day's times are on its place's
+    clock, so reminders in Madrid fire an hour after Lisbon's.
+13. **Where** suggests real places around the day's place as you type, with
     the trip's own ideas first; picking one puts the item on the map (a small
     pin on its row). Older items get **Find on map** on their own screen.
 14. Between two stops on the map, the list shows the travel time and
@@ -114,8 +123,13 @@ This is the app from a traveller's point of view.
     Walk / Drive / Cycle switch remembered on each phone. **Shortest order**
     suggests a quicker order for the day, keeping the first stop and anything
     at a set time in place, and shows the time saved before anyone applies it.
+    **Open day in Google Maps** opens every stop on the map as one route, in
+    plan order, walking, driving or cycling as chosen. Google takes 11 stops
+    per link, so a longer day opens in parts; on iPhone it opens Google Maps,
+    since Apple Maps can't take several stops.
 15. Switch Plan to **Map** to see every stop with a location as pins coloured
-    by day, plus ideas still being considered. Pick a day to see its route.
+    by day, plus ideas still being considered. Pick a day to see its route,
+    framed on that day's city.
     Tap a pin for directions.
 16. Tap a plan item for its details: **Directions** (Google Maps on Android,
     a choice of Apple or Google Maps on iPhone), its bookings, the photos
@@ -270,6 +284,7 @@ requests.
 | Polish 1, part B | Photos and screenshots in chat, @mentions, link previews, delivered and read ticks with an Info sheet and a read-receipts setting, trip cover photos |
 | Polish 1, part C | Notifications you control (six kinds, per-trip mute), reminders before timed stops, gentle "add a place" hints in the plan, places for ideas, Explore food and nightlife that load |
 | Polish 1, part D | Videos in the album and chat, dark mode (Profile → Appearance), invite links that open the installed app, the new app icon |
+| Polish 2, part E | Trips to several places (each day's weather, Explore, place search, map and clock follow its place), a whole day opened in Google Maps |
 
 ## 6. What's not done yet
 

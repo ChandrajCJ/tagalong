@@ -1,14 +1,15 @@
 import { and, asc, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
-import { changeLog, expenses, photos, tripMembers, trips, users, type Db } from '@tagalong/db';
+import { changeLog, expenses, photos, tripMembers, tripPlaces, trips, users, type Db } from '@tagalong/db';
 import {
   CreateTripInput,
   newId,
+  positionsBetween,
   TRIP_RESTORE_DAYS,
+  tripSummary,
   UpdateTripInput,
   type DeletedTrip,
   type MyTrips,
   type Trip,
-  type TripLocation,
   type TripRole,
   type TripSummary,
 } from '@tagalong/shared';
@@ -21,6 +22,7 @@ import type { Geo } from '../../lib/geo';
 import type { Notifier } from '../../lib/notifier';
 import type { Storage } from '../../lib/storage';
 import { postSystemMessage, unreadCounts } from '../chat/channel';
+import { checkPlaceDates, locationColumns, placeRows, toPlace } from './places';
 
 type CreateTrip = z.output<typeof CreateTripInput>;
 type UpdateTrip = z.output<typeof UpdateTripInput>;
@@ -50,16 +52,6 @@ export const createTripsService = (
   /** A short-lived link to the cover, or null for a colour-only cover. */
   const coverUrl = async (key: string | null) =>
     key && storage ? storage.downloadUrl(key, 'cover.jpg', ttl) : null;
-
-  /** The columns for a picked place, with its time zone looked up (best effort). */
-  const locationColumns = async (location: TripLocation) => ({
-    placeId: location.placeId,
-    latitude: location.latitude,
-    longitude: location.longitude,
-    bounds: location.bounds,
-    countryCode: location.countryCode,
-    timezone: (await geo?.timezoneAt(location).catch(() => null)) ?? null,
-  });
 
   return {
     /**
@@ -234,9 +226,11 @@ export const createTripsService = (
         .innerJoin(users, eq(users.id, tripMembers.userId))
         .where(and(eq(tripMembers.tripId, tripId), isNull(tripMembers.leftAt)))
         .orderBy(asc(tripMembers.joinedAt));
+      const places = (await placeRows(db, tripId)).map(toPlace);
 
       return {
         ...rest,
+        places,
         archived: archivedAt !== null,
         coverPhotoId: coverKey ? coverPhotoId : null,
         coverUrl: await coverUrl(coverKey),
@@ -254,18 +248,33 @@ export const createTripsService = (
      */
     async create(input: CreateTrip, userId: string): Promise<{ trip: Trip; created: boolean }> {
       const id = input.id ?? newId();
+      // Older phones send one destination; newer ones every place, in order.
+      const wanted = input.places ?? [{ destination: input.destination, location: input.location, startDate: null, endDate: null }];
+      const positions = positionsBetween(null, null, wanted.length);
+      const placeValues = await Promise.all(
+        wanted.map(async (p, i) => ({
+          id: ('id' in p && p.id) || newId(),
+          tripId: id,
+          position: positions[i]!,
+          destination: p.destination,
+          startDate: p.startDate ?? null,
+          endDate: p.endDate ?? null,
+          ...(await locationColumns(geo, p.location)),
+        })),
+      );
+      checkPlaceDates(placeValues, { startDate: input.startDate ?? null, endDate: input.endDate ?? null });
+      const summary = tripSummary(placeValues);
       const created = await db.transaction(async (tx) => {
         const inserted = await tx
           .insert(trips)
           .values({
             id,
             name: input.name,
-            destination: input.destination,
             startDate: input.startDate ?? null,
             endDate: input.endDate ?? null,
             baseCurrency: input.baseCurrency,
             coverColor: input.coverColor,
-            ...(input.location ? await locationColumns(input.location) : {}),
+            ...summary,
             createdBy: userId,
           })
           .onConflictDoNothing()
@@ -281,9 +290,11 @@ export const createTripsService = (
         }
 
         await tx.insert(tripMembers).values({ tripId: id, userId, role: 'owner' });
-        await tx
-          .insert(changeLog)
-          .values({ tripId: id, entity: 'trip', entityId: id, op: 'upsert', changedBy: userId });
+        await tx.insert(tripPlaces).values(placeValues);
+        await tx.insert(changeLog).values([
+          { tripId: id, entity: 'trip', entityId: id, op: 'upsert', changedBy: userId },
+          ...placeValues.map((p) => ({ tripId: id, entity: 'place', entityId: p.id, op: 'upsert', changedBy: userId })),
+        ]);
         return true;
       });
 
@@ -299,7 +310,13 @@ export const createTripsService = (
       await requireTripRole(db, tripId, userId, 'editor');
       const { version, ...fields } = input;
       const [current] = await db
-        .select({ name: trips.name, startDate: trips.startDate, endDate: trips.endDate, baseCurrency: trips.baseCurrency })
+        .select({
+          name: trips.name,
+          destination: trips.destination,
+          startDate: trips.startDate,
+          endDate: trips.endDate,
+          baseCurrency: trips.baseCurrency,
+        })
         .from(trips)
         .where(eq(trips.id, tripId));
       const start = fields.startDate !== undefined ? fields.startDate : current!.startDate;
@@ -314,25 +331,44 @@ export const createTripsService = (
         if (spent) throw badRequest('The currency can’t change once there are expenses', 'currency_locked');
       }
 
-      const { location, ...plain } = fields;
-      const placeColumns =
-        location === undefined
-          ? {}
-          : location === null
-            ? { placeId: null, latitude: null, longitude: null, bounds: null, countryCode: null, timezone: null }
-            : await locationColumns(location);
+      const { location, destination, ...plain } = fields;
+      // An older phone's edit screen sends the destination every time; only a change (or a newly
+      // picked place) touches the places, and then the first one.
+      const placeChanged = location !== undefined || (destination !== undefined && destination !== current!.destination);
+      const placeColumns = location === undefined ? {} : await locationColumns(geo, location);
+      const datesChanged = fields.startDate !== undefined || fields.endDate !== undefined;
 
       const updated = await db.transaction(async (tx) => {
         const [row] = await tx
           .update(trips)
           .set({
             ...Object.fromEntries(Object.entries(plain).filter(([, v]) => v !== undefined)),
-            ...placeColumns,
             version: sql`${trips.version} + 1`,
           })
           .where(and(eq(trips.id, tripId), eq(trips.version, version), isNull(trips.deletedAt)))
           .returning({ id: trips.id });
         if (!row) return false;
+        let places = await placeRows(tx, tripId);
+        if (datesChanged) {
+          try {
+            checkPlaceDates(places, { startDate: start ?? null, endDate: end ?? null });
+          } catch (e) {
+            throw badRequest(`${(e as Error).message} Change the places’ dates first.`, 'place_dates');
+          }
+        }
+        if (placeChanged && places[0]) {
+          const first = places[0];
+          await tx
+            .update(tripPlaces)
+            .set({ ...(destination !== undefined ? { destination } : {}), ...placeColumns, version: sql`${tripPlaces.version} + 1` })
+            .where(eq(tripPlaces.id, first.id));
+          await tx.insert(changeLog).values({ tripId, entity: 'place', entityId: first.id, op: 'upsert', changedBy: userId });
+          places = await placeRows(tx, tripId);
+          await tx
+            .update(trips)
+            .set(tripSummary(places.map((p) => ({ ...p, countryCode: p.countryCode?.trim() || null }))))
+            .where(eq(trips.id, tripId));
+        }
         await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'upsert', changedBy: userId });
         return true;
       });

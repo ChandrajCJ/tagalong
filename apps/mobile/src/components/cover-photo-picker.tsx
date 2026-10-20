@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { CoverSuggestion, PhotoList, Trip, type Photo } from '@tagalong/shared';
+import { cityOf, CoverSuggestion, PhotoList, Trip, type Photo } from '@tagalong/shared';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
@@ -87,7 +87,8 @@ export function CoverPhotoPicker({ trip, onChanged }: { trip: Trip; onChanged: (
       }),
     );
 
-  const place = trip.destination.split(',')[0];
+  // The first place's photo, for a trip to several.
+  const place = cityOf(trip.places[0]?.destination ?? trip.destination);
 
   return (
     <View style={{ gap: space.sm }}>

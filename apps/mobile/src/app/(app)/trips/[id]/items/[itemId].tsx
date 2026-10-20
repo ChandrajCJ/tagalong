@@ -60,6 +60,7 @@ import { dayKeyOf, formatCost, ITEM_TYPE_META, planDays, shortDate } from '@/lib
 import { realtime, useTripRealtime } from '@/lib/realtime';
 import { useTrip } from '@/lib/trip-context';
 import { avatarColor, colors, fonts, radius, space } from '@/theme';
+import { destinationFor } from '@/lib/trip-places';
 
 /** A plan item's own type is a good first guess at what its booking is. */
 const BOOKING_FOR_ITEM: Record<ItemType, BookingType> = {
@@ -450,7 +451,7 @@ export default function ItemDetail() {
                 <Pressable
                   accessibilityRole="link"
                   accessibilityLabel={`Directions to ${item.placeName}`}
-                  onPress={() => openDirections(item.placeName!, trip.destination, item)}
+                  onPress={() => openDirections(item.placeName!, destinationFor(trip, item.date), item)}
                   style={styles.expenseLink}
                 >
                   <Text style={styles.expenseLinkText}>Directions</Text>
@@ -501,7 +502,7 @@ export default function ItemDetail() {
                 <View key={b.id} style={{ gap: space.sm }}>
                   <BookingCard
                     booking={b}
-                    destination={trip.destination}
+                    destination={destinationFor(trip, item.date)}
                     onPress={
                       canEdit ? () => setBookingSheet({ open: true, booking: b }) : undefined
                     }
@@ -739,6 +740,7 @@ export default function ItemDetail() {
       <FindOnMapSheet
         visible={finding}
         tripId={trip.id}
+        date={item.date}
         query={item.placeName ?? item.title}
         onPick={pinItem}
         onClose={() => setFinding(false)}
