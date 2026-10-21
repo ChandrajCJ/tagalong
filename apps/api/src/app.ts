@@ -22,6 +22,7 @@ import { importsRoutes } from './modules/imports/routes';
 import { invitesRoutes } from './modules/invites/routes';
 import { itineraryRoutes } from './modules/itinerary/routes';
 import { listsRoutes } from './modules/lists/routes';
+import { locationRoutes } from './modules/location/routes';
 import { notificationsRoutes } from './modules/notifications/routes';
 import { photosRoutes } from './modules/photos/routes';
 import { tripsRoutes } from './modules/trips/routes';
@@ -94,6 +95,7 @@ export const buildApp = async (deps: BuildDeps) => {
   await app.register(importsRoutes, { deps: fullDeps });
   await app.register(calendarRoutes, { deps: fullDeps });
   await app.register(usersRoutes, { deps: fullDeps });
+  await app.register(locationRoutes, { deps: fullDeps });
 
   return app;
 };

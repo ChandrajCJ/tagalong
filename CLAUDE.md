@@ -1,8 +1,8 @@
 # Tagalong
 
-Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–026), deployment in `docs/DEPLOY.md`. Read only the part you need.
+Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–028), deployment in `docs/DEPLOY.md`. Read only the part you need.
 
-Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, release track, chores). Build one week per session, in order. Polish-1 (sessions A–D) and polish-2 sessions E–F (several destinations, whole-day Google Maps, calendar feed, countdown pushes, avatars) are done. Next: `docs/plans/polish-2.md` session G (live location, Android widget; one new APK), then week 17.
+Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, release track, chores). Build one week per session, in order. Polish-1 (sessions A–D) and polish-2 (sessions E–G: several destinations, whole-day Google Maps, calendar feed, countdown pushes, avatars, live location, Android widget) are done; G needs the new APK. Next: week 17 in `docs/plans/weeks-17-21.md`.
 
 ## Rules
 - Commit as `Chandraj1710 <chandraj1710@gmail.com>`. Never use the work email.
@@ -14,7 +14,7 @@ Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks
 ## Layout
 - pnpm + Turborepo. `apps/api` (Fastify; `src/server.ts` API :3000, `src/gateway.ts` WebSocket :3002), `apps/worker` (BullMQ), `apps/mobile` (Expo SDK 57, Expo Router, also builds the web app), `packages/db` (Drizzle schema + `migrations/`), `packages/shared` (zod schemas, money, geo helpers).
 - API modules: `apps/api/src/modules/<name>/{routes,service}.ts`. Access checks via `requireTripRole` in `lib/access.ts`.
-- Mobile trip screens: `apps/mobile/src/app/(app)/trips/[id]/` (tabs under `(tabs)`).
+- Mobile trip screens: `apps/mobile/src/app/(app)/trips/[id]/` (tabs under `(tabs)`). Entry is `apps/mobile/index.ts` (Expo Router plus the Android widget's task handler, `src/widget/`).
 
 ## Conventions
 - Client-generated UUIDv7 ids (`newId()`) make creates idempotent.

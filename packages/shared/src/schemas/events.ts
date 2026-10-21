@@ -54,6 +54,10 @@ export const TRIP_EVENT_TYPES = [
   /** Bookings found in an email, waiting for review; and changes as they're added or skipped. */
   'import.created',
   'import.updated',
+  /** Someone sharing their location sent a new position; the payload is a LiveLocation. Never stored. */
+  'location.updated',
+  /** They stopped sharing, ran out of time or left; the payload is { userId }. */
+  'location.stopped',
 ] as const;
 
 export const TripEvent = z.object({

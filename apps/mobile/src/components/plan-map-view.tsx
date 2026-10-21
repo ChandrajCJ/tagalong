@@ -1,13 +1,15 @@
 import Feather from '@expo/vector-icons/Feather';
-import { boundsAround, dayColor, IdeaList, type Idea, type ItineraryItem, type Trip } from '@tagalong/shared';
+import { boundsAround, dayColor, freshness, IdeaList, type Idea, type ItineraryItem, type LiveLocation, type Trip } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { request } from '@/lib/api';
 import { openDirections } from '@/lib/directions';
 import { byPosition, shortDate } from '@/lib/plan';
+import { stopSharing, useSharing } from '@/lib/live-location';
 import { useDayRoute, useRouteMode } from '@/lib/routes';
-import { colors, fonts, radius, space } from '@/theme';
+import { avatarColor, colors, fonts, radius, space } from '@/theme';
+import { ShareLocationSheet, useNow, useTripLocations } from './live-location';
 import { TripMap } from './trip-map';
 import type { MapLine, MapPin } from './trip-map.types';
 import { Body, Button } from './ui';
@@ -22,7 +24,7 @@ interface Props {
   days: string[];
 }
 
-type Selected = { kind: 'item'; item: ItineraryItem } | { kind: 'idea'; idea: Idea };
+type Selected = { kind: 'item'; item: ItineraryItem } | { kind: 'idea'; idea: Idea } | { kind: 'person'; person: LiveLocation };
 
 /**
  * The plan on a map: every stop with a location, coloured by day, plus ideas
@@ -33,6 +35,12 @@ export function PlanMapView({ trip, items, days }: Props) {
   const [day, setDay] = useState<string | 'all'>('all');
   const [showIdeas, setShowIdeas] = useState(true);
   const [selected, setSelected] = useState<Selected | null>(null);
+  // Live location: who's sharing on this trip, and whether I am.
+  const people = useTripLocations(trip.id);
+  const sharing = useSharing();
+  const sharingHere = sharing?.tripId === trip.id;
+  const [sharingSheet, setSharingSheet] = useState(false);
+  const now = useNow();
 
   useEffect(() => {
     request(`/trips/${trip.id}/ideas`, { schema: IdeaList })
@@ -92,17 +100,40 @@ export function PlanMapView({ trip, items, days }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [located, openIdeas, day, showIdeas, days]);
 
-  // Open on the pins, or the day's city, or the destination (every place) when there are none yet.
+  // People sharing their location: their initial in their colour, faded once it's over 10 minutes old.
+  const personPins = people.map((p): MapPin => {
+    const index = trip.members.findIndex((m) => m.userId === p.userId);
+    const { label, stale } = freshness(p.at, now);
+    const name = p.userId === trip.myUserId ? 'You' : p.displayName;
+    return {
+      id: `person:${p.userId}`,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      color: avatarColor(Math.max(index, 0)),
+      label: name.slice(0, 1).toUpperCase(),
+      outlined: stale,
+      title: `${name} · ${label}`,
+    };
+  });
+
+  // Open on the plan's pins, or the day's city, or the destination (every place) when there are none yet.
+  // People aren't framed: someone sharing from home shouldn't zoom the trip out to a continent.
   const around = (loc: { latitude: number; longitude: number; bounds: [number, number, number, number] | null } | null | undefined) =>
     loc ? (loc.bounds ?? boundsAround([loc], 0.1)) : null;
   const bounds =
-    boundsAround(pins) ?? (filteredDate ? around(dayPlaceOf(trip, filteredDate)?.place.location) : null) ?? around(trip.location);
+    boundsAround(pins) ??
+    (filteredDate ? around(dayPlaceOf(trip, filteredDate)?.place.location) : null) ??
+    around(trip.location) ??
+    boundsAround(personPins, 0.05);
 
   const daysWithPins = days.filter((d) => located.some((i) => i.date === d));
 
   const pick = (pin: MapPin) => {
     const [kind, id] = pin.id.split(':');
-    if (kind === 'item') {
+    if (kind === 'person') {
+      const person = people.find((p) => p.userId === id);
+      if (person) setSelected({ kind: 'person', person });
+    } else if (kind === 'item') {
       const item = items.find((i) => i.id === id);
       if (item) setSelected({ kind: 'item', item });
     } else {
@@ -136,6 +167,17 @@ export function PlanMapView({ trip, items, days }: Props) {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters} style={styles.filterBar}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint={sharingHere ? 'Stops sharing your location' : 'Lets people on the trip see where you are, for a while'}
+          onPress={() => (sharingHere ? void stopSharing() : setSharingSheet(true))}
+          style={[styles.chip, styles.shareChip, sharingHere && styles.shareChipOn]}
+        >
+          <Feather name="navigation" size={13} color={sharingHere ? colors.onFill : colors.accentInk} />
+          <Text style={[styles.chipText, { color: sharingHere ? colors.onFill : colors.accentInk }]}>
+            {sharingHere ? 'Stop sharing' : 'Share my location'}
+          </Text>
+        </Pressable>
         <Pressable accessibilityRole="tab" aria-selected={day === 'all'} onPress={() => setDay('all')} style={[styles.chip, day === 'all' && styles.chipOn]}>
           <Text style={[styles.chipText, day === 'all' && { color: colors.onFill }]}>All days</Text>
         </Pressable>
@@ -167,7 +209,18 @@ export function PlanMapView({ trip, items, days }: Props) {
 
       <View style={{ flex: 1 }}>
         {/* A new day frames itself: the map only frames when it opens. */}
-        <TripMap key={day} pins={pins} bounds={bounds} line={line} selectedId={selected ? `${selected.kind}:${selected.kind === 'item' ? selected.item.id : selected.idea.id}` : null} onPressPin={pick} />
+        <TripMap
+          key={day}
+          pins={[...pins, ...personPins]}
+          bounds={bounds}
+          line={line}
+          selectedId={
+            selected
+              ? `${selected.kind}:${selected.kind === 'item' ? selected.item.id : selected.kind === 'idea' ? selected.idea.id : selected.person.userId}`
+              : null
+          }
+          onPressPin={pick}
+        />
 
         {pins.length === 0 ? (
           <View style={styles.overlayNote}>
@@ -178,7 +231,31 @@ export function PlanMapView({ trip, items, days }: Props) {
           </View>
         ) : null}
 
-        {selected ? (
+        {selected?.kind === 'person' ? (
+          <View style={styles.card} accessibilityLiveRegion="polite">
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {selected.person.userId === trip.myUserId ? 'You' : selected.person.displayName}
+              </Text>
+              <Text style={styles.cardMeta}>
+                {freshness(selected.person.at, now).label}
+                {freshness(selected.person.at, now).stale ? ' · may have moved since' : ''}
+              </Text>
+            </View>
+            {selected.person.userId !== trip.myUserId ? (
+              <Button
+                label={`Directions to ${selected.person.displayName.split(' ')[0]}`}
+                variant="outline"
+                icon={<Feather name="navigation" size={14} color={colors.ink} />}
+                onPress={() => openDirections(selected.person.displayName, null, selected.person)}
+                style={{ minHeight: 40, paddingHorizontal: space.md }}
+              />
+            ) : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => setSelected(null)} style={styles.cardButton}>
+              <Feather name="x" size={16} color={colors.muted} />
+            </Pressable>
+          </View>
+        ) : selected ? (
           <View style={styles.card} accessibilityLiveRegion="polite">
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.cardTitle} numberOfLines={2}>
@@ -219,11 +296,14 @@ export function PlanMapView({ trip, items, days }: Props) {
           </View>
         ) : null}
       </View>
+      <ShareLocationSheet visible={sharingSheet} trip={trip} onClose={() => setSharingSheet(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  shareChip: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+  shareChipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   filterBar: { flexGrow: 0 },
   filters: { gap: space.sm, paddingHorizontal: space.xl, paddingVertical: space.sm },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: colors.surface },

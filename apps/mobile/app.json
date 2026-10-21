@@ -74,7 +74,48 @@
         }
       ],
       "@maplibre/maplibre-react-native",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Tagalong uses your location only when you choose Share my location, so the people on your trip can see where you are for the time you pick.",
+          "locationAlwaysAndWhenInUsePermission": "Tagalong uses your location only when you choose Share my location. Allowing it all the time keeps sharing going while the app is closed, until the time you picked runs out.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "expo-task-manager",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "TripCountdown",
+              "label": "Trip countdown",
+              "description": "Your next trip and how long until it starts",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "previewImage": "./assets/widget-preview/countdown.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            },
+            {
+              "name": "TripToday",
+              "label": "Trip today",
+              "description": "During a trip, today's next stop and booking; before it, the countdown and packing",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "previewImage": "./assets/widget-preview/today.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

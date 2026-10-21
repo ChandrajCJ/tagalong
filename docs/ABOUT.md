@@ -136,7 +136,11 @@ This is the app from a traveller's point of view.
     since Apple Maps can't take several stops.
 15. Switch Plan to **Map** to see every stop with a location as pins coloured
     by day, plus ideas still being considered. Pick a day to see its route,
-    framed on that day's city.
+    framed on that day's city. **Share my location** there lets the group
+    see where you are for an hour, four hours or the rest of today (only
+    while the app is open, unless you choose to keep sharing while it's
+    closed); a banner shows while it's on, with **Stop**. Everyone sharing
+    appears as a pin ("Priya · 3 min ago") with directions to them.
     Tap a pin for directions.
 16. Tap a plan item for its details: **Directions** (Google Maps on Android,
     a choice of Apple or Google Maps on iPhone), its bookings, the photos
@@ -295,6 +299,7 @@ requests.
 | Polish 1, part D | Videos in the album and chat, dark mode (Profile → Appearance), invite links that open the installed app, the new app icon |
 | Polish 2, part E | Trips to several places (each day's weather, Explore, place search, map and clock follow its place), a whole day opened in Google Maps |
 | Polish 2, part F | A calendar link Google or Apple Calendar subscribes to, a trip's .ics download, countdown pushes before a trip, profile photos |
+| Polish 2, part G | Live location sharing for a few hours (never saved), the Android home-screen widget (countdown, today's next stop) |
 
 ## 6. What's not done yet
 
@@ -312,6 +317,9 @@ Known gaps in what exists today:
   can ask for the "photo locations" permission; Expo Go can't.
 - **Invite links open the installed app** only with the APK from Polish 1
   part D onwards, once the web app is deployed with its `assetlinks.json`.
+- **Live location in the background and the home-screen widget** need the
+  APK from Polish 2 part G onwards; older installs share only while open and
+  have no widget. Location pins show initials, not profile photos.
 - **iPhone installs** need Apple's paid developer account; until then iPhone
   friends use the web app.
 - **No in-app card or net-banking payments:** those need a paid payment

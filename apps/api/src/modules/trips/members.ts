@@ -5,6 +5,7 @@ import type { Redis } from 'ioredis';
 import { requireTripRole } from '../../lib/access';
 import { conflict, notFound } from '../../lib/errors';
 import { publishTripEvent } from '../../lib/events';
+import { stopSharing } from '../location/service';
 
 const activeMember = (tripId: string, userId: string) =>
   and(eq(tripMembers.tripId, tripId), eq(tripMembers.userId, userId), isNull(tripMembers.leftAt));
@@ -88,6 +89,8 @@ export const createMembersService = (db: Db, redis: Redis) => ({
       });
     });
 
+    // Leaving a trip ends sharing a location with it.
+    await stopSharing(redis, tripId, targetUserId, actorId);
     // The gateway also uses this to stop sending the trip to the person who left.
     await publishTripEvent(redis, {
       type: 'member.left',

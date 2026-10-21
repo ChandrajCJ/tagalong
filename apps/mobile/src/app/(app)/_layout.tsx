@@ -1,9 +1,11 @@
 import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
+import { useSharingLifecycle } from '@/lib/live-location';
 import { resetPushRegistration, usePushNavigation } from '@/lib/push';
 import { realtime } from '@/lib/realtime';
 import { useReminderSync } from '@/lib/reminders';
 import { useSession } from '@/lib/session';
+import { clearWidget, useWidgetSync } from '@/lib/widget';
 import { colors } from '@/theme';
 
 export default function AppLayout() {
@@ -20,6 +22,7 @@ export default function AppLayout() {
     return () => {
       realtime.stop();
       resetPushRegistration();
+      void clearWidget();
     };
   }, []);
 
@@ -27,6 +30,10 @@ export default function AppLayout() {
   usePushNavigation();
   // Reminders before timed stops, scheduled on the phone.
   useReminderSync();
+  // Live location carries on across restarts until its time runs out.
+  useSharingLifecycle();
+  // The Android home-screen widget's countdown and today's next stop.
+  useWidgetSync();
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>

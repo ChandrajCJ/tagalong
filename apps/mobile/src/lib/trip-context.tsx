@@ -10,6 +10,7 @@ import { AvatarPhotos, photosOf } from './avatars';
 import { CLIENT_ID } from './client-id';
 import { useTripRealtime } from './realtime';
 import { requestReminderSync } from './reminders';
+import { requestWidgetSync } from './widget';
 
 interface TripValue {
   trip: Trip | undefined;
@@ -46,6 +47,8 @@ export function TripProvider({ tripId, children }: { tripId: string; children: R
     if (message.event.type === 'trip.updated' || message.event.type.startsWith('place.')) void reload();
     // A stop or booking was added, moved or removed: reminders follow.
     if (/^(item|booking|day|place)\.|^trip\.updated$/.test(message.event.type)) requestReminderSync();
+    // …and so does the home-screen widget, which also counts what's packed.
+    if (/^(item|booking|place|list_item)\.|^trip\.updated$/.test(message.event.type)) requestWidgetSync();
     // Whoever deleted it already left; everyone else is told why it's gone.
     if (message.event.type === 'trip.deleted' && message.event.originClientId !== CLIENT_ID) setDeleted(true);
   });

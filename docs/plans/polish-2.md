@@ -1,6 +1,6 @@
 # Polish 2: several destinations, calendar, whole-day directions, live location, reminders, avatars, widget
 
-Status: approved plan; sessions E and F done. Everything stays free.
+Status: done (sessions E, F and G); G ships with a new APK. Everything stays free.
 
 Sessions at a glance:
 - **E:** trips with several destinations · open a whole day in Google Maps. Server + OTA.

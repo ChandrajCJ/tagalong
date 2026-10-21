@@ -297,7 +297,8 @@ export default function ProfileScreen() {
             </View>
             <Body style={{ fontSize: 13 }}>
               Your profile photo shows only to people on your trips. Your calendar link (under Calendar) lets whoever has it
-              see your trip plans; it’s off until you turn it on, and Stop sharing ends it at once.
+              see your trip plans; it’s off until you turn it on, and Stop sharing ends it at once. Your live location is
+              shared only when you start it from a trip’s map, with that trip, for the time you pick; it’s never saved.
             </Body>
           </View>
 

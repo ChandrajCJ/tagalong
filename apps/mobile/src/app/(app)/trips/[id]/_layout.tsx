@@ -1,4 +1,5 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { LiveLocationBanner } from '@/components/live-location';
 import { TripProvider } from '@/lib/trip-context';
 import { colors } from '@/theme';
 
@@ -19,6 +20,8 @@ export default function TripLayout() {
         <Stack.Screen name="notes/[noteId]" />
         <Stack.Screen name="imports" />
       </Stack>
+      {/* On every screen of the trip while I'm sharing my location with it. */}
+      <LiveLocationBanner tripId={id} />
     </TripProvider>
   );
 }
