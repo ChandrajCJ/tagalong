@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { ServerWakingBanner } from '@/components/server-waking-banner';
 import { UpdateBanner } from '@/components/update-banner';
 import { SessionProvider, useSession } from '@/lib/session';
 import { colors, scheme } from '@/theme';
@@ -45,6 +46,7 @@ function Navigator() {
         {/* Invite links work whether or not you're signed in. */}
         <Stack.Screen name="invite/[token]" />
       </Stack>
+      <ServerWakingBanner />
       <UpdateBanner />
     </>
   );

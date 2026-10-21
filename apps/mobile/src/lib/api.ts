@@ -100,6 +100,52 @@ interface RequestOptions<S extends z.ZodTypeAny> {
   text?: boolean;
 }
 
+/**
+ * The free server sleeps when nobody has used it for a while and takes up to
+ * a minute to wake. While it does, requests fail or get 502/503/504 from
+ * Render's proxy. Keep trying for a while (creates carry client ids, so a
+ * repeat can't duplicate anything) and tell the app, so it can say "waking up"
+ * instead of showing an error.
+ */
+const WAKE_WINDOW_MS = 75_000;
+const WAKING_STATUSES = new Set([502, 503, 504]);
+type ServerState = 'ok' | 'waking';
+const serverListeners = new Set<(state: ServerState) => void>();
+let serverState: ServerState = 'ok';
+const setServerState = (state: ServerState) => {
+  if (state === serverState) return;
+  serverState = state;
+  serverListeners.forEach((l) => l(state));
+};
+/** Follow whether the server is waking up, e.g. for a banner. Returns an unsubscribe. */
+export const onServerState = (listener: (state: ServerState) => void) => {
+  serverListeners.add(listener);
+  listener(serverState);
+  return () => {
+    serverListeners.delete(listener);
+  };
+};
+
+const fetchWhileWaking = async (url: string, init: RequestInit): Promise<Response> => {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      if (!WAKING_STATUSES.has(res.status) || Date.now() - started > WAKE_WINDOW_MS) {
+        setServerState('ok');
+        return res;
+      }
+    } catch {
+      if (Date.now() - started > WAKE_WINDOW_MS) {
+        setServerState('ok');
+        throw new ApiError(0, 'network', "Can't reach Tagalong right now. Check your internet connection and try again.");
+      }
+    }
+    setServerState('waking');
+    await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** attempt, 8000)));
+  }
+};
+
 export async function request<S extends z.ZodTypeAny>(
   path: string,
   { method = 'GET', body, schema, auth = true, text = false }: RequestOptions<S> = {},
@@ -110,16 +156,11 @@ export async function request<S extends z.ZodTypeAny>(
   const token = store.get()?.accessToken;
   if (auth && token) headers.authorization = `Bearer ${token}`;
 
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  } catch {
-    throw new ApiError(0, 'network', `Can't reach the server at ${API_URL}. Is the API running?`);
-  }
+  const res = await fetchWhileWaking(`${API_URL}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 
   if (res.status === 401 && auth && !retried) {
     // Several requests can fail at once; refresh only once for all of them.
