@@ -94,6 +94,8 @@ Use the same Gmail:
 ### Step 7 — UptimeRobot (keep awake and get alerts)
 Sign up at uptimerobot.com (free). Add an **HTTP(s) monitor** for `https://tagalong-api-9twu.onrender.com/health` every **5 minutes**. **Why:** the ping counts as traffic, so the server never sleeps, and you get an email if it goes down.
 
+**Also built in:** while it's awake, the API pings its own `/health` every 10 minutes (`apps/api/src/lib/keep-awake.ts`, using Render's `RENDER_EXTERNAL_URL`), so it never reaches Render's 15 idle minutes. The outside pinger is still worth having: it wakes the server after a Render restart. The GitHub Actions job (`keep-awake.yml`) is only a fallback, because GitHub runs free scheduled jobs late, in practice every few hours.
+
 ### Step 8 — Android APK and push
 1. **Firebase:**
    - At console.firebase.google.com (Spark, free), create a project and add an **Android app** with package `com.chandrajcj.tagalong`.

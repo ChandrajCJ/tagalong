@@ -4,6 +4,7 @@ import { Redis } from 'ioredis';
 import { buildCombined } from './combined';
 import { loadEnv } from './env';
 import { startWorkers } from './jobs/workers';
+import { startKeepAwake } from './lib/keep-awake';
 import { ensureBucket, s3Storage } from './lib/storage';
 
 /**
@@ -48,8 +49,12 @@ const workers = await startWorkers({
     }),
 });
 
+// Stay awake on Render's free plan (see lib/keep-awake.ts). Off elsewhere.
+const stopKeepAwake = startKeepAwake(process.env.RENDER_EXTERNAL_URL, app.log);
+
 const shutdown = async () => {
   app.log.info('Shutting down');
+  stopKeepAwake();
   await app.close();
   await workers.close();
   for (const client of [redis, subscriber, connection]) client.disconnect();
