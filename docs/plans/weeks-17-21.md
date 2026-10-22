@@ -6,9 +6,20 @@ Order: 15 → 16 → 17 budget → 18–19 offline → 20–21 AI. The release t
 
 ---
 
-## Week 17 — Budget
+## Week 17 — Budget (optional)
 
-### What people get
+### Optional by design
+- **A trip doesn't need a budget.** With none set, nothing about budgets shows anywhere except one quiet **"Add a budget (optional)"** link on the Money tab. There are no prompts, cards, alerts or pace warnings, and expenses and settle-up work exactly as today.
+- **Setting one is optional at every step:**
+  - *New trip* and *Edit trip* get a collapsed **"Budget (optional)"** row: a total, Group or Each person, that's it. Leaving it empty creates no budget row.
+  - The Money tab's sheet adds category limits for those who want them.
+  - **Every part is optional on its own:** a total with no categories, categories with no total, or neither.
+- **Removing it** (*Remove budget*) deletes the row and its alerts. The trip goes back to showing nothing about budgets.
+- **Who sees what:** viewers see the budget if one exists. Only editors and owners can add, change or remove it.
+- **API:** `budget` is `null` in `GET /trips/:id/money` when none is set, and `CreateTripInput` / `UpdateTripInput` accept an optional `budget` object.
+- **Tests:** no-budget trips return `null` and produce no alerts, events or Overview line; create with and without a budget; remove resets alerts.
+
+### What people get (once a budget is set)
 - On the Money tab, a **budget card**: "₹18,400 of ₹25,000 spent · ₹6,600 left · about ₹1,320 a day for the 5 days left".
 - **Per-category bars** (food, transport, stay, activity, shopping, other), each with an optional limit.
 - **Planned vs spent:** cost estimates on plan items and bookings that aren't expenses yet show as a lighter "planned" segment, so the group sees what's already committed.
@@ -33,9 +44,9 @@ Order: 15 → 16 → 17 budget → 18–19 offline → 20–21 AI. The release t
 - Events `budget.updated`. The alert check runs after each expense write.
 
 ### Mobile
-- Budget card at the top of Money, with an empty state: "Set a budget so everyone knows the limit". A budget sheet with a Group / Each-person switch, a total, and optional category limits.
+- Budget card at the top of Money, **only when a budget exists**. Otherwise just the small "Add a budget (optional)" link. A budget sheet with a Group / Each-person switch, an optional total and optional category limits.
 - Booking card and plan item screen get "Add as expense".
-- Overview "Get ready" card shows "Budget: ₹6,600 left".
+- Overview "Get ready" card shows "Budget: ₹6,600 left" **only when a budget exists**.
 
 ### Tests
 - **Summary math:** mixed currencies, planned excluded once linked, per-person shares, pace before and after the trip starts, no budget at all.
