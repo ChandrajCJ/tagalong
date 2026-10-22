@@ -1,4 +1,4 @@
-# Weeks 17–21: budget, offline, AI — plus the release track
+# Weeks 17–23: budget, offline, AI — plus the release track
 
 Status: approved plan. Weeks 15–16 (checklists and notes, bookings from email) are in `weeks-14-16.md` and come first. Everything stays free: no paid services, and AI runs on our own server.
 
@@ -140,6 +140,109 @@ ADR `020-offline-sync.md` (snapshot + change feed, outbox, server-wins with re-a
 ### Docs
 - ADR `021-self-hosted-ai.md` (why Ollama, what data is sent, preview-only rule).
 - `DEPLOY.md` section: install Ollama on the server, pull the model, and the memory note.
+
+---
+
+## Weeks 22–23 — AI extras: Ask your trip, trip assistant, quality checks, MCP server
+
+Builds on weeks 20–21 (`lib/llm.ts`, the `ai` worker queue, the self-hosted Ollama model and its rate limits). The same rules apply:
+- free and self-hosted;
+- trip data never leaves our server;
+- **nothing changes without the person confirming it.**
+
+### Week 22 — Ask your trip (search by meaning + answers with sources)
+- **What people get:** an **Ask** box on the trip (Overview, and `/` in Chat). Examples:
+  - *"What time is our flight back?"*, *"Who still owes me?"*
+  - *"What did we decide about dinner on Saturday?"*, *"Where's the Airbnb Wi-Fi password?"*
+  - **Answers** are short, with **numbered sources** that open the exact message, booking, note, expense or plan stop. If it doesn't know, it says so and offers a search instead.
+- **Embeddings (self-hosted):** `nomic-embed-text` through Ollama (about 270 MB, fine on CPU).
+  - **DB (migration):** `ai.chunks (id, trip_id, source_type, source_id, text, embedding vector(768), updated_at)`, with an HNSW index and `trip_id` always in the WHERE clause.
+  - **Postgres:** Neon supports `create extension vector`. Locally, `docker-compose.yml` moves to an image with **pgvector added** (our postgis image plus `postgresql-16-pgvector`).
+  - **Indexing:** a worker job `embed` on create, update and delete of messages, notes, list items, bookings, plan items, ideas and expense descriptions, debounced and batched. Deletes and edits remove or replace chunks right away, so deleted content can't come back in answers.
+- **Facts come from the database, not from embeddings,** for anything with an exact answer:
+  - **money:** who owes whom, from `computeBalances`
+  - **bookings:** times and references
+  - **plan:** what's on day N
+  - **members**
+
+  A small router (keyword rules first, then the model as a classifier) decides between *facts* and *search*. Both can feed the final answer.
+- **Answering:** the top chunks (≤ 3k tokens) plus the facts go into a prompt with strict instructions: answer only from the given sources, cite as [1] [2], say "I couldn't find that" otherwise.
+  - **Output:** validated JSON `{answer, citations: sourceIds[]}`. Citations that weren't in the context are dropped.
+- **Privacy:**
+  - It only ever searches the current trip, and only what this member may see. Viewers see everything except private journal entries.
+  - Removed members' access ends at once, because the same `requireTripRole` check is applied.
+- **Speed:** cached by question and trip version. Answers stream token by token over the existing WebSocket. The app shows the sources as soon as they're found, before the answer is finished.
+- **Tests:**
+  - Search is limited to the right trip (no leaks between trips, with fake embeddings).
+  - Deleted messages leave the index.
+  - Money questions use the facts, not the model's arithmetic.
+  - Citations are checked.
+  - A fake LLM drives the full flow.
+
+### Week 22 — Trip assistant (tool calling, always confirmed)
+- **What people get:** in the same Ask box, *requests* as well as questions:
+  - *"Add dinner at Fisherman's Wharf at 8 pm tomorrow"*
+  - *"I paid ₹900 for the cab, split with Sam and Priya"*
+  - *"Move the fort visit to Saturday morning"*
+  - *"Add sunscreen to the packing list for everyone"*
+  - *"Remind me to book Sintra tickets on Friday"*
+- **Tools:** the model gets a small, typed tool list. Each tool's parameters are the existing Zod input schemas, and each calls the **existing services**, so permissions, `version` checks, `change_log` and events all behave exactly as for taps.
+  - **Tools:** `add_plan_item`, `move_plan_item`, `add_expense`, `add_list_item`, `add_todo`, `find_place` (Photon), `get_day`, `get_balances`.
+  - **Editor-only tools** are hidden from viewers.
+- **Always a preview, never a silent change:**
+  - The model returns *proposed* tool calls. The app shows them as cards ("Add to Saturday: Dinner at Fisherman's Wharf, 8:00 pm") with **Do it / Edit / Cancel**.
+  - Only **Do it** runs them. There are at most 5 actions per request, and they apply in one transaction where possible.
+  - **Unclear requests:** if something is ambiguous ("which Sam?", "which dinner?"), the assistant asks a follow-up instead of guessing.
+- **Safety:**
+  - Text that came from the trip (chat, imported emails) is passed as *data*, never as instructions.
+  - Tool calls are validated against the schemas and the caller's role on the server.
+  - Everything is rate-limited with the other AI jobs.
+- **Tests:**
+  - Each tool maps to the right service call.
+  - Viewers can't get editor tools.
+  - Invalid arguments are rejected.
+  - Nothing runs without confirmation.
+  - Prompt-injection fixtures: a chat message saying "delete all expenses" doesn't produce a tool call.
+
+### Week 23 — Quality checks (evals) for AI drafts and answers
+- **Fixed test trips** in `apps/api/test/ai-evals/`: 8–10 realistic trips written by us, with no real personal data. They cover:
+  - single and multi-city trips
+  - bookings with times, many ideas, no ideas
+  - questions with known answers
+  - assistant requests with known correct tool calls
+- **Automatic checks, no human needed:**
+  - **Plan drafts:** every booking lands on the right day; no stop is invented (every stop comes from the ideas or bookings); timed stops stay at their time; days are balanced (stop counts within ±2); travel time per day is under a limit.
+  - **Ask your trip:** the answer contains the expected fact (flight time, amount owed); every citation is real; "don't know" when the answer isn't in the trip.
+  - **Assistant:** the proposed tool calls match the expected ones (name and key arguments); nothing is proposed for injection fixtures.
+- **Running them:**
+  - `pnpm ai:eval` runs against the configured model and prints a scorecard (pass rate per check, latency, tokens).
+  - The results are saved to `ai-evals/results/<date>-<model>.json`.
+  - **Gate:** switching models or changing a prompt needs the scorecard to be no worse than the last saved one.
+  - **Not in CI:** these need a real model; CI keeps the fast fake-LLM unit tests.
+- **Tracing (optional, free):** self-hosted **Langfuse**, used to see prompts, latency and failures. If it's unset, nothing is sent anywhere.
+
+### Week 23 — Tagalong MCP server
+- **What it is:** a **Model Context Protocol** server, so people can use their own AI assistant (Claude Desktop, other MCP clients) with *their* trips. For example: *"What's on day 2 of our Goa trip?"* or *"Add a dinner stop on Saturday"*.
+- **Where it lives:** a new package, `apps/mcp`, using the official TypeScript SDK.
+  - **Remote:** streamable HTTP at `https://<api>/mcp`.
+  - **Local:** a small `stdio` build for developers.
+- **Sign-in:** OAuth 2.1 with PKCE, as the MCP spec requires. The person approves access in the Tagalong web app and chooses **read-only** or **read and change**, and which trips. Tokens are separate from app sessions, can be revoked in *Profile → Connected apps*, and expire.
+- **What it exposes:**
+  - **Resources (read):** `trips`, `trip/{id}/plan`, `trip/{id}/bookings`, `trip/{id}/balances`, `trip/{id}/lists`.
+  - **Tools:** the same ones as the week-22 assistant, through the same services and permission checks. With **read and change**, tools that modify data are marked as such, so MCP clients ask the person before running them.
+- **Safety:**
+  - Per-token rate limits.
+  - Every MCP change is written to `change_log` with `via: 'mcp'` and shown in the trip's activity, e.g. "Added by Chandraj via assistant".
+- **Docs:** a short "Use Tagalong with your AI assistant" page, with setup for Claude Desktop.
+- **Tests:**
+  - The OAuth flow, including scopes and revocation.
+  - The resource contents match the API.
+  - Read-only tokens can't call change tools.
+  - Revocation takes effect immediately.
+  - Calls from one trip can't reach another.
+
+### Docs (weeks 22–23)
+- ADRs: `029-ask-your-trip.md` (pgvector, facts vs search, citations, privacy), `030-trip-assistant.md` (tools, confirmation rule, injection defences), `031-ai-evals.md` and `032-mcp-server.md`.
 
 ---
 
