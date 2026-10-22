@@ -2,13 +2,13 @@
 
 Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–029 and 033; 030–032 and 034 are reserved for weeks 22–23), deployment in `docs/DEPLOY.md`. Read only the part you need.
 
-Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, 22–23 AI extras: Ask your trip, trip assistant, evals, MCP server; release track, chores). Build one week per session, in order. Polish-1 (sessions A–D) and polish-2 (sessions E–G: several destinations, whole-day Google Maps, calendar feed, countdown pushes, avatars, live location, Android widget) are done; G needs the new APK. Week 17 (optional budget) and the trip journal (`docs/plans/journal.md`) are done. Next: weeks 18–19 offline (private journal entries must stay private there too, see ADR 033).
+Roadmap: polish-1, polish-2, week 17 (optional budget) and the trip journal are done. Next, in order: refresh `docs/ABOUT.md` (step 0), then weeks 20–23 AI in `docs/plans/weeks-20-23-ai.md` (20 draft a plan, 21 catch me up + receipts + helpers, 22 Ask your trip + assistant, 23 evals + MCP server), then weeks 18–19 offline in `docs/plans/weeks-17-21.md`. Build one week per session, in order.
 
 ## Rules
 - Commit as `Chandraj1710 <chandraj1710@gmail.com>`. Never use the work email.
 - Commit and push with `--no-verify`. Remote: `https://ChandrajCJ@github.com/ChandrajCJ/tagalong.git`.
 - Never commit `.env`.
-- Free and open source only — no paid services or keyed APIs.
+- Free and open source only — no paid services or keyed APIs. One owner-approved exception: AI runs on Cloudflare Workers AI's free allowance (a free key, kept in Render's secrets).
 - Don't touch the portfolio repo.
 
 ## Layout
