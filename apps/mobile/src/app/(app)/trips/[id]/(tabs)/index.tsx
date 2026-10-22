@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { cityOf, hasRole, listsSummary, NextUp } from '@tagalong/shared';
+import { budgetLine, cityOf, hasRole, listsSummary, NextUp, TripBudget } from '@tagalong/shared';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -391,13 +391,37 @@ function NextUpCard({ tripId }: { tripId: string }) {
   );
 }
 
-/** A white button on the cover. Text shows beside the icon, except for Back. */
-/** "Packing 12/30 · 2 to-dos left · 3 notes", opening the lists. */
+/**
+ * "Packing 12/30 · 2 to-dos left · 3 notes", opening the lists, and
+ * "Budget: ₹6,600 left" only when the trip has a budget.
+ */
 function GetReadyCard() {
   const { trip } = useTrip();
   const { lists, items } = useTripLists(trip);
   const { notes } = useTripNotes(trip?.id);
+  const [budget, setBudget] = useState<TripBudget | null>(null);
+  const tripId = trip?.id;
+
+  const loadBudget = useCallback(async () => {
+    if (!tripId) return;
+    const data = await request(`/trips/${tripId}/budget`, { schema: TripBudget }).catch(() => null);
+    if (data) setBudget(data);
+  }, [tripId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadBudget();
+    }, [loadBudget]),
+  );
+
+  useTripRealtime(tripId, (m) => {
+    if (m.kind === 'reconnected') return void loadBudget();
+    if (m.kind !== 'event') return;
+    if (m.event.type === 'budget.updated' || (budget?.budget && m.event.type.startsWith('expense.'))) void loadBudget();
+  });
+
   if (!trip) return null;
+  const money = budgetLine(budget, trip.baseCurrency);
   const summary = lists ? listsSummary(lists, items, trip.myUserId) : null;
   const parts = summary
     ? [
@@ -406,6 +430,7 @@ function GetReadyCard() {
         notes && notes.length > 0 ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}` : null,
       ].filter(Boolean)
     : [];
+  if (money) parts.push(money);
   return (
     <Pressable
       accessibilityRole="button"

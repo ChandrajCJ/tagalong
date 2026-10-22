@@ -24,6 +24,7 @@ import type { Notifier } from '../../lib/notifier';
 import { readinessFor } from '../../lib/readiness';
 import type { Storage } from '../../lib/storage';
 import { postSystemMessage, unreadCounts } from '../chat/channel';
+import { announceBudget, checkBudgetAlerts, editBudget, writeBudget } from '../money/budget';
 import { checkPlaceDates, locationColumns, placeRows, toPlace } from './places';
 
 type CreateTrip = z.output<typeof CreateTripInput>;
@@ -303,6 +304,7 @@ export const createTripsService = (
 
         await tx.insert(tripMembers).values({ tripId: id, userId, role: 'owner' });
         await tx.insert(tripPlaces).values(placeValues);
+        if (input.budget) await writeBudget(tx, id, userId, { ...input.budget, categories: {} });
         await tx.insert(changeLog).values([
           { tripId: id, entity: 'trip', entityId: id, op: 'upsert', changedBy: userId },
           ...placeValues.map((p) => ({ tripId: id, entity: 'place', entityId: p.id, op: 'upsert', changedBy: userId })),
@@ -343,7 +345,7 @@ export const createTripsService = (
         if (spent) throw badRequest('The currency can’t change once there are expenses', 'currency_locked');
       }
 
-      const { location, destination, ...plain } = fields;
+      const { location, destination, budget, ...plain } = fields;
       // An older phone's edit screen sends the destination every time; only a change (or a newly
       // picked place) touches the places, and then the first one.
       const placeChanged = location !== undefined || (destination !== undefined && destination !== current!.destination);
@@ -359,7 +361,7 @@ export const createTripsService = (
           })
           .where(and(eq(trips.id, tripId), eq(trips.version, version), isNull(trips.deletedAt)))
           .returning({ id: trips.id });
-        if (!row) return false;
+        if (!row) return null;
         let places = await placeRows(tx, tripId);
         if (datesChanged) {
           try {
@@ -382,7 +384,9 @@ export const createTripsService = (
             .where(eq(trips.id, tripId));
         }
         await tx.insert(changeLog).values({ tripId, entity: 'trip', entityId: tripId, op: 'upsert', changedBy: userId });
-        return true;
+        // Set when the budget changed: the new one, or null once removed.
+        const budgetChange = budget === undefined ? null : await editBudget(tx, tripId, userId, budget);
+        return { budgetChange };
       });
       const trip = await this.get(tripId, userId);
       if (!updated) {
@@ -397,6 +401,10 @@ export const createTripsService = (
           version: trip.version,
           originClientId: origin,
         });
+        if (updated.budgetChange) {
+          await announceBudget(redis, tripId, userId, updated.budgetChange.budget, origin);
+          await checkBudgetAlerts(db, redis, tripId, userId);
+        }
       }
       // A new name or new dates is news for everyone; a new cover colour isn't.
       const renamed = trip.name !== current!.name;

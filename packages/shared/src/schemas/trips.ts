@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRIP_ROLES } from '../roles';
+import { EditTripBudget, NewTripBudget } from './budget';
 import { TripLocation } from './places';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -90,6 +91,8 @@ export const CreateTripInput = z
      * phones still send on their own.
      */
     places: z.array(NewTripPlace).min(1).max(MAX_TRIP_PLACES).optional(),
+    /** Optional: leave it out and the trip has no budget. */
+    budget: NewTripBudget.optional(),
   })
   .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {
     message: 'End date must be on or after the start date',
@@ -108,6 +111,8 @@ export const UpdateTripInput = z
     coverColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
     /** A newly picked place, or null to forget it (the destination became free text). */
     location: TripLocation.nullable().optional(),
+    /** Sets the budget's total and mode, or null removes the budget. Left out, it's untouched. */
+    budget: EditTripBudget.nullable().optional(),
     version: z.number().int().min(1),
   })
   .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {

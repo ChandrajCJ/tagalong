@@ -1,9 +1,10 @@
 import Feather from '@expo/vector-icons/Feather';
-import { cityOf, positionBetween, Trip, TripPlace, UpdateTripInput } from '@tagalong/shared';
+import { amountText, cityOf, positionBetween, Trip, TripBudget, TripPlace, UpdateTripInput } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BudgetField, readBudgetDraft, type BudgetDraft } from '@/components/budget-field';
 import { CoverPhotoPicker } from '@/components/cover-photo-picker';
 import { DateRangeField } from '@/components/date-range-picker';
 import { PlaceSheet, type DraftPlace } from '@/components/place-sheet';
@@ -28,6 +29,10 @@ export default function EditTrip() {
   // The place being edited in the sheet, or 'new' to add one. Places save straight away.
   const [editing, setEditing] = useState<TripPlace | 'new' | null>(null);
   const [placeProblem, setPlaceProblem] = useState<string>();
+  // The budget as it was when the screen opened, and as edited here. Loaded separately, as most trips have none.
+  const [budgetBefore, setBudgetBefore] = useState<TripBudget['budget'] | undefined>(undefined);
+  const [budget, setBudget] = useState<BudgetDraft>({ mode: 'group', total: '' });
+  const [budgetError, setBudgetError] = useState<string>();
 
   const fill = (t: Trip) => {
     setName(t.name);
@@ -39,6 +44,18 @@ export default function EditTrip() {
   useEffect(() => {
     if (trip) fill(trip);
     // Fill once when the screen opens, not on every live update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.id]);
+
+  useEffect(() => {
+    if (!trip?.id) return;
+    void request(`/trips/${trip.id}/budget`, { schema: TripBudget })
+      .then(({ budget: b }) => {
+        setBudgetBefore(b);
+        setBudget({ mode: b?.mode ?? 'group', total: b?.totalMinor ? amountText(b.totalMinor, trip.baseCurrency) : '' });
+      })
+      // Without it the row stays hidden, and the budget untouched.
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip?.id]);
 
@@ -75,7 +92,21 @@ export default function EditTrip() {
     );
   };
 
+  /** What to send for the budget: only a change, so an untouched budget isn't rewritten. */
+  const budgetEdit = (): UpdateTripInput['budget'] | { error: string } => {
+    if (budgetBefore === undefined) return undefined;
+    const total = readBudgetDraft(budget, currency);
+    if (total && typeof total === 'object') return total;
+    if (!budgetBefore) return total ? { mode: budget.mode, totalMinor: total } : undefined;
+    if (budgetBefore.mode === budget.mode && budgetBefore.totalMinor === total) return undefined;
+    // A cleared total keeps any category limits; with none, the budget goes.
+    return { mode: budget.mode, totalMinor: total };
+  };
+
   const save = async () => {
+    const budgetChange = budgetEdit();
+    if (budgetChange && 'error' in budgetChange) return setBudgetError(budgetChange.error);
+    setBudgetError(undefined);
     const parsed = UpdateTripInput.safeParse({
       version: trip.version,
       name: name.trim() || cityOf(trip.destination),
@@ -83,6 +114,7 @@ export default function EditTrip() {
       endDate: dates.end,
       baseCurrency: currency,
       coverColor,
+      budget: budgetChange,
     });
     if (!parsed.success) return setError(parsed.error.issues[0]?.message ?? 'Check the details');
     setBusy(true);
@@ -212,6 +244,21 @@ export default function EditTrip() {
               Expenses are totalled and split in this currency, so it can only change before the first expense.
             </Body>
           </View>
+
+          {budgetBefore !== undefined ? (
+            <BudgetField
+              value={budget}
+              onChange={setBudget}
+              currency={currency}
+              error={budgetError}
+              open={!!budgetBefore}
+              hint={
+                budgetBefore && Object.keys(budgetBefore.categories).length > 0
+                  ? 'Clearing the total keeps the category limits. Change those, or remove the budget, on the Money tab.'
+                  : undefined
+              }
+            />
+          ) : null}
 
           {error ? <Body style={{ color: colors.coralInk }}>{error}</Body> : null}
         </ScrollView>

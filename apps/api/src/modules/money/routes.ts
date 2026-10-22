@@ -1,4 +1,4 @@
-import { CreateExpenseInput, CreateSettlementInput, UpdateExpenseInput } from '@tagalong/shared';
+import { CreateExpenseInput, CreateSettlementInput, SetBudgetInput, UpdateExpenseInput } from '@tagalong/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../../deps';
@@ -25,6 +25,24 @@ export const moneyRoutes = async (app: FastifyInstance, { deps }: { deps: Deps }
   app.get('/trips/:id/money', async (request) => {
     const { id } = parse(TripParams, request.params);
     return service.summary(id, request.user.sub);
+  });
+
+  app.get('/trips/:id/budget', async (request) => {
+    const { id } = parse(TripParams, request.params);
+    return service.budget(id, request.user.sub);
+  });
+
+  app.put('/trips/:id/budget', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    const input = parse(SetBudgetInput, request.body);
+    const { budget, created } = await service.setBudget(id, request.user.sub, input, originOf(request));
+    return reply.status(created ? 201 : 200).send(budget);
+  });
+
+  app.delete('/trips/:id/budget', async (request, reply) => {
+    const { id } = parse(TripParams, request.params);
+    await service.removeBudget(id, request.user.sub, originOf(request));
+    return reply.status(204).send();
   });
 
   app.post('/trips/:id/expenses', async (request, reply) => {

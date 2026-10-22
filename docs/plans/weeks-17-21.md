@@ -8,6 +8,8 @@ Order: 15 → 16 → 17 budget → 18–19 offline → 20–21 AI. The release t
 
 ## Week 17 — Budget (optional)
 
+Done (ADR 029). The tables live in the `expenses` Postgres schema with the rest of the money; expenses already had `booking_id` and `item_id`, and "Add as expense" already linked them.
+
 ### Optional by design
 - **A trip doesn't need a budget.** With none set, nothing about budgets shows anywhere except one quiet **"Add a budget (optional)"** link on the Money tab. There are no prompts, cards, alerts or pace warnings, and expenses and settle-up work exactly as today.
 - **Setting one is optional at every step:**

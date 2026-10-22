@@ -5,6 +5,8 @@ import {
   check,
   date,
   index,
+  integer,
+  jsonb,
   numeric,
   pgSchema,
   primaryKey,
@@ -131,4 +133,45 @@ export const settlements = expensesSchema.table(
     check('settlements_people_check', sql.raw(`from_user <> to_user`)),
     check('settlements_method_check', sql.raw(`method in ('cash', 'transfer', 'other')`)),
   ],
+);
+
+/**
+ * A trip's budget, if it has one (most don't). Amounts are in the trip's
+ * currency; in "per_person" mode they're per person. `total_minor` is null
+ * when only category limits are set.
+ */
+export const budgets = expensesSchema.table(
+  'budgets',
+  {
+    tripId: uuid('trip_id')
+      .primaryKey()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    mode: text('mode').notNull().default('group'),
+    totalMinor: bigint('total_minor', { mode: 'number' }),
+    /** Optional limits by category: { food: 500000, stay: 1200000 }. */
+    categories: jsonb('categories').$type<Partial<Record<string, number>>>().notNull().default({}),
+    version: version(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps(),
+  },
+  () => [
+    check('budgets_mode_check', sql.raw(`mode in ('group', 'per_person')`)),
+    check('budgets_total_check', sql.raw(`total_minor is null or total_minor > 0`)),
+  ],
+);
+
+/**
+ * The 80% and 100% chat cards already posted, so each goes out once. A row
+ * is removed when the budget is raised back past its mark.
+ */
+export const budgetAlerts = expensesSchema.table(
+  'budget_alerts',
+  {
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    threshold: integer('threshold').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tripId, t.threshold] })],
 );

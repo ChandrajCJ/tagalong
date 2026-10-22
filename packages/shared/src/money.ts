@@ -69,6 +69,9 @@ export const allocate = (total: number, weights: number[]): number[] => {
   return parts;
 };
 
+export const EXPENSE_CATEGORIES = ['food', 'transport', 'stay', 'activity', 'shopping', 'other'] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
 export const SPLIT_METHODS = ['equal', 'exact', 'percent', 'shares'] as const;
 export type SplitMethod = (typeof SPLIT_METHODS)[number];
 

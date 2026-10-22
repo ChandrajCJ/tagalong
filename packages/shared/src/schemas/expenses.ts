@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { SPLIT_METHODS } from '../money';
-
-export const EXPENSE_CATEGORIES = ['food', 'transport', 'stay', 'activity', 'shopping', 'other'] as const;
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+import { EXPENSE_CATEGORIES, SPLIT_METHODS } from '../money';
+import { Budget, PlannedCost } from './budget';
 
 export const SETTLEMENT_METHODS = ['cash', 'transfer', 'other'] as const;
 export type SettlementMethod = (typeof SETTLEMENT_METHODS)[number];
@@ -131,6 +129,10 @@ export const TripMoney = z.object({
   people: z.array(MoneyPerson),
   balances: z.array(Balance),
   suggested: z.array(SuggestedTransfer),
+  /** The trip's budget, or null: most trips have none, and then nothing about budgets shows. */
+  budget: Budget.nullable().default(null),
+  /** Costs in the plan not paid yet; empty without a budget. */
+  planned: z.array(PlannedCost).default([]),
 });
 export type TripMoney = z.infer<typeof TripMoney>;
 

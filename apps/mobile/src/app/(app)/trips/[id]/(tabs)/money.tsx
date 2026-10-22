@@ -1,5 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import {
+  Budget,
+  budgetSummary,
   computeBalances,
   Expense,
   formatMoney,
@@ -10,6 +12,7 @@ import {
   TripMoney,
   upiPayLink,
   type MoneyPerson,
+  type SetBudgetInput,
   type SettlementMethod,
   type Transfer,
 } from '@tagalong/shared';
@@ -18,12 +21,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BudgetCard } from '@/components/budget-card';
+import { BudgetSheet } from '@/components/budget-sheet';
 import { IconButton } from '@/components/icon-button';
 import { ExpenseSheet, type ExpenseFields, type SaveResult } from '@/components/expense-sheet';
 import { SettleSheet, type PendingPayment } from '@/components/settle-sheet';
 import { Avatar, Body, Button, Label, Title } from '@/components/ui';
 import { ApiError, request } from '@/lib/api';
 import { CATEGORY_META, decodeDraft, exportCsv, nameOf, type ExpenseDraft } from '@/lib/money';
+import { todayIso } from '@/lib/dates';
 import { planDays, shortDate } from '@/lib/plan';
 import { useTripRealtime } from '@/lib/realtime';
 import { VIEWER_NOTE } from '@/lib/roles';
@@ -70,6 +76,7 @@ export default function MoneyTab() {
   const [error, setError] = useState<string>();
   const [sheet, setSheet] = useState<{ expense?: Expense; draft?: ExpenseDraft | null } | null>(null);
   const [paying, setPaying] = useState<PendingPayment | null>(null);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [toast, setToast] = useState<string>();
   const say = (text: string) => {
     setToast(text);
@@ -113,8 +120,14 @@ export default function MoneyTab() {
       if (parsed.success) setSettlements((list) => upsert(list, parsed.data));
     } else if (event.type === 'settlement.deleted') {
       setSettlements((list) => list.filter((s) => s.id !== event.entityId));
+    } else if (event.type === 'budget.updated') {
+      // The planned costs come with it, so fetch rather than patch.
+      void load();
     } else if (event.type.startsWith('member.')) {
       void reloadTrip();
+      void load();
+    } else if (data?.budget && (event.type.startsWith('item.') || event.type.startsWith('booking.'))) {
+      // A cost in the plan changed what's planned.
       void load();
     }
   });
@@ -147,6 +160,21 @@ export default function MoneyTab() {
   const suggested = useMemo(() => suggestTransfers(balances), [balances]);
   const rows = useMemo(() => buildRows(data?.expenses ?? [], data?.settlements ?? []), [data?.expenses, data?.settlements]);
   const days = useMemo(() => (trip ? planDays(trip.startDate, trip.endDate, []) : []), [trip]);
+  const today = todayIso();
+  const budget = useMemo(
+    () =>
+      trip && data
+        ? budgetSummary(
+            data.budget,
+            data.expenses,
+            data.planned,
+            { startDate: trip.startDate, endDate: trip.endDate, headcount: trip.memberCount },
+            today,
+            me,
+          )
+        : null,
+    [data, trip, today, me],
+  );
 
   if (!trip) return null;
   const base = data?.baseCurrency ?? trip.baseCurrency;
@@ -213,6 +241,31 @@ export default function MoneyTab() {
       return null;
     } catch (e) {
       return e instanceof ApiError ? e.message : 'Could not record that';
+    }
+  };
+
+  const saveBudget = async (input: SetBudgetInput): Promise<string | null> => {
+    try {
+      const saved = await request(`/trips/${trip.id}/budget`, { method: 'PUT', body: input, schema: Budget });
+      setData((d) => (d ? { ...d, budget: saved } : d));
+      void load();
+      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        const latest = Budget.nullable().safeParse(e.data.current);
+        if (latest.success) setData((d) => (d ? { ...d, budget: latest.data } : d));
+      }
+      return e instanceof ApiError ? e.message : 'Could not save the budget';
+    }
+  };
+
+  const removeBudget = async (): Promise<string | null> => {
+    try {
+      await request(`/trips/${trip.id}/budget`, { method: 'DELETE' });
+      setData((d) => (d ? { ...d, budget: null, planned: [] } : d));
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : 'Could not remove the budget';
     }
   };
 
@@ -316,6 +369,23 @@ export default function MoneyTab() {
                 : `Trip spend ${money(total)} · Your share ${money(myShare)}`}
             </Text>
           </View>
+
+          {budget ? (
+            <BudgetCard
+              summary={budget}
+              currency={base}
+              started={!!trip.startDate && trip.startDate <= today}
+              onEdit={canEdit ? () => setBudgetOpen(true) : undefined}
+            />
+          ) : canEdit ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setBudgetOpen(true)}
+              style={styles.addBudget}
+            >
+              <Text style={styles.addBudgetText}>Add a budget (optional)</Text>
+            </Pressable>
+          ) : null}
 
           {suggested.length > 0 ? (
             <View style={{ gap: space.sm }}>
@@ -514,6 +584,14 @@ export default function MoneyTab() {
         onDelete={deleteExpense}
         onClose={() => setSheet(null)}
       />
+      <BudgetSheet
+        visible={budgetOpen}
+        budget={data?.budget ?? null}
+        currency={base}
+        onSave={saveBudget}
+        onRemove={removeBudget}
+        onClose={() => setBudgetOpen(false)}
+      />
       <SettleSheet
         transfer={paying}
         currency={base}
@@ -556,6 +634,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, padding: space.xl },
   fab: { position: 'absolute', right: space.xl, bottom: space.xl, flexDirection: 'row', gap: 6, height: 52, paddingHorizontal: 18, borderRadius: 26, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   fabText: { fontFamily: fonts.bold, fontSize: 15, color: colors.onFill },
+  addBudget: { alignSelf: 'flex-start', minHeight: 36, justifyContent: 'center', marginTop: -space.sm },
+  addBudgetText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   undo: { minHeight: 36, paddingHorizontal: 10, justifyContent: 'center' },
   undoText: { fontFamily: fonts.bold, fontSize: 13, color: colors.accent },
   toast: { position: 'absolute', left: space.xl, right: space.xl, bottom: 90, padding: space.md, borderRadius: radius.md, backgroundColor: colors.ink },

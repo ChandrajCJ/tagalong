@@ -65,7 +65,8 @@ This is the app from a traveller's point of view.
    place? **Add another stop on this trip** (Lisbon → Porto → Madrid), each
    with the days you're there if you know them.
 4. Add dates (optional, and changeable later), a name (optional) and a cover
-   colour, or a cover photo. Tap **Create trip**.
+   colour, or a cover photo. A **Budget (optional)** row, closed unless
+   tapped, takes a total for the group or each person. Tap **Create trip**.
 
 ### Bringing friends in
 5. Tap **Invite**. Make an **editor** link for people who'll help plan, and a
@@ -221,6 +222,15 @@ This is the app from a traveller's point of view.
     filled in; afterwards, confirm and it's recorded. Otherwise **Mark as
     paid** records cash or a transfer. Expenses can also start from a plan
     item, a booking or a chat message, and everything exports as a CSV.
+29. A budget is optional, and most trips skip it: then the only sign of it
+    is a small **Add a budget (optional)** link. Once set (a total, limits
+    for some categories, or both; for the group or each person), a card on
+    Money reads "₹18,400 of ₹25,000 spent · ₹6,600 left · about ₹1,320 a
+    day for the 5 days left", with a lighter "planned" part for plan costs
+    and bookings not paid yet, bars per category, and from day 2 of the trip
+    "At this pace you'll go about ₹4,000 over." The chat gets a card at 80%
+    and at 100%, once each, and the Overview's Get ready card adds "Budget:
+    ₹6,600 left".
 
 ## 4. How it works
 
@@ -300,6 +310,7 @@ requests.
 | Polish 2, part E | Trips to several places (each day's weather, Explore, place search, map and clock follow its place), a whole day opened in Google Maps |
 | Polish 2, part F | A calendar link Google or Apple Calendar subscribes to, a trip's .ics download, countdown pushes before a trip, profile photos |
 | Polish 2, part G | Live location sharing for a few hours (never saved), the Android home-screen widget (countdown, today's next stop) |
+| Budget (optional) | A total and/or category limits for the group or each person, planned vs spent, pace warning, chat cards at 80% and 100%, a line on the Overview |
 
 ## 6. What's not done yet
 
@@ -334,7 +345,8 @@ Known gaps in what exists today:
 
 In the order we intend to build it:
 
-1. **A budget:** spending tracked against what the group planned to spend.
+1. **A trip journal:** each day turned into a shared memory from the
+   photos, places and plan, with almost no typing.
 2. **Works offline:** the whole trip saved on the phone, so it works with no
    signal, catching up when back online.
 3. **AI, self-hosted and free:** draft a day-by-day plan from the group's

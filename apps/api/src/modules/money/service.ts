@@ -21,6 +21,7 @@ import {
   formatMoney,
   hasRole,
   newId,
+  SetBudgetInput,
   splitExpense,
   suggestTransfers,
   UpdateExpenseInput,
@@ -32,6 +33,7 @@ import {
   type Settlement,
   type SettlementMethod,
   type SplitMethod,
+  type TripBudget,
   type TripEvent,
   type TripMoney,
 } from '@tagalong/shared';
@@ -43,10 +45,21 @@ import { publishTripEvent } from '../../lib/events';
 import type { Notifier } from '../../lib/notifier';
 import type { Rates } from '../../lib/fx';
 import { postSystemMessage } from '../chat/channel';
+import {
+  announceBudget,
+  checkBudgetAlerts,
+  deleteBudget,
+  loadBudget,
+  plannedCosts,
+  spentOn,
+  toBudget,
+  writeBudget,
+} from './budget';
 
 type CreateExpense = z.output<typeof CreateExpenseInput>;
 type UpdateExpense = z.output<typeof UpdateExpenseInput>;
 type CreateSettlement = z.output<typeof CreateSettlementInput>;
+type SetBudget = z.output<typeof SetBudgetInput>;
 type ExpenseRow = typeof expenses.$inferSelect;
 type SettlementRow = typeof settlements.$inferSelect;
 type SplitRow = typeof expenseSplits.$inferSelect;
@@ -205,7 +218,7 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates, notifier?
       return quote;
     },
 
-    /** Everything the Money tab needs: expenses, payments, people and balances. */
+    /** Everything the Money tab needs: expenses, payments, people, balances, and the budget if there is one. */
     async summary(tripId: string, userId: string): Promise<TripMoney> {
       await requireTripRole(db, tripId, userId, 'viewer');
       const baseCurrency = await baseCurrencyOf(tripId);
@@ -243,6 +256,11 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates, notifier?
 
       const net = computeBalances(list, settled);
       for (const p of people) if (!net.has(p.userId)) net.set(p.userId, 0);
+      // Planned costs only matter to a budget, so trips without one skip the work.
+      const budgetRow = await loadBudget(db, tripId);
+      const planned = budgetRow
+        ? await plannedCosts(db, rates, tripId, baseCurrency, people.filter((p) => p.active).length)
+        : [];
       return {
         baseCurrency,
         expenses: list,
@@ -250,7 +268,52 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates, notifier?
         people,
         balances: [...net].map(([id, netMinor]) => ({ userId: id, netMinor })),
         suggested: suggestTransfers(net),
+        budget: budgetRow ? toBudget(budgetRow) : null,
+        planned,
       };
+    },
+
+    /** The budget and what's been spent against it, for the Overview. */
+    async budget(tripId: string, userId: string): Promise<TripBudget> {
+      await requireTripRole(db, tripId, userId, 'viewer');
+      const row = await loadBudget(db, tripId);
+      if (!row) return { budget: null, spentMinor: 0, myShareMinor: 0 };
+      const [mine] = await db
+        .select({ total: sql<string>`coalesce(sum(${expenseSplits.shareMinor}), 0)` })
+        .from(expenseSplits)
+        .innerJoin(expenses, eq(expenses.id, expenseSplits.expenseId))
+        .where(and(eq(expenses.tripId, tripId), isNull(expenses.deletedAt), eq(expenseSplits.userId, userId)));
+      return { budget: toBudget(row), spentMinor: await spentOn(db, tripId), myShareMinor: Number(mine?.total ?? 0) };
+    },
+
+    /**
+     * Adds the budget (no `version`) or changes it (the version last seen).
+     * Editors and owners only; a stale version gets the current copy back.
+     */
+    async setBudget(tripId: string, userId: string, input: SetBudget, origin?: string) {
+      await requireTripRole(db, tripId, userId, 'editor');
+      const { version, ...values } = input;
+      const row = await db.transaction((tx) => writeBudget(tx, tripId, userId, values, version));
+      if (!row) {
+        const latest = await loadBudget(db, tripId);
+        throw conflict(
+          version === undefined
+            ? 'Someone added a budget while you were editing. Showing theirs.'
+            : 'Someone changed the budget while you were editing. Showing the latest version.',
+          { current: latest ? toBudget(latest) : null },
+        );
+      }
+      const budget = toBudget(row);
+      await announceBudget(redis, tripId, userId, budget, origin);
+      await checkBudgetAlerts(db, redis, tripId, userId);
+      return { budget, created: version === undefined };
+    },
+
+    /** Takes the budget away; the trip goes back to showing nothing about budgets. */
+    async removeBudget(tripId: string, userId: string, origin?: string) {
+      await requireTripRole(db, tripId, userId, 'editor');
+      const removed = await db.transaction((tx) => deleteBudget(tx, tripId, userId));
+      if (removed) await announceBudget(redis, tripId, userId, null, origin);
     },
 
     /** Retrying with the same client-generated id returns the same expense. */
@@ -313,6 +376,7 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates, notifier?
           origin,
         );
         await publishCard(tripId, userId, result.card);
+        await checkBudgetAlerts(db, redis, tripId, userId);
         // Everyone sharing it hears what it means for them: "Arun added Dinner, you owe ₹640".
         for (const share of split) {
           const owes = share.userId !== input.paidBy && share.shareMinor > 0;
@@ -392,6 +456,7 @@ export const createMoneyService = (db: Db, redis: Redis, rates: Rates, notifier?
         { type: 'expense.upserted', tripId: updated.tripId, entityId: expenseId, actorId: userId, version: updated.version, payload: updated },
         origin,
       );
+      await checkBudgetAlerts(db, redis, updated.tripId, userId);
       return updated;
     },
 

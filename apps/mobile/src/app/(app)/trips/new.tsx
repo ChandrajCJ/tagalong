@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BudgetField, emptyBudgetDraft, readBudgetDraft, type BudgetDraft } from '@/components/budget-field';
 import { CoverImage } from '@/components/cover-image';
 import { pickCoverPhoto, uploadCover } from '@/components/cover-photo-picker';
 import { DateRangeField } from '@/components/date-range-picker';
@@ -16,7 +17,7 @@ import { ApiError, request } from '@/lib/api';
 import { formatDateRange } from '@/lib/format';
 import { colors, coverColors, fonts, radius, space } from '@/theme';
 
-type Errors = Partial<Record<'name' | 'destination' | 'startDate' | 'endDate' | 'form', string>>;
+type Errors = Partial<Record<'name' | 'destination' | 'startDate' | 'endDate' | 'budget' | 'form', string>>;
 
 /** Create a trip (design: NewTrip.dc.html). */
 export default function NewTrip() {
@@ -46,6 +47,7 @@ export default function NewTrip() {
   // A cover photo picked before the trip exists: uploaded right after it's created.
   const [coverPhoto, setCoverPhoto] = useState<ImagePickerAsset | null>(null);
   const [coverProblem, setCoverProblem] = useState<string>();
+  const [budget, setBudget] = useState<BudgetDraft>(emptyBudgetDraft);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
 
@@ -59,6 +61,8 @@ export default function NewTrip() {
       const problem = placeDatesProblem(stops, { startDate: dates.start, endDate: dates.end });
       if (problem) return setErrors({ form: problem });
     }
+    const budgetTotal = readBudgetDraft(budget, currency);
+    if (budgetTotal && typeof budgetTotal === 'object') return setErrors({ budget: budgetTotal.error });
     const parsed = CreateTripInput.safeParse({
       id: tripId,
       name: name.trim() || stops.map((p) => cityOf(p.destination)).filter(Boolean).join(' → ').slice(0, 120),
@@ -69,6 +73,8 @@ export default function NewTrip() {
       coverColor,
       location: place ?? undefined,
       places: withPlaces ? stops : undefined,
+      // An empty total means no budget at all.
+      budget: budgetTotal ? { mode: budget.mode, totalMinor: budgetTotal } : undefined,
     });
     if (!parsed.success) {
       const next: Errors = {};
@@ -233,6 +239,8 @@ export default function NewTrip() {
               Expenses are totalled and split in this currency. You can change it until the first expense.
             </Body>
           </View>
+
+          <BudgetField value={budget} onChange={setBudget} currency={currency} error={errors.budget} />
 
           {errors.form ? <Body style={{ color: colors.coralInk }}>{errors.form}</Body> : null}
         </ScrollView>

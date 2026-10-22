@@ -65,13 +65,7 @@ export const nameOf = (people: MoneyPerson[], userId: string, me: string) =>
   userId === me ? 'You' : (people.find((p) => p.userId === userId)?.displayName ?? 'Someone');
 
 /** A booking or plan item's type, as the closest expense category. */
-export const categoryFor = (type: string): ExpenseCategory => {
-  if (type === 'restaurant' || type === 'meal') return 'food';
-  if (['flight', 'train', 'car', 'transport'].includes(type)) return 'transport';
-  if (type === 'stay') return 'stay';
-  if (type === 'ticket' || type === 'activity') return 'activity';
-  return 'other';
-};
+export { categoryFor } from '@tagalong/shared';
 
 /** Shares the trip's expenses as a CSV file, or downloads it on the web. */
 export const exportCsv = async (

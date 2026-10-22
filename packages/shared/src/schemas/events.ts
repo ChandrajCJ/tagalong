@@ -43,6 +43,8 @@ export const TRIP_EVENT_TYPES = [
   'expense.deleted',
   'settlement.upserted',
   'settlement.deleted',
+  /** The budget was added, changed or removed; the payload is the budget, or null once removed. */
+  'budget.updated',
   'list.upserted',
   'list.deleted',
   'list_item.upserted',
