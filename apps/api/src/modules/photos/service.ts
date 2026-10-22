@@ -16,6 +16,9 @@ type Row = typeof photos.$inferSelect;
 type Fav = { count: number; mine: boolean };
 const NO_FAVS: Fav = { count: 0, mine: false };
 
+/** What shows in the album: its own uploads and photos added with a journal entry. */
+export const IN_ALBUM = ['album', 'journal'] as const;
+
 /** Postgres's "unique_violation", wherever the driver puts it. */
 const isUniqueViolation = (e: unknown): boolean => {
   const err = e as { code?: string; cause?: { code?: string } };
@@ -128,7 +131,7 @@ export const createPhotosService = (
           and(
             eq(photos.tripId, tripId),
             // Chat photos and covers stay out of the album until someone adds them.
-            eq(photos.source, 'album'),
+            inArray(photos.source, [...IN_ALBUM]),
             isNull(photos.deletedAt),
             sql`(${photos.status} = 'ready' or ${photos.uploadedBy} = ${userId})`,
           ),
@@ -139,6 +142,25 @@ export const createPhotosService = (
         photos: await hydrate(rows, userId),
         expiresIn: ttl,
       };
+    },
+
+    /**
+     * The trip's ready photos among these ids, with fresh links, in the order
+     * asked. Ones deleted or from another trip are left out. No access check:
+     * callers have already checked the trip.
+     */
+    async byIds(tripId: string, ids: string[], userId: string): Promise<Photo[]> {
+      const unique = [...new Set(ids)];
+      if (unique.length === 0) return [];
+      const rows = await db
+        .select({ photo: photos, uploaderName: users.displayName })
+        .from(photos)
+        .innerJoin(users, eq(users.id, photos.uploadedBy))
+        .where(
+          and(eq(photos.tripId, tripId), inArray(photos.id, unique), eq(photos.status, 'ready'), isNull(photos.deletedAt)),
+        );
+      const found = new Map((await hydrate(rows, userId)).map((p) => [p.id, p]));
+      return unique.flatMap((id) => (found.has(id) ? [found.get(id)!] : []));
     },
 
     /** One photo with fresh links, for when the worker announces its thumbnail. */
@@ -179,7 +201,7 @@ export const createPhotosService = (
         .where(
           and(
             eq(photos.tripId, item.tripId),
-            eq(photos.source, 'album'),
+            inArray(photos.source, [...IN_ALBUM]),
             eq(photos.status, 'ready'),
             isNull(photos.deletedAt),
             sql`${photos.takenAt} between ${window.from}::timestamp and ${window.to}::timestamp`,
@@ -321,7 +343,7 @@ export const createPhotosService = (
       if (ready.kind === 'photo') await jobs.makeThumbnail(photoId);
       // No payload: each phone fetches its own signed copy. Chat photos and
       // covers aren't in the album, so albums have nothing to show yet.
-      if (ready.source === 'album') {
+      if ((IN_ALBUM as readonly string[]).includes(ready.source)) {
         await publishTripEvent(redis, {
           type: 'photo.upserted',
           tripId: photo.tripId,
@@ -339,7 +361,7 @@ export const createPhotosService = (
       const { photo, uploaderName } = await loadLive(photoId);
       await requireTripRole(db, photo.tripId, userId, 'editor');
       if (photo.status !== 'ready' || photo.source === 'cover') throw notFound('That photo is no longer here');
-      if (photo.source === 'album') return toPhoto(photo, uploaderName);
+      if ((IN_ALBUM as readonly string[]).includes(photo.source)) return toPhoto(photo, uploaderName);
 
       const row = await db.transaction(async (tx) => {
         const [updated] = await tx

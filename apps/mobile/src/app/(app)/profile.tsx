@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { Me, NotificationPrefs, REMINDER_LEADS, UPI_ID, type NotificationKind } from '@tagalong/shared';
+import { JOURNAL_TIMES, Me, NotificationPrefs, REMINDER_LEADS, UPI_ID, type NotificationKind } from '@tagalong/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -205,6 +205,28 @@ export default function ProfileScreen() {
                 prefs={prefs}
                 onChange={(kind: NotificationKind, on) => void changePrefs({ [kind]: on })}
               />
+            ) : null}
+            {prefs?.journal ? (
+              <View style={{ gap: space.xs }}>
+                <Text style={styles.settingTitle}>Journal prompt time</Text>
+                <View style={styles.leads} accessibilityRole="radiogroup" accessibilityLabel="When the journal prompt comes">
+                  {JOURNAL_TIMES.map((t) => {
+                    const on = prefs.journalTime === t;
+                    return (
+                      <Pressable
+                        key={t}
+                        accessibilityRole="radio"
+                        aria-checked={on}
+                        onPress={() => void changePrefs({ journalTime: t })}
+                        style={[styles.lead, on && styles.leadOn]}
+                      >
+                        <Text style={[styles.leadText, on && { color: colors.onFill }]}>{t}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Body style={{ fontSize: 12 }}>On the trip’s own clock, wherever you are.</Body>
+              </View>
             ) : null}
             <View style={styles.setting}>
               <View style={{ flex: 1, gap: 2 }}>

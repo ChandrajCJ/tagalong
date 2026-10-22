@@ -1,8 +1,8 @@
 # Tagalong
 
-Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–029), deployment in `docs/DEPLOY.md`. Read only the part you need.
+Group trip planner: plan, chat, photos, money, explore. Full overview in `docs/ABOUT.md`, decisions in `docs/decisions/` (ADRs 001–029 and 033; 030–032 and 034 are reserved for weeks 22–23), deployment in `docs/DEPLOY.md`. Read only the part you need.
 
-Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, 22–23 AI extras: Ask your trip, trip assistant, evals, MCP server; release track, chores). Build one week per session, in order. Polish-1 (sessions A–D) and polish-2 (sessions E–G: several destinations, whole-day Google Maps, calendar feed, countdown pushes, avatars, live location, Android widget) are done; G needs the new APK. Week 17 (optional budget) is done. Next, in order: the trip journal in `docs/plans/journal.md`, then weeks 18–19 offline.
+Roadmap: `docs/plans/weeks-14-16.md` (weeks 14–16 done) then `docs/plans/weeks-17-21.md` (17 budget, 18–19 offline, 20–21 self-hosted AI, 22–23 AI extras: Ask your trip, trip assistant, evals, MCP server; release track, chores). Build one week per session, in order. Polish-1 (sessions A–D) and polish-2 (sessions E–G: several destinations, whole-day Google Maps, calendar feed, countdown pushes, avatars, live location, Android widget) are done; G needs the new APK. Week 17 (optional budget) and the trip journal (`docs/plans/journal.md`) are done. Next: weeks 18–19 offline (private journal entries must stay private there too, see ADR 033).
 
 ## Rules
 - Commit as `Chandraj1710 <chandraj1710@gmail.com>`. Never use the work email.

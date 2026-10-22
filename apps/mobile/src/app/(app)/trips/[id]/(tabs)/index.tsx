@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { budgetLine, cityOf, hasRole, listsSummary, NextUp, TripBudget } from '@tagalong/shared';
+import { budgetLine, cityOf, dayNumberOf, hasRole, listsSummary, NextUp, TripBudget, tripOver, type Trip } from '@tagalong/shared';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -14,6 +14,7 @@ import { ApiError, request } from '@/lib/api';
 import { confirmAction } from '@/lib/confirm';
 import { BOOKING_META, formatInZone, relativeFrom, routeOf, titleOf } from '@/lib/bookings';
 import { downloadTripCalendar } from '@/lib/calendar';
+import { todayIso } from '@/lib/dates';
 import { formatDateRange, readinessLine, tripCountdown } from '@/lib/format';
 import { useTripLists, useTripNotes } from '@/lib/lists';
 import { useTripRealtime } from '@/lib/realtime';
@@ -219,6 +220,8 @@ export default function TripOverview() {
 
         <NextUpCard tripId={trip.id} />
 
+        <JournalCard trip={trip} />
+
         <GetReadyCard />
 
         {trip.location ? (
@@ -298,6 +301,13 @@ export default function TripOverview() {
             title="Split costs"
             subtitle="Log what you pay; Tagalong works out who owes whom"
             onPress={() => router.push(`${base}/money`)}
+          />
+          <ActionRow
+            icon="book-open"
+            tint="accent"
+            title="Keep a trip journal"
+            subtitle="A page a day, filled in from the plan and photos; add what you want to remember"
+            onPress={() => router.push(`${base}/journal`)}
           />
           <ActionRow
             icon="folder"
@@ -388,6 +398,68 @@ function NextUpCard({ tripId }: { tripId: string }) {
         {booking.itemId ? <Feather name="chevron-right" size={18} color={colors.onAccentMuted} /> : null}
       </Pressable>
     </View>
+  );
+}
+
+/**
+ * From the trip's first day: today's journal page, front and centre. Once
+ * the trip is over: the recap, then the journal.
+ */
+function JournalCard({ trip }: { trip: Trip }) {
+  const today = todayIso();
+  const over = tripOver(trip, today);
+  const dayNo = dayNumberOf(trip.startDate, trip.endDate, today);
+  if (!over && dayNo === null) return null;
+  const base = `/trips/${trip.id}` as const;
+  if (over) {
+    return (
+      <View style={{ gap: space.sm }}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(`${base}/recap`)}
+          style={({ pressed }) => [styles.nextUp, pressed && { opacity: 0.85 }]}
+        >
+          <View style={styles.nextIcon}>
+            <Feather name="star" size={20} color={colors.onFill} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.nextTitle}>Your {trip.name} recap</Text>
+            <Text style={styles.nextWhen}>The trip in numbers, day by day on the map, and the best photos</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.onAccentMuted} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(`${base}/journal`)}
+          style={({ pressed }) => [styles.explore, pressed && { opacity: 0.85 }]}
+        >
+          <View style={[styles.exploreIcon, { backgroundColor: colors.violet }]}>
+            <Feather name="book-open" size={22} color={colors.onFill} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.exploreTitle}>Journal</Text>
+            <Body style={{ fontSize: 13 }}>Every day of the trip, with everyone’s entries</Body>
+          </View>
+          <Feather name="chevron-right" size={18} color={colors.faint} />
+        </Pressable>
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push(`${base}/journal/${today}`)}
+      style={({ pressed }) => [styles.nextUp, pressed && { opacity: 0.85 }]}
+    >
+      <View style={styles.nextIcon}>
+        <Feather name="book-open" size={20} color={colors.onFill} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.nextTitle}>Journal · Day {dayNo}</Text>
+        <Text style={styles.nextWhen}>What happened today? Add it before you forget.</Text>
+      </View>
+      <Feather name="chevron-right" size={18} color={colors.onAccentMuted} />
+    </Pressable>
   );
 }
 

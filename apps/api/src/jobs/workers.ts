@@ -18,6 +18,7 @@ import { processLinkPreview } from './preview';
 import { PURGE_JOB, purgeDeletedTrips } from './purge';
 import { COUNTDOWN_JOB, queueCountdowns } from './countdown';
 import { DUE_JOB, queueDueTomorrow } from './due';
+import { JOURNAL_JOB, runJournalJob } from './journal';
 import { bullJobs } from '../lib/jobs';
 import { createNotifier } from '../lib/notifier';
 import { processThumbnail } from './thumbnail';
@@ -83,6 +84,11 @@ export const startWorkers = async ({
         if (result.sent) log.info(result, 'Countdown pushes');
         return result;
       }
+      if (job.name === JOURNAL_JOB) {
+        const result = await runJournalJob({ db, push: expoPushSender });
+        if (result.prompts || result.memories || result.recaps) log.info(result, 'Journal pushes');
+        return result;
+      }
       if (job.name === PURGE_JOB) {
         const result = await purgeDeletedTrips({ db, storage });
         if (result.trips) log.info(result, 'Purged deleted trips');
@@ -142,6 +148,8 @@ export const startWorkers = async ({
   await systemQueue.upsertJobScheduler(DUE_JOB, { pattern: '15 * * * *' }, { name: DUE_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
   // Countdowns before trips: hourly, so each person's 9 am and 7 pm come round; each stage is sent once.
   await systemQueue.upsertJobScheduler(COUNTDOWN_JOB, { pattern: '20 * * * *' }, { name: COUNTDOWN_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
+  // The journal's evening prompt, "On this day" and the recap: hourly, so each person's evening comes round.
+  await systemQueue.upsertJobScheduler(JOURNAL_JOB, { pattern: '35 * * * *' }, { name: JOURNAL_JOB, opts: { removeOnComplete: 10, removeOnFail: 50 } });
   await systemQueue.close();
 
   // Forwarded booking emails: read the inbox every two minutes, one run at a time.

@@ -169,6 +169,13 @@
       "when": 1792641869499,
       "tag": "0023_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792667109153,
+      "tag": "0024_journal",
+      "breakpoints": true
     }
   ]
 }

@@ -25,8 +25,8 @@ export const localDateTime = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, 'Use a local date and time like 2026-06-12T18:30:00');
 
-/** Where a photo was added: the album, a chat message, or the trip's cover. */
-export const PHOTO_SOURCES = ['album', 'chat', 'cover'] as const;
+/** Where a photo was added: the album, a chat message, the trip's cover, or a journal entry (also in the album). */
+export const PHOTO_SOURCES = ['album', 'chat', 'cover', 'journal'] as const;
 export type PhotoSource = (typeof PHOTO_SOURCES)[number];
 
 export const Photo = z.object({

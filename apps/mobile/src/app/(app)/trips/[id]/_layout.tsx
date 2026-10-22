@@ -3,7 +3,7 @@ import { LiveLocationBanner } from '@/components/live-location';
 import { TripProvider } from '@/lib/trip-context';
 import { colors } from '@/theme';
 
-/** The trip hub: tabs, plus Invite, Edit, Members, Get ready, notes and a plan item's detail on top of them. */
+/** The trip hub: tabs, plus Invite, Edit, Members, Get ready, notes, the journal, the recap and a plan item's detail on top of them. */
 export default function TripLayout() {
   const { id } = useLocalSearchParams<{ id: string }>();
   return (
@@ -19,6 +19,9 @@ export default function TripLayout() {
         <Stack.Screen name="lists" />
         <Stack.Screen name="notes/[noteId]" />
         <Stack.Screen name="imports" />
+        <Stack.Screen name="journal/index" />
+        <Stack.Screen name="journal/[date]" />
+        <Stack.Screen name="recap" />
       </Stack>
       {/* On every screen of the trip while I'm sharing my location with it. */}
       <LiveLocationBanner tripId={id} />

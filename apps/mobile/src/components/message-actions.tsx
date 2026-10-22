@@ -15,6 +15,9 @@ interface Props {
   canInfo: boolean;
   /** On a photo message whose photos aren't all in the album yet. */
   canAddToAlbum: boolean;
+  /** On anything with words in it: a message or a poll, for the trip journal's quote board. */
+  canSaveToJournal: boolean;
+  onSaveToJournal: () => void;
   onInfo: () => void;
   onAddToAlbum: () => void;
   onReply: () => void;
@@ -27,7 +30,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** Long-press menu for a message: react, reply, add it to the plan or the money, copy, edit or delete it. */
+/** Long-press menu for a message: react, reply, add it to the plan, the money or the journal, copy, edit or delete it. */
 export function MessageActions({
   message,
   canReact,
@@ -37,6 +40,8 @@ export function MessageActions({
   canDelete,
   canInfo,
   canAddToAlbum,
+  canSaveToJournal,
+  onSaveToJournal,
   onInfo,
   onAddToAlbum,
   onReply,
@@ -85,6 +90,7 @@ export function MessageActions({
             </>
           ) : null}
           {canAddToAlbum ? <Action icon="image" label="Add to album" onPress={onAddToAlbum} /> : null}
+          {canSaveToJournal ? <Action icon="book-open" label="Save to journal" onPress={onSaveToJournal} /> : null}
           {message?.body ? <Action icon="copy" label="Copy text" onPress={onCopy} /> : null}
           {canInfo ? <Action icon="info" label="Info" onPress={onInfo} /> : null}
           {canEdit ? <Action icon="edit-2" label="Edit" onPress={onEdit} /> : null}

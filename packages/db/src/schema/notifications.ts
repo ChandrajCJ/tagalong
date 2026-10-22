@@ -25,6 +25,12 @@ export const notificationPrefs = identity.table(
     trip: boolean('trip'),
     /** The countdown before a trip: a week, three days, the evening before, the morning of. */
     countdown: boolean('countdown'),
+    /** The evening journal prompt during a trip. */
+    journal: boolean('journal'),
+    /** "A year ago today…" and the end-of-trip recap. */
+    memories: boolean('memories'),
+    /** When the evening prompt comes, "20:30" on the trip's clock. Defaults row only. */
+    journalTime: text('journal_time'),
     /** Reminders before timed stops, which the phone schedules itself. Defaults row only. */
     reminders: boolean('reminders'),
     reminderMinutes: integer('reminder_minutes'),

@@ -232,6 +232,39 @@ This is the app from a traveller's point of view.
     and at 100%, once each, and the Overview's Get ready card adds "Budget:
     ₹6,600 left".
 
+### Remembering it: the journal
+30. From the first day of the trip, the Overview leads with **Journal · Day
+    3**, opening today's page. Each day's page fills itself in with no
+    typing: "Day 3 · Porto", the weather (the forecast ahead, what it really
+    was afterwards), the day's stops on a small map with the distance and
+    time between them, the day in numbers (photos, messages, money spent and
+    what it came to each) and highlights: the most-loved photos, the
+    most-voted idea that happened, and the busiest moment in the chat.
+31. **Write** adds an entry: some words, a mood if you like (😍 🙂 😴 🥵 🌧️
+    🤯), photos and videos from the album (or new ones, which join the album
+    too), a place, and who sees it: **The group** or **Just me** (🔒, which
+    nobody else ever sees, owners included). An empty day offers starters
+    like "Best meal" and "Quote of the day". A half-written entry is kept on
+    the phone until it's sent. Everyone, viewers too, can write; the group
+    reacts and comments on shared entries, live.
+32. In the chat, a message's menu has **Save to journal**: it becomes a quote
+    on the day it was said, with who said it. Small avatars show who has
+    written that day, without nagging.
+33. During the trip an evening push asks one question ("Day 2 in Goa: what
+    was the best moment?", then "Best thing you ate today?"…) at 8:30 pm on
+    the trip's clock, unless you've already written; the time can be changed
+    or turned off in **Profile → Notifications**. A year later, "A year ago
+    today you were at Dudhsagar Falls" comes as a push and a card on Your
+    trips.
+34. The morning after the trip ends, "Your Goa recap is ready ✨": the trip's
+    story, for members only. Days, places, distance, photos, messages, the
+    most-used emoji, the most-loved photos, each person's share of the
+    spending and the biggest shared cost; then day by day with a map that
+    follows along, each day's best photos, a few lines from the group's
+    entries and the weather; and **Plan the next one**, which starts a new
+    trip with the same people. The numbers can be saved as an image (web) or
+    shared as text (phone).
+
 ## 4. How it works
 
 ### The pieces
@@ -311,6 +344,7 @@ requests.
 | Polish 2, part F | A calendar link Google or Apple Calendar subscribes to, a trip's .ics download, countdown pushes before a trip, profile photos |
 | Polish 2, part G | Live location sharing for a few hours (never saved), the Android home-screen widget (countdown, today's next stop) |
 | Budget (optional) | A total and/or category limits for the group or each person, planned vs spent, pace warning, chat cards at 80% and 100%, a line on the Overview |
+| Trip journal | A page a day that fills itself in (weather, route, numbers, highlights), group and private entries with photos, moods and places, reactions and comments, quotes saved from chat, an evening prompt, "On this day" memories, the end-of-trip recap |
 
 ## 6. What's not done yet
 
@@ -338,6 +372,10 @@ Known gaps in what exists today:
 - **Forwarding emails isn't switched on yet:** it needs the free Gmail inbox
   from DEPLOY.md. Until then, paste the email or read a ticket PDF instead.
   Screenshots of tickets can't be read (no OCR).
+- **The recap's "Save as image" works in the web app only.** On phones it
+  shares the numbers as text until an APK adds a screen-capture module.
+- **Viewers can't add new photos to a journal entry,** only ones already in
+  the album, because uploading to the album needs the editor role.
 - **No public-transport times:** there's no free, key-less source that covers
   India. Travel times are walking, driving or cycling.
 
@@ -345,11 +383,9 @@ Known gaps in what exists today:
 
 In the order we intend to build it:
 
-1. **A trip journal:** each day turned into a shared memory from the
-   photos, places and plan, with almost no typing.
-2. **Works offline:** the whole trip saved on the phone, so it works with no
+1. **Works offline:** the whole trip saved on the phone, so it works with no
    signal, catching up when back online.
-3. **AI, self-hosted and free:** draft a day-by-day plan from the group's
+2. **AI, self-hosted and free:** draft a day-by-day plan from the group's
    ideas and bookings, summarise long chats, and read amounts from receipt
    photos.
 

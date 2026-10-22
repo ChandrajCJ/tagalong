@@ -1,5 +1,5 @@
 import Feather from '@expo/vector-icons/Feather';
-import { groupTrips, MyTrips, type DeletedTrip, type TripSummary } from '@tagalong/shared';
+import { groupTrips, MemoryList, MyTrips, type DeletedTrip, type Memory, type TripSummary } from '@tagalong/shared';
 import { Link, router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
@@ -13,6 +13,7 @@ import { formatDateRange, readinessLine, tripCountdown } from '@/lib/format';
 import { registerForPush, setAppBadge } from '@/lib/push';
 import { useTripsRealtime } from '@/lib/realtime';
 import { youAre } from '@/lib/roles';
+import { secureStorage } from '@/lib/storage';
 import { colors, fonts, radius, space } from '@/theme';
 
 /** Changes that move the "new" counts or the list itself. */
@@ -20,6 +21,64 @@ const LIST_EVENTS = new Set(['message.created', 'message.deleted', 'read.updated
 
 type Row = { type: 'trip'; trip: TripSummary } | { type: 'deleted'; trip: DeletedTrip };
 type Section = { key: string; title: string; data: Row[]; toggle?: boolean };
+
+/** Keychain keys allow letters, digits, ".", "-" and "_". */
+const dismissedKey = (m: Memory, today: string) => `memory-dismissed.${m.tripId}.${today}`;
+
+/** "1 year ago: Goa with the gang", opening that day of its journal. Each can be put away for the day. */
+function Memories() {
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const today = todayIso();
+
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      void (async () => {
+        const list = await request(`/me/memories?today=${today}`, { schema: MemoryList }).catch(() => null);
+        if (!list || !live) return;
+        const kept = await Promise.all(list.memories.map(async (m) => ((await secureStorage.get(dismissedKey(m, today))) ? null : m)));
+        if (live) setMemories(kept.filter((m): m is Memory => m !== null));
+      })();
+      return () => {
+        live = false;
+      };
+    }, [today]),
+  );
+
+  if (memories.length === 0) return null;
+  return (
+    <View style={{ gap: space.sm, marginBottom: space.md }}>
+      {memories.map((m) => (
+        <Pressable
+          key={m.tripId}
+          accessibilityRole="button"
+          accessibilityLabel={`${m.yearsAgo === 1 ? 'A year' : `${m.yearsAgo} years`} ago today: ${m.tripName}. Opens that day of the journal.`}
+          onPress={() => router.push(`/trips/${m.tripId}/journal/${m.date}`)}
+        >
+          <CoverImage color={m.coverColor} uri={m.coverUrl} cacheKey={`cover-${m.tripId}`} style={styles.memory}>
+            <View style={{ flex: 1, justifyContent: 'flex-end', gap: 2 }}>
+              <Text style={[styles.memoryKicker, !m.coverUrl && { color: colors.onCover }]}>{m.yearsAgo === 1 ? '1 year ago today' : `${m.yearsAgo} years ago today`}</Text>
+              <Text style={[styles.memoryTitle, !m.coverUrl && { color: colors.onCover, textShadowRadius: 0 }]} numberOfLines={1}>
+                {m.tripName}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Hide this memory for today"
+              onPress={() => {
+                void secureStorage.set(dismissedKey(m, today), '1');
+                setMemories((list) => list.filter((x) => x.tripId !== m.tripId));
+              }}
+              style={styles.memoryClose}
+            >
+              <Feather name="x" size={18} color={m.coverUrl ? colors.onPhoto : colors.onCover} />
+            </Pressable>
+          </CoverImage>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
 
 /** Your trips (design: Home.dc.html). */
 export default function Trips() {
@@ -119,7 +178,9 @@ export default function Trips() {
               <Body style={{ color: colors.coralInk }}>{error}</Body>
               <Button label="Try again" variant="outline" onPress={load} />
             </View>
-          ) : null
+          ) : (
+            <Memories />
+          )
         }
         ListEmptyComponent={
           data && !error ? (
@@ -229,6 +290,10 @@ function DeletedRow({ trip, onRestore }: { trip: DeletedTrip; onRestore: () => v
 }
 
 const styles = StyleSheet.create({
+  memory: { height: 110, borderRadius: radius.lg, padding: space.lg, flexDirection: 'row' },
+  memoryKicker: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.onPhoto },
+  memoryTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.onPhoto, textShadowColor: 'rgba(0,0,0,0.35)', textShadowRadius: 6 },
+  memoryClose: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginTop: -space.sm, marginRight: -space.sm },
   ready: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   readyText: { fontFamily: fonts.medium, fontSize: 12, color: colors.accentInk },
   screen: { flex: 1, backgroundColor: colors.bg },

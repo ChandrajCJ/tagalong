@@ -4,6 +4,7 @@ import {
   ChatMessage,
   hasRole,
   insertMention,
+  JournalEntry,
   LinkPreview,
   MAX_CHAT_IMAGES,
   Me,
@@ -63,7 +64,7 @@ import {
 } from '@/lib/chat';
 import { encodeDraft, type ExpenseDraft } from '@/lib/money';
 import { uploadPhoto } from '@/lib/photos';
-import { planDays } from '@/lib/plan';
+import { planDays, shortDate } from '@/lib/plan';
 import { realtime, useTripRealtime } from '@/lib/realtime';
 import { secureStorage } from '@/lib/storage';
 import { useTrip } from '@/lib/trip-context';
@@ -350,6 +351,17 @@ export default function ChatTab() {
       say(missing.length === 1 ? 'Added to the album' : `Added ${missing.length} photos to the album`);
     } catch (e) {
       say(e instanceof ApiError ? e.message : 'Couldn’t add them to the album. Try again.');
+    }
+  };
+
+  /** "Save to journal": the message becomes a quote on the day it was said. */
+  const saveToJournal = async (message: LocalMessage) => {
+    setActionsFor(null);
+    try {
+      const quote = await request(`/messages/${message.id}/save-to-journal`, { method: 'POST', body: {}, schema: JournalEntry });
+      say(`Saved to the journal, ${shortDate(quote.date)}`);
+    } catch (e) {
+      say(e instanceof ApiError ? e.message : 'Couldn’t save it to the journal. Try again.');
     }
   };
 
@@ -969,6 +981,8 @@ export default function ChatTab() {
         }
         canInfo={!!actionsFor && actionsFor.senderId === me && !actionsFor.status && actionsFor.kind !== 'system'}
         canAddToAlbum={canPost && !!actionsFor && actionsFor.images.some((i) => !i.inAlbum)}
+        canSaveToJournal={!!actionsFor && !actionsFor.status && actionsFor.kind !== 'system' && !!actionsFor.body.trim()}
+        onSaveToJournal={() => actionsFor && void saveToJournal(actionsFor)}
         onInfo={() => {
           setInfoFor(actionsFor?.id ?? null);
           setActionsFor(null);

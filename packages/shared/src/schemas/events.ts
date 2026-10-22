@@ -45,6 +45,11 @@ export const TRIP_EVENT_TYPES = [
   'settlement.deleted',
   /** The budget was added, changed or removed; the payload is the budget, or null once removed. */
   'budget.updated',
+  /**
+   * A group journal entry, its reactions or comments changed; the payload is
+   * { date, entryId }, never the entry, and private entries send nothing.
+   */
+  'journal.updated',
   'list.upserted',
   'list.deleted',
   'list_item.upserted',

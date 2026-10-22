@@ -53,7 +53,8 @@ export const photos = mediaSchema.table(
     caption: text('caption'),
     /**
      * Where it was added: the trip's album, a chat message (kept out of the
-     * album unless someone adds it), or the trip's cover photo.
+     * album unless someone adds it), the trip's cover photo, or a journal
+     * entry (which is in the album too).
      */
     source: text('source').notNull().default('album'),
     /** A photo, or a short video whose poster frame the phone uploads as its thumbnail. */
@@ -67,7 +68,7 @@ export const photos = mediaSchema.table(
     index('photos_trip_taken_idx').on(t.tripId, t.takenAt),
     index('photos_batch_idx').on(t.batchId),
     check('photos_status_check', sql.raw(`status in ('pending', 'ready')`)),
-    check('photos_source_check', sql.raw(`source in ('album', 'chat', 'cover')`)),
+    check('photos_source_check', sql.raw(`source in ('album', 'chat', 'cover', 'journal')`)),
     // The server only stores what every phone and browser can show. iPhones'
     // HEIC is converted on the phone before upload.
     check(

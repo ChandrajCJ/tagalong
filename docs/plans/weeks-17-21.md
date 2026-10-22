@@ -255,7 +255,7 @@ Builds on weeks 20–21 (`lib/llm.ts`, the `ai` worker queue, the self-hosted Ol
   - Calls from one trip can't reach another.
 
 ### Docs (weeks 22–23)
-- ADRs: `029-ask-your-trip.md` (pgvector, facts vs search, citations, privacy), `030-trip-assistant.md` (tools, confirmation rule, injection defences), `031-ai-evals.md` and `032-mcp-server.md`.
+- ADRs: `034-ask-your-trip.md` (pgvector, facts vs search, citations, privacy), `030-trip-assistant.md` (tools, confirmation rule, injection defences), `031-ai-evals.md` and `032-mcp-server.md`.
 
 ---
 

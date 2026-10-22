@@ -93,6 +93,11 @@ export const CreateTripInput = z
     places: z.array(NewTripPlace).min(1).max(MAX_TRIP_PLACES).optional(),
     /** Optional: leave it out and the trip has no budget. */
     budget: NewTripBudget.optional(),
+    /**
+     * "Plan the next one" from a recap: everyone still on that trip joins this
+     * one, with the same role (its owners as editors). You must be on it.
+     */
+    copyMembersFrom: z.string().uuid().optional(),
   })
   .refine((t) => !t.startDate || !t.endDate || t.startDate <= t.endDate, {
     message: 'End date must be on or after the start date',

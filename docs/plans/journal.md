@@ -1,6 +1,6 @@
 # Trip journal (built right after week 17, before offline)
 
-Status: approved plan. Everything stays free. One session for v1, shipped as a migration, an API deploy and an OTA update (no new native modules). Builds on what exists:
+Status: done (v1), see ADR 033 for what was decided and what's left. Everything stays free. One session for v1, shipped as a migration, an API deploy and an OTA update (no new native modules). Builds on what exists:
 - photos and videos with places (`media`)
 - the plan with places
 - multi-place weather (`tripWeather`)

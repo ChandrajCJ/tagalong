@@ -277,6 +277,14 @@ export const createTripsService = (
       );
       checkPlaceDates(placeValues, { startDate: input.startDate ?? null, endDate: input.endDate ?? null });
       const summary = tripSummary(placeValues);
+      // "Plan the next one": the people from a trip I'm on come along.
+      const companions = input.copyMembersFrom
+        ? (await requireTripRole(db, input.copyMembersFrom, userId, 'viewer'),
+          await db
+            .select({ userId: tripMembers.userId, role: tripMembers.role })
+            .from(tripMembers)
+            .where(and(eq(tripMembers.tripId, input.copyMembersFrom), isNull(tripMembers.leftAt))))
+        : [];
       const created = await db.transaction(async (tx) => {
         const inserted = await tx
           .insert(trips)
@@ -303,6 +311,12 @@ export const createTripsService = (
         }
 
         await tx.insert(tripMembers).values({ tripId: id, userId, role: 'owner' });
+        const others = companions.filter((c) => c.userId !== userId);
+        if (others.length > 0) {
+          await tx
+            .insert(tripMembers)
+            .values(others.map((c) => ({ tripId: id, userId: c.userId, role: c.role === 'owner' ? 'editor' : c.role })));
+        }
         await tx.insert(tripPlaces).values(placeValues);
         if (input.budget) await writeBudget(tx, id, userId, { ...input.budget, categories: {} });
         await tx.insert(changeLog).values([

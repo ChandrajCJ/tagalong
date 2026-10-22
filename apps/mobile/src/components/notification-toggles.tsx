@@ -15,6 +15,14 @@ export const KIND_COPY: Record<NotificationKind, { title: string; detail: string
     title: 'Countdown',
     detail: '“A week to Goa! 2 to-dos still open”, then 3 days out, the evening before and the morning of',
   },
+  journal: {
+    title: 'Journal prompt',
+    detail: '“Day 2 in Goa: what was the best moment?” in the evening during a trip, unless you’ve written that day',
+  },
+  memories: {
+    title: 'Memories',
+    detail: '“A year ago today you were in Goa”, and your recap the morning after a trip ends',
+  },
 };
 
 const KINDS = Object.keys(KIND_COPY) as NotificationKind[];

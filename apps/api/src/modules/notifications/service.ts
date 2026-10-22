@@ -4,6 +4,8 @@ import {
   DEFAULT_PREFS,
   UpdateNotificationPrefsInput,
   UpdateTripNotificationsInput,
+  DEFAULT_JOURNAL_TIME,
+  JOURNAL_TIMES,
   type NotificationKind,
   type NotificationPrefs,
   type TripNotifications,
@@ -16,7 +18,12 @@ type UpdateDefaults = z.output<typeof UpdateNotificationPrefsInput>;
 type UpdateTrip = z.output<typeof UpdateTripNotificationsInput>;
 
 /** The switches a person can turn on and off, per trip or as defaults. */
-type Kind = 'chat' | 'mentions' | 'plan' | 'money' | 'todos' | 'trip' | 'countdown';
+type Kind = 'chat' | 'mentions' | 'plan' | 'money' | 'todos' | 'trip' | 'countdown' | 'journal' | 'memories';
+
+const journalTimeOf = (row: Row | undefined) =>
+  (JOURNAL_TIMES as readonly string[]).includes(row?.journalTime ?? '')
+    ? (row!.journalTime as NotificationPrefs['journalTime'])
+    : DEFAULT_JOURNAL_TIME;
 
 /** Defaults, then the trip's own choices on top; anything never set is on. */
 const resolve = (defaults: Row | undefined, trip: Row | undefined): NotificationPrefs => {
@@ -31,6 +38,9 @@ const resolve = (defaults: Row | undefined, trip: Row | undefined): Notification
     todos: pick('todos'),
     trip: pick('trip'),
     countdown: pick('countdown'),
+    journal: pick('journal'),
+    memories: pick('memories'),
+    journalTime: journalTimeOf(defaults),
     reminders: defaults?.reminders ?? DEFAULT_PREFS.reminders,
     reminderMinutes: defaults?.reminderMinutes ?? DEFAULT_PREFS.reminderMinutes,
     mutedUntil: latest && latest.getTime() > Date.now() ? latest.toISOString() : null,
@@ -119,6 +129,8 @@ export const createNotificationsService = (db: Db) => {
           todos: trip?.todos ?? null,
           trip: trip?.trip ?? null,
           countdown: trip?.countdown ?? null,
+          journal: trip?.journal ?? null,
+          memories: trip?.memories ?? null,
           mutedUntil: trip?.mutedUntil && trip.mutedUntil.getTime() > Date.now() ? trip.mutedUntil.toISOString() : null,
         },
       };

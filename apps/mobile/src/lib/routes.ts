@@ -25,14 +25,17 @@ export const formatDistance = (metres: number) => {
   return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
 };
 
-const located = (items: ItineraryItem[]) =>
-  items.filter((i) => i.latitude !== null && i.longitude !== null) as (ItineraryItem & { latitude: number; longitude: number })[];
+/** What routing needs of a stop: a plan item, or a stop on a journal day. */
+type RouteItem = Pick<ItineraryItem, 'id' | 'latitude' | 'longitude'> & { version?: number };
+
+const located = <T extends RouteItem>(items: T[]) =>
+  items.filter((i) => i.latitude !== null && i.longitude !== null) as (T & { latitude: number; longitude: number })[];
 
 /**
  * How someone gets around on a day, remembered on this device per day.
  * Until they choose, it's walking for a compact day and driving otherwise.
  */
-export function useRouteMode(tripId: string, date: string | null, dayItems: ItineraryItem[]) {
+export function useRouteMode(tripId: string, date: string | null, dayItems: RouteItem[]) {
   const [chosen, setChosen] = useState<TravelMode | null>(null);
   // Keychain keys allow only letters, digits, ".", "-" and "_".
   const key = date ? `route-mode.${tripId}.${date}` : null;
@@ -61,12 +64,12 @@ export function useRouteMode(tripId: string, date: string | null, dayItems: Itin
  * Travel between the day's stops, refetched whenever the located stops or
  * their order change. Null while loading, or when there's nothing to join up.
  */
-export function useDayRoute(tripId: string, date: string | null, mode: TravelMode, dayItems: ItineraryItem[]) {
+export function useDayRoute(tripId: string, date: string | null, mode: TravelMode, dayItems: RouteItem[]) {
   const [route, setRoute] = useState<DayRoute | null>(null);
   const stops = located(dayItems);
   // Which stops, where, and in what order. The version too: after a drag the
   // order changes here first, and the server's copy only once it's saved.
-  const signature = dayItems.map((i) => `${i.id}.${i.version}@${i.latitude ?? ''},${i.longitude ?? ''}`).join(';');
+  const signature = dayItems.map((i) => `${i.id}.${i.version ?? 0}@${i.latitude ?? ''},${i.longitude ?? ''}`).join(';');
   const enough = stops.length >= 2;
 
   useEffect(() => {
